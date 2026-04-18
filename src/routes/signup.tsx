@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Pill, Building2, Store } from "lucide-react";
+import { Building2, Store, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import logo from "@/assets/logo.jpg";
 import {
   Select,
   SelectContent,
@@ -52,6 +53,7 @@ function SignupPage() {
     password: "",
   });
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
 
@@ -100,22 +102,40 @@ function SignupPage() {
       toast.error("Account created but business setup failed: " + bizError.message);
       return;
     }
-    toast.success("Account created! Upload your license to get verified.");
-    navigate({ to: "/dashboard" });
+    // If session exists Supabase skipped email confirmation — go straight to dashboard
+    if (data.session) {
+      toast.success("Account created! Upload your license to get verified.");
+      navigate({ to: "/dashboard" });
+    } else {
+      // Email confirmation is enabled — prompt the user to check inbox
+      setEmailSent(true);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4 py-10">
       <div className="w-full max-w-lg">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero shadow-glow">
-            <Pill className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            PharmaHub <span className="text-primary">GH</span>
+            Pharma<span className="text-primary">Hub GH</span>
           </span>
         </Link>
 
+        {emailSent ? (
+          <Card className="p-8 shadow-elegant text-center space-y-4">
+            <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+            <h1 className="font-display text-2xl font-bold">Confirm your email</h1>
+            <p className="text-sm text-muted-foreground">
+              We sent a confirmation link to <strong>{form.email}</strong>. Click it to activate
+              your account, then come back to sign in.
+            </p>
+            <Link to="/login" className="text-sm text-primary hover:underline font-medium block">
+              Go to sign in
+            </Link>
+          </Card>
+        ) : (
+        ) : (
         <Card className="p-8 shadow-elegant">
           <h1 className="font-display text-2xl font-bold">Create your account</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -204,6 +224,7 @@ function SignupPage() {
             </Link>
           </p>
         </Card>
+        )}
       </div>
     </div>
   );

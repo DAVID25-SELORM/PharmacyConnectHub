@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import logo from "@/assets/logo.jpg";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -41,11 +41,9 @@ function LoginPage() {
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-hero shadow-glow">
-            <Pill className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            PharmaHub <span className="text-primary">GH</span>
+            Pharma<span className="text-primary">Hub GH</span>
           </span>
         </Link>
 
@@ -69,7 +67,15 @@ function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
