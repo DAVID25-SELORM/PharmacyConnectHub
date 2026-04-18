@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Pill, Menu, LayoutDashboard } from "lucide-react";
+import { Menu, LayoutDashboard } from "lucide-react";
+import logo from "@/assets/logo.jpg";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +26,13 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-hero shadow-glow transition-transform group-hover:scale-105">
-            <Pill className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img
+            src={logo}
+            alt="PharmaHub GH"
+            className="h-9 w-9 rounded-xl object-contain transition-transform group-hover:scale-105"
+          />
           <span className="font-display text-lg font-bold tracking-tight">
-            PharmaHub <span className="text-primary">GH</span>
+            Pharma<span className="text-primary">Hub GH</span>
           </span>
         </Link>
 

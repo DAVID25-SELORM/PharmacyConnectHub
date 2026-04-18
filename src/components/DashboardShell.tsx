@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Pill, LogOut, ShieldAlert, Clock } from "lucide-react";
+import { LogOut, ShieldAlert, Clock } from "lucide-react";
+import logo from "@/assets/logo.jpg";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -24,12 +25,10 @@ export function DashboardHeader({
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-hero">
-            <Pill className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
           <div>
             <div className="font-display text-base font-bold leading-none">
-              PharmaHub <span className="text-primary">GH</span>
+              Pharma<span className="text-primary">Hub GH</span>
             </div>
             <div className="text-[11px] text-muted-foreground">{subtitle}</div>
           </div>
