@@ -1,0 +1,28 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "Supabase",
+    "supabase",
+    "tanstack",
+    "TanStack",
+    "vite",
+    "Vite",
+    "tailwindcss",
+    "shadcn",
+    "radix",
+    "Radix",
+    "sonner",
+    "lucide",
+    "pharma",
+    "Paystack",
+    "paystack"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    "dist",
+    ".git",
+    "bun.lockb",
+    "package-lock.json"
+  ]
+}

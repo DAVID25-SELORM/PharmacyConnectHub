@@ -135,9 +135,8 @@ function SignupPage() {
             </Link>
           </Card>
         ) : (
-        ) : (
-        <Card className="p-8 shadow-elegant">
-          <h1 className="font-display text-2xl font-bold">Create your account</h1>
+          <Card className="p-8 shadow-elegant">
+            <h1 className="font-display text-2xl font-bold">Create your account</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             We verify every business before they can transact.
           </p>

@@ -19,9 +19,6 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiPaystackWebhookRouteImport } from './routes/api.paystack.webhook'
-import { Route as ApiPaystackVerifyRouteImport } from './routes/api.paystack.verify'
-import { Route as ApiPaystackInitRouteImport } from './routes/api.paystack.init'
 
 const WholesalerRoute = WholesalerRouteImport.update({
   id: '/wholesaler',
@@ -73,21 +70,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPaystackWebhookRoute = ApiPaystackWebhookRouteImport.update({
-  id: '/api/paystack/webhook',
-  path: '/api/paystack/webhook',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPaystackVerifyRoute = ApiPaystackVerifyRouteImport.update({
-  id: '/api/paystack/verify',
-  path: '/api/paystack/verify',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPaystackInitRoute = ApiPaystackInitRouteImport.update({
-  id: '/api/paystack/init',
-  path: '/api/paystack/init',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -100,9 +82,6 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/wholesaler': typeof WholesalerRoute
-  '/api/paystack/init': typeof ApiPaystackInitRoute
-  '/api/paystack/verify': typeof ApiPaystackVerifyRoute
-  '/api/paystack/webhook': typeof ApiPaystackWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,9 +94,6 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/wholesaler': typeof WholesalerRoute
-  '/api/paystack/init': typeof ApiPaystackInitRoute
-  '/api/paystack/verify': typeof ApiPaystackVerifyRoute
-  '/api/paystack/webhook': typeof ApiPaystackWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,9 +107,6 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/wholesaler': typeof WholesalerRoute
-  '/api/paystack/init': typeof ApiPaystackInitRoute
-  '/api/paystack/verify': typeof ApiPaystackVerifyRoute
-  '/api/paystack/webhook': typeof ApiPaystackWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,9 +121,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/wholesaler'
-    | '/api/paystack/init'
-    | '/api/paystack/verify'
-    | '/api/paystack/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -163,9 +133,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/wholesaler'
-    | '/api/paystack/init'
-    | '/api/paystack/verify'
-    | '/api/paystack/webhook'
   id:
     | '__root__'
     | '/'
@@ -178,9 +145,6 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/wholesaler'
-    | '/api/paystack/init'
-    | '/api/paystack/verify'
-    | '/api/paystack/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -194,9 +158,6 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   WholesalerRoute: typeof WholesalerRoute
-  ApiPaystackInitRoute: typeof ApiPaystackInitRoute
-  ApiPaystackVerifyRoute: typeof ApiPaystackVerifyRoute
-  ApiPaystackWebhookRoute: typeof ApiPaystackWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -206,13 +167,6 @@ declare module '@tanstack/react-router' {
       path: '/wholesaler'
       fullPath: '/wholesaler'
       preLoaderRoute: typeof WholesalerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -241,13 +195,6 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -285,27 +232,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/paystack/webhook': {
-      id: '/api/paystack/webhook'
-      path: '/api/paystack/webhook'
-      fullPath: '/api/paystack/webhook'
-      preLoaderRoute: typeof ApiPaystackWebhookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/paystack/verify': {
-      id: '/api/paystack/verify'
-      path: '/api/paystack/verify'
-      fullPath: '/api/paystack/verify'
-      preLoaderRoute: typeof ApiPaystackVerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/paystack/init': {
-      id: '/api/paystack/init'
-      path: '/api/paystack/init'
-      fullPath: '/api/paystack/init'
-      preLoaderRoute: typeof ApiPaystackInitRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -320,9 +246,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   WholesalerRoute: WholesalerRoute,
-  ApiPaystackInitRoute: ApiPaystackInitRoute,
-  ApiPaystackVerifyRoute: ApiPaystackVerifyRoute,
-  ApiPaystackWebhookRoute: ApiPaystackWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
