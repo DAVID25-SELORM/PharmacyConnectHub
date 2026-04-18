@@ -10,6 +10,8 @@ import {
   ShieldX,
   Store,
   Users,
+  Eye,
+  Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -289,8 +291,17 @@ function BusinessList({ items, reload }: { items: Biz[]; reload: () => Promise<v
 function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: biz.name,
+    license_number: biz.license_number ?? "",
+    city: biz.city ?? "",
+    region: biz.region ?? "",
+    phone: biz.phone ?? "",
+  });
 
   useEffect(() => {
     void supabase
@@ -350,6 +361,32 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
     void reload();
   };
 
+  const saveEdit = async () => {
+    if (!editForm.name.trim()) {
+      toast.error("Business name is required");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        name: editForm.name.trim(),
+        license_number: editForm.license_number.trim() || null,
+        city: editForm.city.trim() || null,
+        region: editForm.region.trim() || null,
+        phone: editForm.phone.trim() || null,
+      })
+      .eq("id", biz.id);
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Business details updated");
+    setShowEditDialog(false);
+    void reload();
+  };
+
   const TypeIcon = biz.type === "wholesaler" ? Building2 : Store;
 
   return (
@@ -379,6 +416,25 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
           </div>
         </div>
         <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowViewDialog(true)}>
+            <Eye className="h-4 w-4" /> View
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setEditForm({
+                name: biz.name,
+                license_number: biz.license_number ?? "",
+                city: biz.city ?? "",
+                region: biz.region ?? "",
+                phone: biz.phone ?? "",
+              });
+              setShowEditDialog(true);
+            }}
+          >
+            <Edit className="h-4 w-4" /> Edit
+          </Button>
           {biz.verification_status === "pending" && (
             <>
               <Button
@@ -452,6 +508,179 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
             </Button>
             <Button variant="hero" onClick={reject} disabled={busy}>
               Confirm reject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Business Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Business Name
+                </div>
+                <div className="font-semibold">{biz.name}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Type
+                </div>
+                <Badge variant="secondary" className="uppercase">
+                  {biz.type}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  License Number
+                </div>
+                <div>{biz.license_number ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Phone
+                </div>
+                <div>{biz.phone ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  City
+                </div>
+                <div>{biz.city ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Region
+                </div>
+                <div>{biz.region ?? "—"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Status
+                </div>
+                <Badge
+                  variant={
+                    biz.verification_status === "approved"
+                      ? "default"
+                      : biz.verification_status === "rejected"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {biz.verification_status}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                  Submitted
+                </div>
+                <div className="text-sm">{timeAgo(biz.created_at)}</div>
+              </div>
+            </div>
+            {biz.rejection_reason && (
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wider text-destructive mb-1">
+                  Rejection Reason
+                </div>
+                <div className="text-sm text-destructive">{biz.rejection_reason}</div>
+              </div>
+            )}
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+                Documents
+              </div>
+              {docs.length === 0 ? (
+                <div className="text-sm text-muted-foreground italic">No documents uploaded</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {docs.map((d) => (
+                    <Button
+                      key={d.id}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDoc(d.storage_path)}
+                    >
+                      <FileText className="h-4 w-4" /> {d.doc_type}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Business Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Business Name *</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="Business name"
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-license">License Number</Label>
+                <Input
+                  id="edit-license"
+                  value={editForm.license_number}
+                  onChange={(e) => setEditForm({ ...editForm, license_number: e.target.value })}
+                  placeholder="PHA-2024-001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Phone</Label>
+                <Input
+                  id="edit-phone"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  placeholder="0240000000"
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-city">City</Label>
+                <Input
+                  id="edit-city"
+                  value={editForm.city}
+                  onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                  placeholder="Accra"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-region">Region</Label>
+                <Input
+                  id="edit-region"
+                  value={editForm.region}
+                  onChange={(e) => setEditForm({ ...editForm, region: e.target.value })}
+                  placeholder="Greater Accra"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="hero" onClick={saveEdit} disabled={busy}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
             </Button>
           </DialogFooter>
         </DialogContent>

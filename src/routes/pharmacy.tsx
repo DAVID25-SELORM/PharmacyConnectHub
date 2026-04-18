@@ -104,6 +104,11 @@ function PharmacyDashboard() {
     }
     if (business && business.type !== "pharmacy") {
       navigate({ to: business.type === "wholesaler" ? "/wholesaler" : "/dashboard" });
+      return;
+    }
+    if (business && business.verification_status === "rejected") {
+      navigate({ to: "/onboarding" });
+      return;
     }
   }, [loading, user, business, roles, navigate]);
 
@@ -235,6 +240,29 @@ function PharmacyDashboard() {
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         <Pill className="h-5 w-5 animate-pulse" />
         <span className="ml-2">Loading…</span>
+      </div>
+    );
+  }
+
+  if (business.verification_status === "pending") {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader subtitle="Pharmacy workspace" showNav={false} isAdmin={roles.includes("admin")} />
+        <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16">
+          <Card className="p-8 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning/10">
+              <Pill className="h-8 w-8 text-warning" />
+            </div>
+            <h2 className="mt-6 font-display text-2xl font-bold">Verification Pending</h2>
+            <p className="mt-2 text-muted-foreground">
+              Your pharmacy registration is being reviewed by our admin team. You'll receive access
+              once your license and details are verified.
+            </p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              This usually takes 1-2 business days. We'll notify you once approved.
+            </p>
+          </Card>
+        </main>
       </div>
     );
   }
