@@ -85,13 +85,13 @@ function AdminPanel() {
       .order("created_at", { ascending: false });
     const all = (bizData as Biz[]) ?? [];
     setBusinesses(all);
-    
+
     const pharmacies = all.filter((b) => b.type === "pharmacy");
     const wholesalers = all.filter((b) => b.type === "wholesaler");
-    
+
     const { data: orderAgg } = await supabase.from("orders").select("total_ghs,status");
     const orders = (orderAgg as { total_ghs: number; status: string }[]) ?? [];
-    
+
     setStats({
       pharmacies: {
         total: pharmacies.length,
@@ -146,9 +146,7 @@ function AdminPanel() {
               </div>
               <div className="font-display text-3xl font-bold">{stats.pharmacies.total}</div>
               <div className="mt-2 flex gap-3 text-xs">
-                <span className="text-muted-foreground">
-                  {stats.pharmacies.approved} approved
-                </span>
+                <span className="text-muted-foreground">{stats.pharmacies.approved} approved</span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-warning">{stats.pharmacies.pending} pending</span>
               </div>
@@ -161,9 +159,7 @@ function AdminPanel() {
               </div>
               <div className="font-display text-3xl font-bold">{stats.wholesalers.total}</div>
               <div className="mt-2 flex gap-3 text-xs">
-                <span className="text-muted-foreground">
-                  {stats.wholesalers.approved} approved
-                </span>
+                <span className="text-muted-foreground">{stats.wholesalers.approved} approved</span>
                 <span className="text-muted-foreground">·</span>
                 <span className="text-warning">{stats.wholesalers.pending} pending</span>
               </div>
@@ -199,9 +195,7 @@ function AdminPanel() {
                 <ShieldCheck className="h-5 w-5 text-success" />
               </div>
               <div className="font-display text-3xl font-bold">{formatGHS(stats.gmv)}</div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                Gross merchandise value
-              </div>
+              <div className="mt-2 text-xs text-muted-foreground">Gross merchandise value</div>
             </Card>
           </div>
         </div>

@@ -111,7 +111,14 @@ function OnboardingPage() {
         <Card className="mt-6 p-6">
           <div className="mb-4">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Status</div>
-            <div className="mt-1 text-lg font-semibold capitalize">{business.verification_status}</div>
+            <div className="mt-1 text-lg font-semibold capitalize">
+              {business.verification_status}
+            </div>
+            {business.verification_status === "rejected" && business.rejection_reason && (
+              <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                Rejection reason: {business.rejection_reason}
+              </div>
+            )}
           </div>
           <div className="space-y-3 text-sm">
             <Field label="Business name" value={business.name} />
@@ -130,7 +137,9 @@ function OnboardingPage() {
                   <div className="min-w-0">
                     <div className="font-medium">{dt.label}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
-                      {existing ? `Uploaded ${new Date(existing.uploaded_at).toLocaleDateString()}` : "PDF, JPG or PNG (max 10MB)"}
+                      {existing
+                        ? `Uploaded ${new Date(existing.uploaded_at).toLocaleDateString()}`
+                        : "PDF, JPG or PNG (max 10MB)"}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

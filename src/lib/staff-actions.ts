@@ -45,88 +45,16 @@ function sortStaffMembers(left: StaffMember, right: StaffMember) {
   return new Date(rightJoined).getTime() - new Date(leftJoined).getTime();
 }
 
-async function getAccessToken() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? "";
-}
-
-function getStaffApiUrl() {
-  const configuredOrigin = import.meta.env.VITE_STAFF_API_BASE_URL?.trim();
-  if (configuredOrigin) {
-    return new URL("/api/staff/list", configuredOrigin).toString();
-  }
-
-  if (import.meta.env.DEV) {
-    return null;
-  }
-
-  return "/api/staff/list";
-}
-
 export async function listBusinessStaff(businessId: string): Promise<StaffMember[]> {
-  const accessToken = await getAccessToken();
-  const staffApiUrl = getStaffApiUrl();
+  const { data, error } = await supabase.rpc("list_business_staff", {
+    _business_id: businessId,
+  });
 
-  if (accessToken && staffApiUrl) {
-    try {
-      const response = await fetch(staffApiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ businessId }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as {
-        error?: string;
-        staff?: StaffMember[];
-      } | null;
-
-      if (response.ok) {
-        return (payload?.staff ?? []).sort(sortStaffMembers);
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        throw new Error(payload?.error || "Failed to load team members");
-      }
-
-      console.error("Staff list API failed; falling back to direct business_staff query.", {
-        businessId,
-        payload,
-        status: response.status,
-      });
-    } catch (error) {
-      console.error("Staff list API request failed; falling back to direct business_staff query.", {
-        businessId,
-        error,
-      });
-    }
+  if (error) {
+    throw new Error(error.message || "Failed to load team members");
   }
 
-  const { data: fallbackData, error: fallbackError } = await supabase
-    .from("business_staff")
-    .select("id,user_id,role,status,invited_at,joined_at")
-    .eq("business_id", businessId);
-
-  if (fallbackError) {
-    throw new Error(fallbackError.message || "Failed to load team members");
-  }
-
-  return (
-    (fallbackData ?? []) as Array<
-      Pick<StaffMember, "id" | "user_id" | "role" | "status" | "invited_at" | "joined_at">
-    >
-  )
-    .map((member) => ({
-      ...member,
-      full_name: null,
-      phone: null,
-      user_email: null,
-    }))
-    .sort(sortStaffMembers);
+  return ((data ?? []) as StaffMember[]).sort(sortStaffMembers);
 }
 
 /**

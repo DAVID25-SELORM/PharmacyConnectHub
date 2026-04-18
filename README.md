@@ -1,52 +1,51 @@
-# Pharmacy Connect Hub MVP
+# PharmaHub GH
 
-A simple B2B pharmacy ordering platform prototype for wholesalers and retail pharmacies.
+PharmaHub GH is a Supabase-backed B2B pharmaceutical marketplace for wholesalers and retail pharmacies in Ghana.
 
-## Features
+## Current product scope
 
-- Multi-wholesaler product catalog
-- Multi-wholesaler price comparison by medicine
-- Supplier quote request and bidding workflow
-- Line-item quote breakdown before acceptance
-- Order confirmation summary with printable request details
-- Fulfillment lifecycle tracking (Accepted > Processing > Dispatched > Delivered)
-- Admin workspace for wholesaler onboarding and product publishing
-- Role-based login gates for pharmacy, supplier, and admin dashboards
-- Supplier dashboard for quote submission
-- Persistent order request storage in `data.json`
-- Order request history and quote acceptance
+- Email auth with onboarding for pharmacies and wholesalers
+- Admin review flow with approve, reject, and edit business details
+- Verification gates that block unapproved businesses from using the marketplace
+- Multi-wholesaler product catalog for pharmacies
+- Cart, checkout, and cash-on-delivery order placement
+- Wholesaler product CRUD and bulk CSV upload
+- Order inbox and fulfillment status tracking
+- Team management using Supabase RPC and row-level security
 
-## Run locally
+## Tech stack
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Start the backend and frontend together:
-   ```bash
-   npm run dev
-   ```
-3. Open `http://localhost:5173`
+- Vite + React 19
+- TanStack Router
+- Tailwind CSS v4 + shadcn/ui
+- Supabase Auth, Postgres, Storage, and RLS
+- Vercel static SPA deployment
 
-## Optional commands
+## Local development
 
-- Run frontend only:
-   ```bash
-   npm run dev:web
-   ```
-- Run API only:
-   ```bash
-   npm run dev:api
-   ```
+1. Install dependencies.
 
-## Demo login accounts
+```bash
+npm install
+```
 
-- Admin: `admin@pharmacyconnecthub.com` / `demo123`
-- Supplier: `supplier@pharmacyconnecthub.com` / `demo123`
-- Pharmacy: `pharmacy@pharmacyconnecthub.com` / `demo123`
+2. Create a `.env` file from `.env.example`.
 
-## Notes
+3. Start the app.
 
-- The backend runs on `http://localhost:4000`
-- API routes are proxied by Vite to simplify local development
-- Data is persisted to `data.json` for the prototype
+```bash
+npm run dev
+```
+
+4. Open `http://localhost:5173`.
+
+## Required environment variables
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+## Supabase setup
+
+Apply the SQL migrations in `supabase/migrations` to your Supabase project before using the app.
+
+Additional setup notes live in `supabase/SETUP.md`.

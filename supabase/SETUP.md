@@ -1,7 +1,7 @@
 # Supabase setup
 
 This repo now boots the Supabase-backed router app from `src/main.tsx`.
-The legacy `src/App.tsx` + `server.ts` prototype is no longer the active frontend entrypoint.
+The app is a client-side Vite SPA backed directly by Supabase.
 
 ## 1. Apply the database schema
 
@@ -16,30 +16,19 @@ In the Supabase SQL editor for your project, run the migration files in this ord
 
 ## 2. Configure environment variables
 
-Client-side variables required for the Supabase app:
+Required client-side variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Server-side variables required for server handlers:
-
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `PAYSTACK_SECRET_KEY`
-
-The current staff-management flow uses direct Supabase RPC calls from the client for existing users,
-so staff additions do not depend on the `api/staff/*` handlers.
-
 ## 3. Hosting assumptions
 
-The app now reads auth and business data directly from Supabase.
+The app reads auth, business, product, and order data directly from Supabase.
 
-However, payment flows still use server handlers at:
+The current checkout flow is cash on delivery only. No Express server or custom staff API handlers are required for the live app.
 
-- `/api/paystack/init`
-- `/api/paystack/verify`
-- `/api/paystack/webhook`
+## 4. Important notes
 
-If you deploy as a static frontend only, those payment endpoints will not exist.
-To keep payments working, deploy a server runtime that supports those handlers or move them to Supabase Edge Functions.
+- `supabase/schema.sql` is legacy reference material, not the source of truth.
+- The active business-staff flows rely on the `add_business_staff_by_email`, `list_business_staff`, and `get_user_business_context` RPC functions from the migrations.
+- If you add server-side notifications later, prefer Supabase Edge Functions over reintroducing a separate Express backend.

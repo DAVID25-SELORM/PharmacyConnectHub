@@ -1,14 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import {
-  Search,
-  ShoppingCart,
-  Plus,
-  Minus,
-  Trash2,
-  Package,
-  ShieldCheck,
-} from "lucide-react";
+import { Search, ShoppingCart, Plus, Minus, Trash2, Package, ShieldCheck } from "lucide-react";
 import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -58,7 +50,13 @@ type Product = {
   stock: number;
   image_hue: number | null;
   wholesaler_id: string;
-  wholesaler: { id: string; name: string; city: string | null; region: string | null } | null;
+  wholesaler: {
+    id: string;
+    name: string;
+    city: string | null;
+    region: string | null;
+    verification_status: string;
+  } | null;
 };
 
 type CartItem = { productId: string; quantity: number };
@@ -115,10 +113,16 @@ function PharmacyDashboard() {
   useEffect(() => {
     void supabase
       .from("products")
-      .select("*, wholesaler:businesses!products_wholesaler_id_fkey(id,name,city,region)")
+      .select(
+        "*, wholesaler:businesses!products_wholesaler_id_fkey(id,name,city,region,verification_status)",
+      )
       .eq("active", true)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setProducts((data as unknown as Product[]) ?? []));
+      .then(({ data }) => {
+        const all = (data as unknown as Product[]) ?? [];
+        // Only show products from approved wholesalers in the catalog.
+        setProducts(all.filter((p) => p.wholesaler?.verification_status === "approved"));
+      });
   }, []);
 
   const loadOrders = useEffectEvent(async () => {
@@ -247,7 +251,11 @@ function PharmacyDashboard() {
   if (business.verification_status === "pending") {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader subtitle="Pharmacy workspace" showNav={false} isAdmin={roles.includes("admin")} />
+        <DashboardHeader
+          subtitle="Pharmacy workspace"
+          showNav={false}
+          isAdmin={roles.includes("admin")}
+        />
         <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16">
           <Card className="p-8 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning/10">
@@ -281,7 +289,6 @@ function PharmacyDashboard() {
             productMap={productMap}
             updateQty={updateQty}
             placeOrder={placeOrder}
-
             placing={placing}
             canPlaceOrders={canPlaceOrders}
           />
