@@ -38,7 +38,7 @@ interface OrderRequest {
   customerPhone: string;
   deliveryAddress: string;
   items: OrderRequestItem[];
-  status: 'Quote requested' | 'Quotes received' | 'Accepted';
+  status: 'Quote requested' | 'Quotes received' | 'Accepted' | 'Processing' | 'Dispatched' | 'Delivered';
   acceptedQuoteId?: string;
   createdAt: string;
 }
@@ -62,12 +62,34 @@ interface Quote {
   createdAt: string;
 }
 
-type Role = 'pharmacy' | 'supplier';
+type Role = 'pharmacy' | 'supplier' | 'admin';
+
+interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  wholesalerId?: string;
+}
+
+interface AdminUserRow {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  wholesalerId?: string;
+}
+
+const orderStatusFlow = ['Quote requested', 'Quotes received', 'Accepted', 'Processing', 'Dispatched', 'Delivered'] as const;
 
 type QuoteDraft = Record<string, { quotedPrice: string; deliveryDays: string; comment: string }>;
 
 export default function App() {
   const [role, setRole] = useState<Role>('pharmacy');
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [activeWholesalerId, setActiveWholesalerId] = useState('');
   const [wholesalers, setWholesalers] = useState<Wholesaler[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -76,6 +98,8 @@ export default function App() {
   const [selectedWholesaler, setSelectedWholesaler] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [compareGeneric, setCompareGeneric] = useState('');
+  const [compareStrength, setCompareStrength] = useState('');
   const [orderRequests, setOrderRequests] = useState<OrderRequest[]>([]);
   const [supplierRequests, setSupplierRequests] = useState<OrderRequest[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -84,6 +108,48 @@ export default function App() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [quoteDrafts, setQuoteDrafts] = useState<Record<string, QuoteDraft>>({});
+  const [lastSubmittedRequest, setLastSubmittedRequest] = useState<OrderRequest | null>(null);
+  const [newWholesalerName, setNewWholesalerName] = useState('');
+  const [newWholesalerLocation, setNewWholesalerLocation] = useState('');
+  const [newWholesalerRating, setNewWholesalerRating] = useState('4.5');
+  const [newProductWholesalerId, setNewProductWholesalerId] = useState('');
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductGeneric, setNewProductGeneric] = useState('');
+  const [newProductStrength, setNewProductStrength] = useState('');
+  const [newProductPackSize, setNewProductPackSize] = useState('');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductStock, setNewProductStock] = useState('');
+
+  // Admin user management
+  const [adminUsers, setAdminUsers] = useState<AdminUserRow[]>([]);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<Role>('pharmacy');
+  const [newUserWholesalerId, setNewUserWholesalerId] = useState('');
+
+  // Pharmacy self-registration
+  const [showRegister, setShowRegister] = useState(false);
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regError, setRegError] = useState('');
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('pch-user');
+    if (!storedUser) {
+      return;
+    }
+
+    try {
+      const parsedUser = JSON.parse(storedUser) as AppUser;
+      setCurrentUser(parsedUser);
+      setRole(parsedUser.role);
+      setActiveWholesalerId(parsedUser.role === 'supplier' ? parsedUser.wholesalerId ?? '' : '');
+    } catch {
+      localStorage.removeItem('pch-user');
+    }
+  }, []);
 
   useEffect(() => {
     fetch('/api/wholesalers')
@@ -98,6 +164,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
     if (role === 'pharmacy') {
       fetchOrderRequests();
       fetchQuotes();
@@ -107,7 +177,11 @@ export default function App() {
       fetchSupplierRequests(activeWholesalerId);
       fetchSupplierQuotes(activeWholesalerId);
     }
-  }, [role, activeWholesalerId]);
+
+    if (role === 'admin') {
+      fetchAdminUsers();
+    }
+  }, [role, activeWholesalerId, currentUser]);
 
   const fetchOrderRequests = () => {
     fetch('/api/order-requests')
@@ -137,6 +211,49 @@ export default function App() {
       .catch(() => setMessage('Unable to load supplier quotes'));
   };
 
+  const login = async () => {
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError('Enter your email and password.');
+      return;
+    }
+
+    setLoading(true);
+    setLoginError('');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Login failed');
+      }
+
+      const data = (await response.json()) as { user: AppUser };
+      setCurrentUser(data.user);
+      setRole(data.user.role);
+      setActiveWholesalerId(data.user.role === 'supplier' ? data.user.wholesalerId ?? '' : '');
+      localStorage.setItem('pch-user', JSON.stringify(data.user));
+      setLoginPassword('');
+    } catch (error) {
+      setLoginError((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setRole('pharmacy');
+    setActiveWholesalerId('');
+    setMessage('');
+    setLoginError('');
+    localStorage.removeItem('pch-user');
+  };
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const term = search.trim().toLowerCase();
@@ -148,6 +265,54 @@ export default function App() {
       return matchesSearch && matchesWholesaler;
     });
   }, [products, search, selectedWholesaler]);
+
+  const compareGenericOptions = useMemo(() => {
+    return Array.from(new Set(products.map((product) => product.generic))).sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const compareStrengthOptions = useMemo(() => {
+    if (!compareGeneric) {
+      return [];
+    }
+
+    return Array.from(new Set(products.filter((product) => product.generic === compareGeneric).map((product) => product.strength))).sort((a, b) => a.localeCompare(b));
+  }, [products, compareGeneric]);
+
+  const compareOffers = useMemo(() => {
+    if (!compareGeneric) {
+      return [];
+    }
+
+    return products
+      .filter((product) => product.generic === compareGeneric && (compareStrength ? product.strength === compareStrength : true))
+      .map((product) => ({
+        ...product,
+        wholesaler: wholesalers.find((wholesaler) => wholesaler.id === product.wholesalerId)
+      }))
+      .sort((a, b) => a.price - b.price);
+  }, [products, wholesalers, compareGeneric, compareStrength]);
+
+  useEffect(() => {
+    if (!compareGenericOptions.length) {
+      return;
+    }
+
+    if (!compareGeneric || !compareGenericOptions.includes(compareGeneric)) {
+      setCompareGeneric(compareGenericOptions[0]);
+      setCompareStrength('');
+    }
+  }, [compareGenericOptions, compareGeneric]);
+
+  useEffect(() => {
+    if (!compareStrengthOptions.length) {
+      setCompareStrength('');
+      return;
+    }
+
+    if (compareStrength && !compareStrengthOptions.includes(compareStrength)) {
+      setCompareStrength('');
+    }
+  }, [compareStrengthOptions, compareStrength]);
 
   const cartTotal = useMemo(() => {
     return cart.reduce((total, item) => total + item.product.price * item.quantity, 0);
@@ -205,7 +370,8 @@ export default function App() {
         throw new Error(error.error || 'Order request submission failed');
       }
 
-      await response.json();
+      const createdOrder = (await response.json()) as OrderRequest;
+      setLastSubmittedRequest(createdOrder);
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
@@ -320,6 +486,349 @@ export default function App() {
     );
   };
 
+  const getStatusIndex = (status: OrderRequest['status']) => orderStatusFlow.indexOf(status);
+
+  const getNextSupplierAction = (status: OrderRequest['status']) => {
+    if (status === 'Accepted') {
+      return 'Mark as processing';
+    }
+    if (status === 'Processing') {
+      return 'Mark as dispatched';
+    }
+    if (status === 'Dispatched') {
+      return 'Mark as delivered';
+    }
+    return null;
+  };
+
+  const advanceOrderStatus = async (orderRequestId: string) => {
+    if (!activeWholesalerId) {
+      setMessage('Select a wholesaler first.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderRequestId, wholesalerId: activeWholesalerId })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Unable to update order status');
+      }
+
+      await response.json();
+      setMessage('Order status updated successfully.');
+      fetchSupplierRequests(activeWholesalerId);
+      fetchSupplierQuotes(activeWholesalerId);
+      fetchOrderRequests();
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createWholesaler = async () => {
+    const rating = Number(newWholesalerRating);
+    if (!newWholesalerName.trim() || !newWholesalerLocation.trim() || Number.isNaN(rating) || rating < 0 || rating > 5) {
+      setMessage('Enter wholesaler name, location, and a rating between 0 and 5.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/wholesalers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newWholesalerName.trim(),
+          location: newWholesalerLocation.trim(),
+          rating
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create wholesaler');
+      }
+
+      setNewWholesalerName('');
+      setNewWholesalerLocation('');
+      setNewWholesalerRating('4.5');
+      const wholesalersResponse = await fetch('/api/wholesalers');
+      setWholesalers(await wholesalersResponse.json());
+      setMessage('Wholesaler added successfully.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createProduct = async () => {
+    const price = Number(newProductPrice);
+    const stock = Number(newProductStock);
+    if (
+      !newProductWholesalerId ||
+      !newProductName.trim() ||
+      !newProductGeneric.trim() ||
+      !newProductStrength.trim() ||
+      !newProductPackSize.trim() ||
+      Number.isNaN(price) ||
+      price <= 0 ||
+      Number.isNaN(stock) ||
+      stock < 0
+    ) {
+      setMessage('Enter complete product details, valid price, and stock.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wholesalerId: newProductWholesalerId,
+          name: newProductName.trim(),
+          generic: newProductGeneric.trim(),
+          strength: newProductStrength.trim(),
+          packSize: newProductPackSize.trim(),
+          price,
+          stock
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create product');
+      }
+
+      setNewProductWholesalerId('');
+      setNewProductName('');
+      setNewProductGeneric('');
+      setNewProductStrength('');
+      setNewProductPackSize('');
+      setNewProductPrice('');
+      setNewProductStock('');
+      const productsResponse = await fetch('/api/products');
+      setProducts(await productsResponse.json());
+      setMessage('Product added successfully.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAdminUsers = () => {
+    fetch('/api/users')
+      .then((res) => res.json())
+      .then(setAdminUsers)
+      .catch(() => setMessage('Unable to load users'));
+  };
+
+  const createUser = async () => {
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserPassword || !newUserRole) {
+      setMessage('Enter name, email, password, and role for the new account.');
+      return;
+    }
+    if (newUserRole === 'supplier' && !newUserWholesalerId) {
+      setMessage('Select a wholesaler for the supplier account.');
+      return;
+    }
+
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newUserName.trim(),
+          email: newUserEmail.trim(),
+          password: newUserPassword,
+          role: newUserRole,
+          ...(newUserRole === 'supplier' ? { wholesalerId: newUserWholesalerId } : {})
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create user');
+      }
+
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('pharmacy');
+      setNewUserWholesalerId('');
+      fetchAdminUsers();
+      setMessage('User account created successfully.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    setLoading(true);
+    setMessage('');
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete user');
+      }
+
+      fetchAdminUsers();
+      setMessage('User account removed.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async () => {
+    if (!regName.trim() || !regEmail.trim() || !regPassword) {
+      setRegError('Enter your name, email, and password.');
+      return;
+    }
+
+    setLoading(true);
+    setRegError('');
+
+    try {
+      const createResponse = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: regName.trim(), email: regEmail.trim().toLowerCase(), password: regPassword, role: 'pharmacy' })
+      });
+
+      if (!createResponse.ok) {
+        const error = await createResponse.json();
+        throw new Error(error.error || 'Registration failed');
+      }
+
+      // Auto sign-in after successful registration
+      const loginResponse = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: regEmail.trim().toLowerCase(), password: regPassword })
+      });
+
+      if (!loginResponse.ok) {
+        throw new Error('Account created. Please sign in.');
+      }
+
+      const data = (await loginResponse.json()) as { user: AppUser };
+      setCurrentUser(data.user);
+      setRole(data.user.role);
+      setActiveWholesalerId('');
+      localStorage.setItem('pch-user', JSON.stringify(data.user));
+      setRegName('');
+      setRegEmail('');
+      setRegPassword('');
+    } catch (error) {
+      setRegError((error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="page-container">
+        <section className="panel auth-panel">
+          <h1>Pharmacy Connect Hub</h1>
+          {showRegister ? (
+            <>
+              <p>Create a pharmacy account to start ordering.</p>
+              <div className="auth-form">
+                <input
+                  value={regName}
+                  onChange={(event) => setRegName(event.target.value)}
+                  placeholder="Pharmacy / business name"
+                />
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(event) => setRegEmail(event.target.value)}
+                  placeholder="Email"
+                />
+                <input
+                  type="password"
+                  value={regPassword}
+                  onChange={(event) => setRegPassword(event.target.value)}
+                  placeholder="Password"
+                />
+                <button onClick={register} disabled={loading}>
+                  {loading ? 'Creating account...' : 'Create account'}
+                </button>
+              </div>
+              {regError && <p className="message">{regError}</p>}
+              <p className="auth-toggle">
+                Already have an account?{' '}
+                <button className="link-btn" onClick={() => { setShowRegister(false); setRegError(''); }}>
+                  Sign in
+                </button>
+              </p>
+            </>
+          ) : (
+            <>
+              <p>Sign in to access your role-specific workspace.</p>
+              <div className="auth-form">
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  placeholder="Email"
+                />
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="Password"
+                />
+                <button onClick={login} disabled={loading}>
+                  {loading ? 'Signing in...' : 'Sign in'}
+                </button>
+              </div>
+              {loginError && <p className="message">{loginError}</p>}
+              <p className="auth-toggle">
+                New pharmacy?{' '}
+                <button className="link-btn" onClick={() => { setShowRegister(true); setLoginError(''); }}>
+                  Create an account
+                </button>
+              </p>
+              <div className="auth-hint">
+                <p><strong>Demo accounts</strong></p>
+                <p>Admin: admin@pharmacyconnecthub.com / demo123</p>
+                <p>Supplier: supplier@pharmacyconnecthub.com / demo123</p>
+                <p>Pharmacy: pharmacy@pharmacyconnecthub.com / demo123</p>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-container">
       <header>
@@ -327,27 +836,15 @@ export default function App() {
           <h1>Pharmacy Connect Hub</h1>
           <p>Order request + supplier quote dashboard for pharmacy procurement.</p>
         </div>
-        <div className="role-panel">
-          <label>
-            View as
-            <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
-              <option value="pharmacy">Pharmacy</option>
-              <option value="supplier">Supplier</option>
-            </select>
-          </label>
-          {role === 'supplier' && (
-            <label>
-              Supplier
-              <select value={activeWholesalerId} onChange={(event) => setActiveWholesalerId(event.target.value)}>
-                <option value="">Select wholesaler</option>
-                {wholesalers.map((wholesaler) => (
-                  <option key={wholesaler.id} value={wholesaler.id}>
-                    {wholesaler.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <div className="role-panel session-panel">
+          <p>
+            <strong>{currentUser.name}</strong>
+          </p>
+          <p>Role: {currentUser.role}</p>
+          {currentUser.role === 'supplier' && (
+            <p>Supplier: {wholesalers.find((wholesaler) => wholesaler.id === activeWholesalerId)?.name ?? 'Unassigned'}</p>
           )}
+          <button onClick={logout}>Sign out</button>
         </div>
       </header>
 
@@ -356,6 +853,51 @@ export default function App() {
           <section className="grid-two">
             <div className="panel">
               <h2>Search products</h2>
+              <div className="compare-box">
+                <div className="compare-header">
+                  <h3>Compare wholesaler offers</h3>
+                  <p>See who has the best price before adding to cart.</p>
+                </div>
+                <div className="compare-controls">
+                  <select value={compareGeneric} onChange={(event) => setCompareGeneric(event.target.value)}>
+                    {compareGenericOptions.length === 0 ? (
+                      <option value="">No medicines available</option>
+                    ) : (
+                      compareGenericOptions.map((generic) => (
+                        <option key={generic} value={generic}>
+                          {generic}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <select value={compareStrength} onChange={(event) => setCompareStrength(event.target.value)}>
+                    <option value="">All strengths</option>
+                    {compareStrengthOptions.map((strength) => (
+                      <option key={strength} value={strength}>
+                        {strength}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="compare-list">
+                  {compareOffers.length === 0 ? (
+                    <p className="empty-state">No supplier offers match this selection.</p>
+                  ) : (
+                    compareOffers.map((offer, index) => (
+                      <div key={offer.id} className={`compare-offer ${index === 0 ? 'best-offer' : ''}`}>
+                        <div>
+                          <strong>{offer.wholesaler?.name ?? 'Unknown wholesaler'}</strong>
+                          <p>{offer.packSize} • Stock: {offer.stock}</p>
+                        </div>
+                        <div className="compare-price">
+                          {index === 0 && <span className="badge">Best price</span>}
+                          <strong>GHS {offer.price.toFixed(2)}</strong>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
               <div className="controls-row">
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, generic, pack size" />
                 <select value={selectedWholesaler} onChange={(event) => setSelectedWholesaler(event.target.value)}>
@@ -440,6 +982,19 @@ export default function App() {
               <button className="primary-button" onClick={submitOrder} disabled={loading || cart.length === 0}>
                 {loading ? 'Submitting order...' : 'Submit order'}
               </button>
+              {lastSubmittedRequest && (
+                <div className="confirmation-box">
+                  <div className="quote-heading">
+                    <strong>Last order confirmation</strong>
+                    <button onClick={() => window.print()}>Print summary</button>
+                  </div>
+                  <p><strong>Request ID:</strong> {lastSubmittedRequest.id}</p>
+                  <p><strong>Pharmacy:</strong> {lastSubmittedRequest.customerName}</p>
+                  <p><strong>Address:</strong> {lastSubmittedRequest.deliveryAddress}</p>
+                  <p><strong>Status:</strong> {lastSubmittedRequest.status}</p>
+                  <p><strong>Submitted:</strong> {new Date(lastSubmittedRequest.createdAt).toLocaleString()}</p>
+                </div>
+              )}
               {message && <p className="message">{message}</p>}
             </div>
           </section>
@@ -461,6 +1016,16 @@ export default function App() {
                       <p>
                         <strong>Status:</strong> {request.status}
                       </p>
+                      <div className="status-track">
+                        {orderStatusFlow.map((statusLabel) => (
+                          <span
+                            key={`${request.id}-${statusLabel}`}
+                            className={`status-step ${getStatusIndex(request.status) >= getStatusIndex(statusLabel) ? 'done' : ''}`}
+                          >
+                            {statusLabel}
+                          </span>
+                        ))}
+                      </div>
                       <p>
                         <strong>Requested:</strong> {new Date(request.createdAt).toLocaleString()}
                       </p>
@@ -486,8 +1051,19 @@ export default function App() {
                               </div>
                               <p>Total: GHS {quote.total.toFixed(2)}</p>
                               <p>Sent: {new Date(quote.createdAt).toLocaleString()}</p>
+                              <div className="quote-items">
+                                {quote.items.map((item) => (
+                                  <div key={item.productId} className="quote-item-row">
+                                    <p>
+                                      <strong>{item.productName}</strong> - GHS {item.quotedPrice.toFixed(2)} each
+                                    </p>
+                                    <p>Delivery: {item.deliveryDays} day(s)</p>
+                                    {item.comment && <p>Note: {item.comment}</p>}
+                                  </div>
+                                ))}
+                              </div>
                               {quote.status === 'Pending' && (
-                                <button onClick={() => acceptQuote(quote.id)} disabled={loading || request.status === 'Accepted'}>
+                                <button onClick={() => acceptQuote(quote.id)} disabled={loading || request.status !== 'Quotes received'}>
                                   Accept this quote
                                 </button>
                               )}
@@ -507,7 +1083,7 @@ export default function App() {
             )}
           </section>
         </>
-      ) : (
+      ) : role === 'supplier' ? (
         <section className="panel">
           <h2>Supplier dashboard</h2>
           {!activeWholesalerId ? (
@@ -518,6 +1094,10 @@ export default function App() {
             <div className="orders-grid">
               {supplierRequests.map((request) => {
                 const supplyableItems = getSupplyableProducts(request);
+                const acceptedSupplierQuote = supplierQuotes.find(
+                  (quote) => quote.orderRequestId === request.id && quote.status === 'Accepted'
+                );
+                const nextSupplierAction = getNextSupplierAction(request.status);
                 return (
                   <article key={request.id} className="order-card">
                     <h3>{request.customerName}</h3>
@@ -550,9 +1130,22 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <button className="primary-button" onClick={() => submitQuote(request.id)} disabled={loading || supplyableItems.length === 0}>
+                    <button
+                      className="primary-button"
+                      onClick={() => submitQuote(request.id)}
+                      disabled={
+                        loading ||
+                        supplyableItems.length === 0 ||
+                        (request.status !== 'Quote requested' && request.status !== 'Quotes received')
+                      }
+                    >
                       Submit quote
                     </button>
+                    {acceptedSupplierQuote && nextSupplierAction && (
+                      <button className="status-action" onClick={() => advanceOrderStatus(request.id)} disabled={loading}>
+                        {nextSupplierAction}
+                      </button>
+                    )}
                     <div className="quote-list">
                       <h4>My quotes</h4>
                       {supplierQuotes.filter((quote) => quote.orderRequestId === request.id).length === 0 ? (
@@ -568,6 +1161,17 @@ export default function App() {
                               </div>
                               <p>GHS {quote.total.toFixed(2)}</p>
                               <p>Sent: {new Date(quote.createdAt).toLocaleString()}</p>
+                              <div className="quote-items">
+                                {quote.items.map((item) => (
+                                  <div key={item.productId} className="quote-item-row">
+                                    <p>
+                                      <strong>{item.productName}</strong> - GHS {item.quotedPrice.toFixed(2)} each
+                                    </p>
+                                    <p>Delivery: {item.deliveryDays} day(s)</p>
+                                    {item.comment && <p>Note: {item.comment}</p>}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           ))
                       )}
@@ -577,6 +1181,162 @@ export default function App() {
               })}
             </div>
           )}
+          {message && <p className="message">{message}</p>}
+        </section>
+      ) : (
+        <section className="panel">
+          <h2>Admin workspace</h2>
+          <p className="product-meta">Onboard wholesalers and publish products into the marketplace catalog.</p>
+
+          <div className="admin-grid">
+            <article className="form-card">
+              <h3>Add wholesaler</h3>
+              <div className="quote-inputs">
+                <input
+                  value={newWholesalerName}
+                  onChange={(event) => setNewWholesalerName(event.target.value)}
+                  placeholder="Wholesaler name"
+                />
+                <input
+                  value={newWholesalerLocation}
+                  onChange={(event) => setNewWholesalerLocation(event.target.value)}
+                  placeholder="Location"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={5}
+                  step="0.1"
+                  value={newWholesalerRating}
+                  onChange={(event) => setNewWholesalerRating(event.target.value)}
+                  placeholder="Rating"
+                />
+                <button onClick={createWholesaler} disabled={loading}>Add wholesaler</button>
+              </div>
+            </article>
+
+            <article className="form-card">
+              <h3>Add product</h3>
+              <div className="quote-inputs">
+                <select value={newProductWholesalerId} onChange={(event) => setNewProductWholesalerId(event.target.value)}>
+                  <option value="">Select wholesaler</option>
+                  {wholesalers.map((wholesaler) => (
+                    <option key={wholesaler.id} value={wholesaler.id}>
+                      {wholesaler.name}
+                    </option>
+                  ))}
+                </select>
+                <input value={newProductName} onChange={(event) => setNewProductName(event.target.value)} placeholder="Product name" />
+                <input value={newProductGeneric} onChange={(event) => setNewProductGeneric(event.target.value)} placeholder="Generic name" />
+                <div className="inline-grid">
+                  <input value={newProductStrength} onChange={(event) => setNewProductStrength(event.target.value)} placeholder="Strength" />
+                  <input value={newProductPackSize} onChange={(event) => setNewProductPackSize(event.target.value)} placeholder="Pack size" />
+                </div>
+                <div className="inline-grid">
+                  <input type="number" min={0} step="0.01" value={newProductPrice} onChange={(event) => setNewProductPrice(event.target.value)} placeholder="Price (GHS)" />
+                  <input type="number" min={0} step="1" value={newProductStock} onChange={(event) => setNewProductStock(event.target.value)} placeholder="Stock" />
+                </div>
+                <button onClick={createProduct} disabled={loading}>Add product</button>
+              </div>
+            </article>
+          </div>
+
+          <div className="admin-grid">
+            <article className="form-card">
+              <h3>Wholesalers ({wholesalers.length})</h3>
+              <div className="list-stack">
+                {wholesalers.map((wholesaler) => (
+                  <div key={wholesaler.id} className="quote-item-row">
+                    <p><strong>{wholesaler.name}</strong></p>
+                    <p>{wholesaler.location}</p>
+                    <p>Rating: {wholesaler.rating.toFixed(1)}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="form-card">
+              <h3>Products ({products.length})</h3>
+              <div className="list-stack">
+                {products.map((product) => (
+                  <div key={product.id} className="quote-item-row">
+                    <p><strong>{product.name}</strong></p>
+                    <p>{product.generic} - {product.strength}</p>
+                    <p>GHS {product.price.toFixed(2)} - Stock {product.stock}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <h3 className="admin-section-title">User accounts</h3>
+          <div className="admin-grid">
+            <article className="form-card">
+              <h3>Create account</h3>
+              <div className="quote-inputs">
+                <input
+                  value={newUserName}
+                  onChange={(event) => setNewUserName(event.target.value)}
+                  placeholder="Full name"
+                />
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(event) => setNewUserEmail(event.target.value)}
+                  placeholder="Email address"
+                />
+                <input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(event) => setNewUserPassword(event.target.value)}
+                  placeholder="Password"
+                />
+                <select value={newUserRole} onChange={(event) => { setNewUserRole(event.target.value as Role); setNewUserWholesalerId(''); }}>
+                  <option value="pharmacy">Pharmacy</option>
+                  <option value="supplier">Supplier</option>
+                  <option value="admin">Admin</option>
+                </select>
+                {newUserRole === 'supplier' && (
+                  <select value={newUserWholesalerId} onChange={(event) => setNewUserWholesalerId(event.target.value)}>
+                    <option value="">Select wholesaler</option>
+                    {wholesalers.map((wh) => (
+                      <option key={wh.id} value={wh.id}>{wh.name}</option>
+                    ))}
+                  </select>
+                )}
+                <button onClick={createUser} disabled={loading}>Create account</button>
+              </div>
+            </article>
+
+            <article className="form-card">
+              <h3>Accounts ({adminUsers.length})</h3>
+              <div className="list-stack">
+                {adminUsers.length === 0 ? (
+                  <p className="empty-state">No accounts loaded.</p>
+                ) : (
+                  adminUsers.map((user) => (
+                    <div key={user.id} className="quote-item-row user-row">
+                      <div>
+                        <p><strong>{user.name}</strong></p>
+                        <p>{user.email}</p>
+                        <p>Role: <span className={`role-badge role-${user.role}`}>{user.role}</span>
+                          {user.role === 'supplier' && user.wholesalerId && (
+                            <> · {wholesalers.find((wh) => wh.id === user.wholesalerId)?.name ?? user.wholesalerId}</>
+                          )}
+                        </p>
+                      </div>
+                      {user.id !== currentUser?.id && (
+                        <button className="small-danger" onClick={() => deleteUser(user.id)} disabled={loading}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+          </div>
+
           {message && <p className="message">{message}</p>}
         </section>
       )}

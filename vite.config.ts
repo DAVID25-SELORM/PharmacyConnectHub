@@ -1,12 +1,15 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import tsConfigPaths from 'vite-tsconfig-paths'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': 'http://localhost:4000'
-    }
-  }
-});
+  plugins: [
+    TanStackRouterVite({ routesDirectory: 'src/routes', generatedRouteTree: 'src/routeTree.gen.ts' }),
+    react(),
+    tailwindcss(),
+    tsConfigPaths(),
+  ],
+})
+
