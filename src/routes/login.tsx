@@ -27,10 +27,19 @@ function LoginPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      if (error.message.toLowerCase().includes("invalid login credentials")) {
+        toast.error(
+          "Invalid email or password. If you were added as staff, sign in with the email already registered on PharmaHub or use Forgot password to reset access.",
+        );
+      } else {
+        toast.error(error.message);
+      }
       return;
     }
     toast.success("Welcome back!");

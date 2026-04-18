@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WholesalerRouteImport } from './routes/wholesaler'
+import { Route as StaffRouteImport } from './routes/staff'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PharmacyRouteImport } from './routes/pharmacy'
@@ -23,6 +24,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const WholesalerRoute = WholesalerRouteImport.update({
   id: '/wholesaler',
   path: '/wholesaler',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffRoute = StaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/pharmacy'
     | '/reset-password'
     | '/signup'
+    | '/staff'
     | '/wholesaler'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/pharmacy'
     | '/reset-password'
     | '/signup'
+    | '/staff'
     | '/wholesaler'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/pharmacy'
     | '/reset-password'
     | '/signup'
+    | '/staff'
     | '/wholesaler'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   PharmacyRoute: typeof PharmacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  StaffRoute: typeof StaffRoute
   WholesalerRoute: typeof WholesalerRoute
 }
 
@@ -167,6 +180,13 @@ declare module '@tanstack/react-router' {
       path: '/wholesaler'
       fullPath: '/wholesaler'
       preLoaderRoute: typeof WholesalerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff': {
+      id: '/staff'
+      path: '/staff'
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -245,6 +265,7 @@ const rootRouteChildren: RootRouteChildren = {
   PharmacyRoute: PharmacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  StaffRoute: StaffRoute,
   WholesalerRoute: WholesalerRoute,
 }
 export const routeTree = rootRouteImport

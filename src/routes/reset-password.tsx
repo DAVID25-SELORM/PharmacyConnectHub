@@ -20,15 +20,27 @@ function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Supabase fires PASSWORD_RECOVERY when the page loads with a valid reset hash
+    let active = true;
+
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (active && data.session) {
+        setReady(true);
+      }
+    })();
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" || Boolean(session)) {
         setReady(true);
       }
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -48,8 +60,8 @@ function ResetPasswordPage() {
       toast.error(error.message);
       return;
     }
-    toast.success("Password updated! Please sign in.");
-    navigate({ to: "/login" });
+    toast.success("Password updated. Opening your workspace.");
+    navigate({ to: "/dashboard" });
   };
 
   if (!ready) {
@@ -82,7 +94,7 @@ function ResetPasswordPage() {
         <Card className="p-8 shadow-elegant">
           <h1 className="font-display text-2xl font-bold">Set new password</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose a strong password for your account.
+            Choose a strong password to finish account access.
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>

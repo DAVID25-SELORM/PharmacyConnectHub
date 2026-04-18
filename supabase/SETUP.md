@@ -10,6 +10,7 @@ In the Supabase SQL editor for your project, run the migration files in this ord
 1. `supabase/migrations/20260418020126_9c479796-cb89-4d6c-9caf-0bb04a77bf15.sql`
 2. `supabase/migrations/20260418020137_9bde4aff-ea64-4c26-a749-dbfe0e9d0e53.sql`
 3. `supabase/migrations/20260418021718_2cdc1fd4-5ee9-4953-8ad4-6e1a83e54eb9.sql`
+4. `supabase/migrations/20260418030000_add_business_staff.sql`
 
 `supabase/schema.sql` is an older prototype schema and should not be used for the current Supabase app.
 
@@ -20,12 +21,15 @@ Client-side variables required for the Supabase app:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-Server-side variables required only if you deploy the server handlers:
+Server-side variables required for server handlers:
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `PAYSTACK_SECRET_KEY`
+
+The current staff-management flow uses direct Supabase RPC calls from the client for existing users,
+so staff additions do not depend on the `api/staff/*` handlers.
 
 ## 3. Hosting assumptions
 
