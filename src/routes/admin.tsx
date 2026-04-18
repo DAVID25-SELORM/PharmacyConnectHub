@@ -57,7 +57,12 @@ function AdminPanel() {
   const navigate = useNavigate();
   const { loading, user, roles, business } = useSession();
   const [businesses, setBusinesses] = useState<Biz[]>([]);
-  const [stats, setStats] = useState({ pending: 0, approved: 0, orders: 0, gmv: 0 });
+  const [stats, setStats] = useState({
+    pharmacies: { total: 0, pending: 0, approved: 0, rejected: 0 },
+    wholesalers: { total: 0, pending: 0, approved: 0, rejected: 0 },
+    orders: 0,
+    gmv: 0,
+  });
 
   useEffect(() => {
     if (loading) return;
@@ -78,11 +83,26 @@ function AdminPanel() {
       .order("created_at", { ascending: false });
     const all = (bizData as Biz[]) ?? [];
     setBusinesses(all);
+    
+    const pharmacies = all.filter((b) => b.type === "pharmacy");
+    const wholesalers = all.filter((b) => b.type === "wholesaler");
+    
     const { data: orderAgg } = await supabase.from("orders").select("total_ghs,status");
     const orders = (orderAgg as { total_ghs: number; status: string }[]) ?? [];
+    
     setStats({
-      pending: all.filter((b) => b.verification_status === "pending").length,
-      approved: all.filter((b) => b.verification_status === "approved").length,
+      pharmacies: {
+        total: pharmacies.length,
+        pending: pharmacies.filter((b) => b.verification_status === "pending").length,
+        approved: pharmacies.filter((b) => b.verification_status === "approved").length,
+        rejected: pharmacies.filter((b) => b.verification_status === "rejected").length,
+      },
+      wholesalers: {
+        total: wholesalers.length,
+        pending: wholesalers.filter((b) => b.verification_status === "pending").length,
+        approved: wholesalers.filter((b) => b.verification_status === "approved").length,
+        rejected: wholesalers.filter((b) => b.verification_status === "rejected").length,
+      },
       orders: orders.length,
       gmv: orders.reduce((s, o) => s + Number(o.total_ghs), 0),
     });
@@ -115,11 +135,73 @@ function AdminPanel() {
           Approve businesses and monitor platform health.
         </p>
 
-        <div className="grid gap-4 my-8 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Pending verification" value={stats.pending} />
-          <Stat label="Approved businesses" value={stats.approved} />
-          <Stat label="Total orders" value={stats.orders} />
-          <Stat label="Platform GMV" value={formatGHS(stats.gmv)} />
+        <div className="my-8 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="p-5 border-primary/20 bg-primary/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-primary">Pharmacies</div>
+                <Store className="h-5 w-5 text-primary" />
+              </div>
+              <div className="font-display text-3xl font-bold">{stats.pharmacies.total}</div>
+              <div className="mt-2 flex gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  {stats.pharmacies.approved} approved
+                </span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-warning">{stats.pharmacies.pending} pending</span>
+              </div>
+            </Card>
+
+            <Card className="p-5 border-accent/20 bg-accent/5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-accent">Wholesalers</div>
+                <Building2 className="h-5 w-5 text-accent" />
+              </div>
+              <div className="font-display text-3xl font-bold">{stats.wholesalers.total}</div>
+              <div className="mt-2 flex gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  {stats.wholesalers.approved} approved
+                </span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-warning">{stats.wholesalers.pending} pending</span>
+              </div>
+            </Card>
+
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-muted-foreground">
+                  Pending Verification
+                </div>
+                <ShieldX className="h-5 w-5 text-warning" />
+              </div>
+              <div className="font-display text-3xl font-bold">
+                {stats.pharmacies.pending + stats.wholesalers.pending}
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">Requires your approval</div>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-muted-foreground">Total Orders</div>
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="font-display text-3xl font-bold">{stats.orders}</div>
+              <div className="mt-2 text-xs text-muted-foreground">All-time platform orders</div>
+            </Card>
+
+            <Card className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-semibold text-muted-foreground">Platform GMV</div>
+                <ShieldCheck className="h-5 w-5 text-success" />
+              </div>
+              <div className="font-display text-3xl font-bold">{formatGHS(stats.gmv)}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Gross merchandise value
+              </div>
+            </Card>
+          </div>
         </div>
 
         <Card className="mb-8 border-border/70 p-6">
