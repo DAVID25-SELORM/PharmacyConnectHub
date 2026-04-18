@@ -8,8 +8,6 @@ import {
   Trash2,
   Package,
   ShieldCheck,
-  CreditCard,
-  Banknote,
 } from "lucide-react";
 import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -91,7 +89,7 @@ function PharmacyDashboard() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "paystack">("paystack");
+  const [paymentMethod, setPaymentMethod] = useState<"cod" | "paystack">("cod");
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
@@ -136,35 +134,6 @@ function PharmacyDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
-  // Verify Paystack payment when returning from checkout (?reference=...)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const reference = params.get("reference") || params.get("trxref");
-    if (!reference) return;
-    void (async () => {
-      try {
-        const res = await fetch("/api/paystack/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reference }),
-        });
-        const j = await res.json();
-        if (res.ok && j.status === "paid") toast.success("Payment confirmed!");
-        else toast.error(`Payment ${j.status ?? "not confirmed"}`);
-      } catch {
-        toast.error("Failed to verify payment");
-      } finally {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("reference");
-        url.searchParams.delete("trxref");
-        window.history.replaceState({}, "", url.toString());
-        void loadOrders();
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
 
   const addToCart = (productId: string) => {
@@ -185,24 +154,6 @@ function PharmacyDashboard() {
       return;
     }
     setCart((prev) => prev.map((c) => (c.productId === productId ? { ...c, quantity: qty } : c)));
-  };
-
-  const payForOrder = async (orderId: string) => {
-    const { data: sess } = await supabase.auth.getSession();
-    const res = await fetch("/api/paystack/init", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${sess.session?.access_token ?? ""}`,
-      },
-      body: JSON.stringify({ orderId }),
-    });
-    const j = await res.json();
-    if (!res.ok) {
-      toast.error(j.error ?? "Failed to start payment");
-      return;
-    }
-    window.location.href = j.authorization_url;
   };
 
   const placeOrder = async () => {
@@ -262,20 +213,6 @@ function PharmacyDashboard() {
       }
       if (placedOrders.length === 0) return;
 
-      if (paymentMethod === "paystack") {
-        toast.success(
-          placedOrders.length > 1
-            ? `${placedOrders.length} orders placed. Pay each from "My orders".`
-            : "Redirecting to Paystack…",
-        );
-        setCart([]);
-        void loadOrders();
-        if (placedOrders.length === 1) {
-          await payForOrder(placedOrders[0].id);
-        }
-        return;
-      }
-
       toast.success(
         `Placed ${placedOrders.length} order${placedOrders.length > 1 ? "s" : ""} (Pay on Delivery)`,
       );
@@ -316,8 +253,7 @@ function PharmacyDashboard() {
             productMap={productMap}
             updateQty={updateQty}
             placeOrder={placeOrder}
-            paymentMethod={paymentMethod}
-            setPaymentMethod={setPaymentMethod}
+
             placing={placing}
             canPlaceOrders={canPlaceOrders}
           />
@@ -347,7 +283,7 @@ function PharmacyDashboard() {
             />
           </TabsContent>
           <TabsContent value="orders">
-            <OrdersView orders={orders} payForOrder={payForOrder} />
+            <OrdersView orders={orders} />
           </TabsContent>
         </Tabs>
       </main>
@@ -373,8 +309,6 @@ function CartSheet({
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
   placeOrder: () => Promise<void>;
-  paymentMethod: "cod" | "paystack";
-  setPaymentMethod: (m: "cod" | "paystack") => void;
   placing: boolean;
   canPlaceOrders: boolean;
 }) {
@@ -473,37 +407,6 @@ function CartSheet({
             </div>
             <SheetFooter className="border-t border-border pt-4">
               <div className="w-full space-y-4">
-                <div>
-                  <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    Payment method
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("paystack")}
-                      className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${paymentMethod === "paystack" ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:bg-muted/40"}`}
-                    >
-                      <div className="flex items-center gap-1.5 text-sm font-semibold">
-                        <CreditCard className="h-4 w-4" /> Paystack
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        Card · MoMo · Bank
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("cod")}
-                      className={`flex flex-col items-start rounded-xl border p-3 text-left transition ${paymentMethod === "cod" ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:bg-muted/40"}`}
-                    >
-                      <div className="flex items-center gap-1.5 text-sm font-semibold">
-                        <Banknote className="h-4 w-4" /> Pay on delivery
-                      </div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        Cash to courier
-                      </div>
-                    </button>
-                  </div>
-                </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-semibold">{formatGHS(subtotal)}</span>
@@ -675,13 +578,7 @@ function CatalogView({
   );
 }
 
-function OrdersView({
-  orders,
-  payForOrder,
-}: {
-  orders: OrderRow[];
-  payForOrder: (id: string) => Promise<void>;
-}) {
+function OrdersView({ orders }: { orders: OrderRow[] }) {
   if (orders.length === 0) {
     return (
       <Card className="p-12 text-center text-muted-foreground">
@@ -729,16 +626,6 @@ function OrdersView({
               </div>
             ))}
           </div>
-
-          {o.payment_method === "paystack" &&
-            o.payment_status === "unpaid" &&
-            o.status !== "cancelled" && (
-              <div className="mt-4 flex justify-end">
-                <Button variant="hero" size="sm" onClick={() => payForOrder(o.id)}>
-                  <CreditCard className="h-4 w-4" /> Pay {formatGHS(o.total_ghs)}
-                </Button>
-              </div>
-            )}
         </Card>
       ))}
     </div>

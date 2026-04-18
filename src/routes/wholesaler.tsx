@@ -9,6 +9,8 @@ import {
   Search,
   Pill,
   Loader2,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -474,6 +476,7 @@ function ProductsManager({
                   <th className="px-4 py-3 font-medium text-right">Price</th>
                   <th className="px-4 py-3 font-medium text-right">Stock</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  {canManageProducts && <th className="px-4 py-3 font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -504,6 +507,14 @@ function ProductsManager({
                         </Badge>
                       )}
                     </td>
+                    {canManageProducts && (
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <EditProductDialog product={p} reload={reload} />
+                          <DeleteProductDialog product={p} reload={reload} />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -699,3 +710,232 @@ function AddProductDialog({
     </Dialog>
   );
 }
+
+function EditProductDialog({
+  product,
+  reload,
+}: {
+  product: Product;
+  reload: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: product.name,
+    brand: product.brand ?? "",
+    category: product.category ?? "Antibiotics",
+    form: product.form ?? "Tablet",
+    pack_size: product.pack_size ?? "",
+    price_ghs: product.price_ghs.toString(),
+    stock: product.stock.toString(),
+    image_hue: (product.image_hue ?? 200).toString(),
+  });
+
+  const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.price_ghs) {
+      toast.error("Name and price are required");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: form.name.trim(),
+        brand: form.brand.trim() || null,
+        category: form.category,
+        form: form.form,
+        pack_size: form.pack_size.trim() || null,
+        price_ghs: Number(form.price_ghs),
+        stock: Number(form.stock || 0),
+        image_hue: Number(form.image_hue || 200),
+      })
+      .eq("id", product.id);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Product updated");
+    setOpen(false);
+    void reload();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Edit className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit product</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="e-name">Name *</Label>
+            <Input
+              id="e-name"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="e.g. Amoxicillin 500mg"
+              required
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="e-brand">Brand</Label>
+              <Input
+                id="e-brand"
+                value={form.brand}
+                onChange={(e) => update("brand", e.target.value)}
+                placeholder="GSK"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="e-cat">Category</Label>
+              <Select value={form.category} onValueChange={(v) => update("category", v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="e-form">Form</Label>
+              <Select value={form.form} onValueChange={(v) => update("form", v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Tablet", "Capsule", "Syrup", "Injection", "Cream", "Drops", "Sachet"].map(
+                    (f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="e-pack">Pack size</Label>
+              <Input
+                id="e-pack"
+                value={form.pack_size}
+                onChange={(e) => update("pack_size", e.target.value)}
+                placeholder="100s"
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="e-price">Price (GH₵) *</Label>
+              <Input
+                id="e-price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.price_ghs}
+                onChange={(e) => update("price_ghs", e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="e-stock">Stock</Label>
+              <Input
+                id="e-stock"
+                type="number"
+                min="0"
+                value={form.stock}
+                onChange={(e) => update("stock", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="e-hue">Color hue</Label>
+              <Input
+                id="e-hue"
+                type="number"
+                min="0"
+                max="360"
+                value={form.image_hue}
+                onChange={(e) => update("image_hue", e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="hero" disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteProductDialog({
+  product,
+  reload,
+}: {
+  product: Product;
+  reload: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const onDelete = async () => {
+    setDeleting(true);
+    const { error } = await supabase.from("products").delete().eq("id", product.id);
+    setDeleting(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Product deleted");
+    setOpen(false);
+    void reload();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete product</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete <strong>{product.name}</strong>? This action cannot be
+            undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" onClick={onDelete} disabled={deleting}>
+            {deleting && <Loader2 className="h-4 w-4 animate-spin" />} Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
