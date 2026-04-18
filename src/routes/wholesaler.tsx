@@ -11,6 +11,8 @@ import {
   Loader2,
   Edit,
   Trash2,
+  Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -449,7 +451,10 @@ function ProductsManager({
             />
           </div>
           {canManageProducts ? (
-            <AddProductDialog businessId={businessId} reload={reload} />
+            <div className="flex gap-2">
+              <BulkUploadDialog businessId={businessId} reload={reload} />
+              <AddProductDialog businessId={businessId} reload={reload} />
+            </div>
           ) : (
             <div className="text-sm text-muted-foreground">
               View-only access. Ask the business owner for manager access to edit products.
@@ -938,4 +943,172 @@ function DeleteProductDialog({
     </Dialog>
   );
 }
+
+function BulkUploadDialog({
+  businessId,
+  reload,
+}: {
+  businessId: string;
+  reload: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+
+  const downloadTemplate = () => {
+    const csvContent = `name,brand,category,form,pack_size,price_ghs,stock,image_hue
+Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500,70
+Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240,195
+Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
+    
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "product-upload-template.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const parseCSV = (text: string): Array<Record<string, string>> => {
+    const lines = text.trim().split("\n");
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].split(",").map((h) => h.trim());
+    const rows: Array<Record<string, string>> = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(",").map((v) => v.trim());
+      if (values.length !== headers.length) continue;
+      
+      const row: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index];
+      });
+      rows.push(row);
+    }
+    
+    return rows;
+  };
+
+  const onUpload = async () => {
+    if (!file) {
+      toast.error("Please select a CSV file");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const text = await file.text();
+      const rows = parseCSV(text);
+
+      if (rows.length === 0) {
+        toast.error("No valid products found in CSV");
+        setUploading(false);
+        return;
+      }
+
+      const products = rows.map((row) => ({
+        wholesaler_id: businessId,
+        name: row.name?.trim() || "",
+        brand: row.brand?.trim() || null,
+        category: row.category?.trim() || "Other",
+        form: row.form?.trim() || "Tablet",
+        pack_size: row.pack_size?.trim() || null,
+        price_ghs: Number(row.price_ghs) || 0,
+        stock: Number(row.stock) || 0,
+        image_hue: Number(row.image_hue) || 200,
+      }));
+
+      // Validate required fields
+      const invalid = products.filter((p) => !p.name || p.price_ghs <= 0);
+      if (invalid.length > 0) {
+        toast.error(`${invalid.length} product(s) missing name or valid price. Please fix and retry.`);
+        setUploading(false);
+        return;
+      }
+
+      const { error } = await supabase.from("products").insert(products);
+
+      if (error) {
+        toast.error(error.message);
+        setUploading(false);
+        return;
+      }
+
+      toast.success(`Successfully uploaded ${products.length} product(s)`);
+      setOpen(false);
+      setFile(null);
+      void reload();
+    } catch (err) {
+      toast.error("Failed to parse CSV file. Please check the format.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">
+          <Upload className="h-4 w-4" /> Bulk upload
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Bulk upload products</DialogTitle>
+          <DialogDescription>
+            Upload multiple products at once using a CSV file.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <h4 className="mb-2 text-sm font-medium">Step 1: Download template</h4>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Download our CSV template with sample products to see the required format.
+            </p>
+            <Button variant="outline" size="sm" onClick={downloadTemplate}>
+              <Download className="h-4 w-4" /> Download template
+            </Button>
+          </div>
+
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <h4 className="mb-2 text-sm font-medium">Step 2: Fill in your products</h4>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Open the template in Excel or Google Sheets and add your products.
+            </p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              <li>• <strong>name</strong> and <strong>price_ghs</strong> are required</li>
+              <li>• Use exact category names from the dropdown</li>
+              <li>• Save as CSV format when done</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <h4 className="mb-2 text-sm font-medium">Step 3: Upload CSV file</h4>
+            <Input
+              type="file"
+              accept=".csv"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+            {file && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+              </p>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="button" variant="hero" onClick={onUpload} disabled={uploading || !file}>
+            {uploading && <Loader2 className="h-4 w-4 animate-spin" />} Upload products
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
