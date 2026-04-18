@@ -52,12 +52,26 @@ async function getAccessToken() {
   return session?.access_token ?? "";
 }
 
+function getStaffApiUrl() {
+  const configuredOrigin = import.meta.env.VITE_STAFF_API_BASE_URL?.trim();
+  if (configuredOrigin) {
+    return new URL("/api/staff/list", configuredOrigin).toString();
+  }
+
+  if (import.meta.env.DEV) {
+    return null;
+  }
+
+  return "/api/staff/list";
+}
+
 export async function listBusinessStaff(businessId: string): Promise<StaffMember[]> {
   const accessToken = await getAccessToken();
+  const staffApiUrl = getStaffApiUrl();
 
-  if (accessToken) {
+  if (accessToken && staffApiUrl) {
     try {
-      const response = await fetch("/api/staff/list", {
+      const response = await fetch(staffApiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
