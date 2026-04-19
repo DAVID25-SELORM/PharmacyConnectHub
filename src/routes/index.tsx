@@ -85,9 +85,7 @@ function Hero() {
                 </Link>
               </Button>
               <Button asChild variant="outline" size="xl">
-                <Link to="/wholesaler">
-                  I'm a wholesaler
-                </Link>
+                <Link to="/wholesaler">I'm a wholesaler</Link>
               </Button>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -221,8 +219,8 @@ function Features() {
             Built for the way pharmacies actually buy
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Stop juggling WhatsApp orders and scattered price lists. PharmaHub brings the
-            wholesale catalog into one clean workspace.
+            Stop juggling WhatsApp orders and scattered price lists. PharmaHub brings the wholesale
+            catalog into one clean workspace.
           </p>
         </div>
         <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

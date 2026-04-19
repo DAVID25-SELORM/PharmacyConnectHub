@@ -49,3 +49,4 @@ npm run dev
 Apply the SQL migrations in `supabase/migrations` to your Supabase project before using the app.
 
 Additional setup notes live in `supabase/SETUP.md`.
+Run `supabase/SMOKE_TEST.md` after setup to verify signup, approval, catalog, ordering, and notifications end to end.

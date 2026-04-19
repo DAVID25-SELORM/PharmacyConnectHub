@@ -192,7 +192,6 @@ CREATE POLICY "Insert items for own order" ON public.order_items FOR INSERT WITH
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  user_count INT;
   signup_role public.app_role;
 BEGIN
   INSERT INTO public.profiles (id, full_name, phone)
@@ -201,8 +200,7 @@ BEGIN
   signup_role := COALESCE((NEW.raw_user_meta_data->>'role')::public.app_role, 'pharmacy');
   INSERT INTO public.user_roles (user_id, role) VALUES (NEW.id, signup_role);
 
-  SELECT COUNT(*) INTO user_count FROM auth.users;
-  IF user_count = 1 THEN
+  IF (SELECT COUNT(*) FROM auth.users) = 1 THEN
     INSERT INTO public.user_roles (user_id, role) VALUES (NEW.id, 'admin') ON CONFLICT DO NOTHING;
   END IF;
 

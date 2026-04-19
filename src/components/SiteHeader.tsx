@@ -3,11 +3,7 @@ import { Menu, LayoutDashboard } from "lucide-react";
 import logo from "@/assets/logo.jpg";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useSession } from "@/hooks/use-session";
 
 export function SiteHeader() {
@@ -42,7 +38,9 @@ export function SiteHeader() {
               key={link.to}
               to={link.to}
               className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted"
-              activeProps={{ className: "rounded-lg px-3 py-2 text-sm font-medium text-foreground bg-muted" }}
+              activeProps={{
+                className: "rounded-lg px-3 py-2 text-sm font-medium text-foreground bg-muted",
+              }}
             >
               {link.label}
             </Link>
@@ -96,10 +94,14 @@ export function SiteHeader() {
                 ) : (
                   <>
                     <Button asChild variant="outline">
-                      <Link to="/login" onClick={() => setOpen(false)}>Sign in</Link>
+                      <Link to="/login" onClick={() => setOpen(false)}>
+                        Sign in
+                      </Link>
                     </Button>
                     <Button asChild variant="hero">
-                      <Link to="/signup" onClick={() => setOpen(false)}>Get started</Link>
+                      <Link to="/signup" onClick={() => setOpen(false)}>
+                        Get started
+                      </Link>
                     </Button>
                   </>
                 )}

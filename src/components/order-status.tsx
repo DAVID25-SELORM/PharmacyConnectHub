@@ -1,8 +1,22 @@
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle2, PackageCheck, Truck, XCircle, Banknote, CreditCard } from "lucide-react";
+import {
+  Clock,
+  CheckCircle2,
+  PackageCheck,
+  Truck,
+  XCircle,
+  Banknote,
+  CreditCard,
+} from "lucide-react";
 import { timeAgo } from "@/lib/format";
 
-export type OrderStatus = "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
+export type OrderStatus =
+  | "pending"
+  | "accepted"
+  | "packed"
+  | "dispatched"
+  | "delivered"
+  | "cancelled";
 export type PaymentMethod = "cod" | "paystack";
 export type PaymentStatus = "unpaid" | "paid" | "refunded" | "failed";
 
@@ -19,12 +33,36 @@ export type OrderTimelineData = {
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
   const map: Record<OrderStatus, { icon: typeof Clock; cls: string; label: string }> = {
-    pending: { icon: Clock, cls: "bg-warning/15 text-warning-foreground border-warning/30", label: "Pending" },
-    accepted: { icon: CheckCircle2, cls: "bg-primary/15 text-primary border-primary/30", label: "Accepted" },
-    packed: { icon: PackageCheck, cls: "bg-primary/15 text-primary border-primary/30", label: "Packed" },
-    dispatched: { icon: Truck, cls: "bg-accent/15 text-accent border-accent/30", label: "Dispatched" },
-    delivered: { icon: CheckCircle2, cls: "bg-success/15 text-success border-success/30", label: "Delivered" },
-    cancelled: { icon: XCircle, cls: "bg-destructive/15 text-destructive border-destructive/30", label: "Cancelled" },
+    pending: {
+      icon: Clock,
+      cls: "bg-warning/15 text-warning-foreground border-warning/30",
+      label: "Pending",
+    },
+    accepted: {
+      icon: CheckCircle2,
+      cls: "bg-primary/15 text-primary border-primary/30",
+      label: "Accepted",
+    },
+    packed: {
+      icon: PackageCheck,
+      cls: "bg-primary/15 text-primary border-primary/30",
+      label: "Packed",
+    },
+    dispatched: {
+      icon: Truck,
+      cls: "bg-accent/15 text-accent border-accent/30",
+      label: "Dispatched",
+    },
+    delivered: {
+      icon: CheckCircle2,
+      cls: "bg-success/15 text-success border-success/30",
+      label: "Delivered",
+    },
+    cancelled: {
+      icon: XCircle,
+      cls: "bg-destructive/15 text-destructive border-destructive/30",
+      label: "Cancelled",
+    },
   };
   const cfg = map[status];
   const Icon = cfg.icon;
@@ -38,7 +76,10 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 export function PaymentBadge({ method, status }: { method: PaymentMethod; status: PaymentStatus }) {
   if (method === "cod") {
     return (
-      <Badge variant="secondary" className="gap-1 border border-border bg-muted text-muted-foreground">
+      <Badge
+        variant="secondary"
+        className="gap-1 border border-border bg-muted text-muted-foreground"
+      >
         <Banknote className="h-3 w-3" /> Pay on delivery
       </Badge>
     );
@@ -47,10 +88,16 @@ export function PaymentBadge({ method, status }: { method: PaymentMethod; status
     status === "paid"
       ? { cls: "bg-success/15 text-success border-success/30", label: "Paid" }
       : status === "failed"
-        ? { cls: "bg-destructive/15 text-destructive border-destructive/30", label: "Payment failed" }
+        ? {
+            cls: "bg-destructive/15 text-destructive border-destructive/30",
+            label: "Payment failed",
+          }
         : status === "refunded"
           ? { cls: "bg-muted text-muted-foreground border-border", label: "Refunded" }
-          : { cls: "bg-warning/15 text-warning-foreground border-warning/30", label: "Awaiting payment" };
+          : {
+              cls: "bg-warning/15 text-warning-foreground border-warning/30",
+              label: "Awaiting payment",
+            };
   return (
     <Badge variant="secondary" className={`gap-1 border ${cfg.cls}`}>
       <CreditCard className="h-3 w-3" /> {cfg.label}
@@ -97,7 +144,9 @@ export function OrderTimeline({ o }: { o: OrderTimelineData }) {
               <span>{s.label}</span>
               {done && <span className="opacity-70">· {timeAgo(s.at!)}</span>}
             </div>
-            {i < steps.length - 1 && <div className={`h-px w-3 ${done ? "bg-success/40" : "bg-border"}`} />}
+            {i < steps.length - 1 && (
+              <div className={`h-px w-3 ${done ? "bg-success/40" : "bg-border"}`} />
+            )}
           </div>
         );
       })}

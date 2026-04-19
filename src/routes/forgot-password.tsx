@@ -48,8 +48,8 @@ function ForgotPasswordPage() {
               <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
               <h1 className="font-display text-2xl font-bold">Check your email</h1>
               <p className="text-sm text-muted-foreground">
-                We sent a password reset link to <strong>{email}</strong>. Check your inbox and
-                spam folder.
+                We sent a password reset link to <strong>{email}</strong>. Check your inbox and spam
+                folder.
               </p>
               <Link
                 to="/login"

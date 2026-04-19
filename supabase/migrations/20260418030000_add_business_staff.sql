@@ -309,23 +309,23 @@ BEGIN
     RAISE EXCEPTION 'Only the business owner can add staff.';
   END IF;
 
-  SELECT u.id
-  INTO v_user_id
-  FROM auth.users u
-  WHERE lower(u.email) = lower(trim(_email))
-  LIMIT 1;
+  v_user_id := (
+    SELECT u.id
+    FROM auth.users u
+    WHERE lower(u.email) = lower(trim(_email))
+    LIMIT 1
+  );
 
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'No user found for that email. Ask them to create an account first.';
   END IF;
 
-  SELECT EXISTS (
+  v_is_owner := EXISTS (
     SELECT 1
     FROM public.businesses b
     WHERE b.id = _business_id
       AND b.owner_id = v_user_id
-  )
-  INTO v_is_owner;
+  );
 
   IF _role = 'owner' AND NOT v_is_owner THEN
     RAISE EXCEPTION 'Owner role is reserved for the business owner.';
@@ -333,31 +333,35 @@ BEGIN
 
   v_effective_role := CASE WHEN v_is_owner THEN 'owner'::public.staff_role ELSE _role END;
 
-  INSERT INTO public.business_staff (
-    business_id,
-    user_id,
-    role,
-    status,
-    invited_by,
-    joined_at
-  )
-  VALUES (
-    _business_id,
-    v_user_id,
-    v_effective_role,
-    'active',
-    auth.uid(),
-    now()
-  )
-  ON CONFLICT (business_id, user_id) DO UPDATE
-    SET role = EXCLUDED.role,
-        status = 'active',
-        invited_by = EXCLUDED.invited_by,
-        joined_at = COALESCE(public.business_staff.joined_at, EXCLUDED.joined_at),
-        updated_at = now()
-  RETURNING * INTO v_staff;
+  FOR v_staff IN
+    INSERT INTO public.business_staff (
+      business_id,
+      user_id,
+      role,
+      status,
+      invited_by,
+      joined_at
+    )
+    VALUES (
+      _business_id,
+      v_user_id,
+      v_effective_role,
+      'active',
+      auth.uid(),
+      now()
+    )
+    ON CONFLICT (business_id, user_id) DO UPDATE
+      SET role = EXCLUDED.role,
+          status = 'active',
+          invited_by = EXCLUDED.invited_by,
+          joined_at = COALESCE(public.business_staff.joined_at, EXCLUDED.joined_at),
+          updated_at = now()
+    RETURNING *
+  LOOP
+    RETURN v_staff;
+  END LOOP;
 
-  RETURN v_staff;
+  RAISE EXCEPTION 'Unable to add or update staff membership.';
 END;
 $$;
 

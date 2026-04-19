@@ -27,7 +27,7 @@ CREATE POLICY "Users update own notifications"
   USING (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- Trigger: business verification status changed → notify business owner
+-- Trigger: business verification status changed -> notify business owner
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.notify_business_verification_changed()
 RETURNS TRIGGER
@@ -75,7 +75,7 @@ CREATE TRIGGER trg_notify_business_verification
   EXECUTE FUNCTION public.notify_business_verification_changed();
 
 -- ---------------------------------------------------------------------------
--- Trigger: new order placed → notify wholesaler owner
+-- Trigger: new order placed -> notify wholesaler owner
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.notify_new_order()
 RETURNS TRIGGER
@@ -83,27 +83,18 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  wholesaler_owner UUID;
-  pharmacy_name TEXT;
 BEGIN
-  SELECT b.owner_id INTO wholesaler_owner
-  FROM public.businesses b WHERE b.id = NEW.wholesaler_id;
-
-  SELECT b.name INTO pharmacy_name
-  FROM public.businesses b WHERE b.id = NEW.pharmacy_id;
-
-  IF wholesaler_owner IS NOT NULL THEN
-    INSERT INTO public.notifications(user_id, type, title, body, metadata)
-    VALUES (
-      wholesaler_owner,
-      'new_order',
-      'New order received',
-      'Order #' || NEW.order_number || ' from ' || COALESCE(pharmacy_name, 'a pharmacy') ||
-        ' — GHS ' || to_char(NEW.total_ghs, 'FM999,999.00'),
-      jsonb_build_object('order_id', NEW.id, 'order_number', NEW.order_number)
-    );
-  END IF;
+  INSERT INTO public.notifications(user_id, type, title, body, metadata)
+  SELECT
+    w.owner_id,
+    'new_order',
+    'New order received',
+    'Order #' || NEW.order_number || ' from ' || COALESCE(ph.name, 'a pharmacy') ||
+      ' - GHS ' || to_char(NEW.total_ghs, 'FM999,999.00'),
+    jsonb_build_object('order_id', NEW.id, 'order_number', NEW.order_number)
+  FROM public.businesses w
+  LEFT JOIN public.businesses ph ON ph.id = NEW.pharmacy_id
+  WHERE w.id = NEW.wholesaler_id;
 
   RETURN NEW;
 END;
@@ -116,7 +107,7 @@ CREATE TRIGGER trg_notify_new_order
   EXECUTE FUNCTION public.notify_new_order();
 
 -- ---------------------------------------------------------------------------
--- Trigger: order status changed → notify pharmacy owner
+-- Trigger: order status changed -> notify pharmacy owner
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.notify_order_status_changed()
 RETURNS TRIGGER
@@ -124,41 +115,29 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  pharmacy_owner UUID;
-  wholesaler_name TEXT;
-  status_label TEXT;
 BEGIN
   IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
     RETURN NEW;
   END IF;
 
-  SELECT b.owner_id INTO pharmacy_owner
-  FROM public.businesses b WHERE b.id = NEW.pharmacy_id;
-
-  SELECT b.name INTO wholesaler_name
-  FROM public.businesses b WHERE b.id = NEW.wholesaler_id;
-
-  status_label := CASE NEW.status
-    WHEN 'accepted'   THEN 'accepted'
-    WHEN 'packed'     THEN 'packed and ready'
-    WHEN 'dispatched' THEN 'out for delivery'
-    WHEN 'delivered'  THEN 'delivered'
-    WHEN 'cancelled'  THEN 'cancelled'
-    ELSE NEW.status::TEXT
-  END;
-
-  IF pharmacy_owner IS NOT NULL THEN
-    INSERT INTO public.notifications(user_id, type, title, body, metadata)
-    VALUES (
-      pharmacy_owner,
-      'order_status',
-      'Order update',
-      'Your order #' || NEW.order_number || ' from ' ||
-        COALESCE(wholesaler_name, 'your wholesaler') || ' is now ' || status_label || '.',
-      jsonb_build_object('order_id', NEW.id, 'order_number', NEW.order_number, 'status', NEW.status)
-    );
-  END IF;
+  INSERT INTO public.notifications(user_id, type, title, body, metadata)
+  SELECT
+    ph.owner_id,
+    'order_status',
+    'Order update',
+    'Your order #' || NEW.order_number || ' from ' || COALESCE(w.name, 'your wholesaler') ||
+      ' is now ' || CASE NEW.status
+        WHEN 'accepted'   THEN 'accepted'
+        WHEN 'packed'     THEN 'packed and ready'
+        WHEN 'dispatched' THEN 'out for delivery'
+        WHEN 'delivered'  THEN 'delivered'
+        WHEN 'cancelled'  THEN 'cancelled'
+        ELSE NEW.status::TEXT
+      END || '.',
+    jsonb_build_object('order_id', NEW.id, 'order_number', NEW.order_number, 'status', NEW.status)
+  FROM public.businesses ph
+  LEFT JOIN public.businesses w ON w.id = NEW.wholesaler_id
+  WHERE ph.id = NEW.pharmacy_id;
 
   RETURN NEW;
 END;

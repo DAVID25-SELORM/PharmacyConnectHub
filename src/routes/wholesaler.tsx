@@ -68,6 +68,7 @@ type Product = {
   pack_size: string | null;
   price_ghs: number;
   stock: number;
+  image_hue: number | null;
   active: boolean;
 };
 
@@ -181,7 +182,11 @@ function WholesalerDashboard() {
   if (business.verification_status === "pending") {
     return (
       <div className="min-h-screen bg-background">
-        <DashboardHeader subtitle="Wholesaler workspace" showNav={false} isAdmin={roles.includes("admin")} />
+        <DashboardHeader
+          subtitle="Wholesaler workspace"
+          showNav={false}
+          isAdmin={roles.includes("admin")}
+        />
         <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-16">
           <Card className="p-8 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-warning/10">
@@ -189,8 +194,8 @@ function WholesalerDashboard() {
             </div>
             <h2 className="mt-6 font-display text-2xl font-bold">Verification Pending</h2>
             <p className="mt-2 text-muted-foreground">
-              Your wholesaler registration is being reviewed by our admin team. You'll receive access
-              once your license and details are verified.
+              Your wholesaler registration is being reviewed by our admin team. You'll receive
+              access once your license and details are verified.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
               This usually takes 1-2 business days. We'll notify you once approved.
@@ -744,13 +749,7 @@ function AddProductDialog({
   );
 }
 
-function EditProductDialog({
-  product,
-  reload,
-}: {
-  product: Product;
-  reload: () => Promise<void>;
-}) {
+function EditProductDialog({ product, reload }: { product: Product; reload: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -988,7 +987,7 @@ function BulkUploadDialog({
 Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500,70
 Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240,195
 Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
-    
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1001,21 +1000,21 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
   const parseCSV = (text: string): Array<Record<string, string>> => {
     const lines = text.trim().split("\n");
     if (lines.length < 2) return [];
-    
+
     const headers = lines[0].split(",").map((h) => h.trim());
     const rows: Array<Record<string, string>> = [];
-    
+
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(",").map((v) => v.trim());
       if (values.length !== headers.length) continue;
-      
+
       const row: Record<string, string> = {};
       headers.forEach((header, index) => {
         row[header] = values[index];
       });
       rows.push(row);
     }
-    
+
     return rows;
   };
 
@@ -1051,7 +1050,9 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
       // Validate required fields
       const invalid = products.filter((p) => !p.name || p.price_ghs <= 0);
       if (invalid.length > 0) {
-        toast.error(`${invalid.length} product(s) missing name or valid price. Please fix and retry.`);
+        toast.error(
+          `${invalid.length} product(s) missing name or valid price. Please fix and retry.`,
+        );
         setUploading(false);
         return;
       }
@@ -1085,9 +1086,7 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bulk upload products</DialogTitle>
-          <DialogDescription>
-            Upload multiple products at once using a CSV file.
-          </DialogDescription>
+          <DialogDescription>Upload multiple products at once using a CSV file.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-muted/30 p-4">
@@ -1106,7 +1105,9 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
               Open the template in Excel or Google Sheets and add your products.
             </p>
             <ul className="space-y-1 text-xs text-muted-foreground">
-              <li>• <strong>name</strong> and <strong>price_ghs</strong> are required</li>
+              <li>
+                • <strong>name</strong> and <strong>price_ghs</strong> are required
+              </li>
               <li>• Use exact category names from the dropdown</li>
               <li>• Save as CSV format when done</li>
             </ul>
@@ -1138,5 +1139,3 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
     </Dialog>
   );
 }
-
-

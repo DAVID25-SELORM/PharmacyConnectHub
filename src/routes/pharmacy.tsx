@@ -1,6 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import { Search, ShoppingCart, Plus, Minus, Trash2, Package, ShieldCheck } from "lucide-react";
+import {
+  Search,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  Package,
+  ShieldCheck,
+  Building2,
+  MapPin,
+} from "lucide-react";
 import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -61,6 +71,17 @@ type Product = {
 
 type CartItem = { productId: string; quantity: number };
 
+type WholesalerSummary = {
+  id: string;
+  name: string;
+  city: string | null;
+  region: string | null;
+  productCount: number;
+  categoryCount: number;
+  stockTotal: number;
+  lowestPrice: number | null;
+};
+
 type OrderRow = {
   id: string;
   order_number: string;
@@ -87,7 +108,6 @@ function PharmacyDashboard() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "paystack">("cod");
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
@@ -144,6 +164,47 @@ function PharmacyDashboard() {
   }, [businessId]);
 
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  const approvedWholesalers = useMemo<WholesalerSummary[]>(() => {
+    const grouped = new Map<
+      string,
+      Omit<WholesalerSummary, "categoryCount"> & { categories: Set<string> }
+    >();
+
+    for (const product of products) {
+      const wholesaler = product.wholesaler;
+      if (!wholesaler) continue;
+
+      const existing = grouped.get(wholesaler.id);
+      if (existing) {
+        existing.productCount += 1;
+        existing.stockTotal += product.stock;
+        if (product.category) existing.categories.add(product.category);
+        existing.lowestPrice =
+          existing.lowestPrice === null
+            ? Number(product.price_ghs)
+            : Math.min(existing.lowestPrice, Number(product.price_ghs));
+        continue;
+      }
+
+      grouped.set(wholesaler.id, {
+        id: wholesaler.id,
+        name: wholesaler.name,
+        city: wholesaler.city,
+        region: wholesaler.region,
+        productCount: 1,
+        categories: new Set(product.category ? [product.category] : []),
+        stockTotal: product.stock,
+        lowestPrice: Number(product.price_ghs),
+      });
+    }
+
+    return Array.from(grouped.values())
+      .map(({ categories, ...entry }) => ({
+        ...entry,
+        categoryCount: categories.size,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [products]);
 
   const addToCart = (productId: string) => {
     setCart((prev) => {
@@ -195,7 +256,7 @@ function PharmacyDashboard() {
             pharmacy_id: business.id,
             wholesaler_id: wid,
             total_ghs: total,
-            payment_method: paymentMethod,
+            payment_method: "cod",
           })
           .select()
           .single();
@@ -300,19 +361,28 @@ function PharmacyDashboard() {
           <p className="mt-1 text-muted-foreground">
             Browse the catalog and order from verified wholesalers across Ghana.
           </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {approvedWholesalers.length > 0
+              ? `${approvedWholesalers.length} approved wholesaler${approvedWholesalers.length > 1 ? "s are" : " is"} available for comparison right now.`
+              : "Approved wholesalers will appear here as soon as they finish onboarding."}
+          </p>
         </div>
 
         <VerificationBanner business={business} />
 
         <Tabs defaultValue="catalog" className="w-full">
           <TabsList className="mb-6">
-            <TabsTrigger value="catalog">Catalog</TabsTrigger>
+            <TabsTrigger value="catalog">
+              Catalog ({approvedWholesalers.length} wholesaler
+              {approvedWholesalers.length === 1 ? "" : "s"})
+            </TabsTrigger>
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="catalog">
             <CatalogView
               products={products}
+              wholesalers={approvedWholesalers}
               addToCart={addToCart}
               canOrder={business.verification_status === "approved" && canPlaceOrders}
             />
@@ -333,8 +403,6 @@ function CartSheet({
   productMap,
   updateQty,
   placeOrder,
-  paymentMethod,
-  setPaymentMethod,
   placing,
   canPlaceOrders,
 }: {
@@ -446,6 +514,10 @@ function CartSheet({
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-semibold">{formatGHS(subtotal)}</span>
                 </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Payment</span>
+                  <span className="font-medium">Cash on delivery</span>
+                </div>
                 {!canPlaceOrders && (
                   <div className="text-xs text-muted-foreground">
                     Your access is view-only. Ask the business owner for cashier or manager access
@@ -475,16 +547,31 @@ function CartSheet({
 
 function CatalogView({
   products,
+  wholesalers,
   addToCart,
   canOrder,
 }: {
   products: Product[];
+  wholesalers: WholesalerSummary[];
   addToCart: (id: string) => void;
   canOrder: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<string>("relevance");
+  const [wholesalerId, setWholesalerId] = useState<string>("all");
+
+  useEffect(() => {
+    if (wholesalerId === "all") return;
+    if (!wholesalers.some((wholesaler) => wholesaler.id === wholesalerId)) {
+      setWholesalerId("all");
+    }
+  }, [wholesalerId, wholesalers]);
+
+  const categoryCount = useMemo(
+    () => new Set(products.map((product) => product.category).filter(Boolean)).size,
+    [products],
+  );
 
   const filtered = useMemo(() => {
     let list = products.filter((p) => {
@@ -495,7 +582,8 @@ function CatalogView({
         (p.brand ?? "").toLowerCase().includes(q) ||
         (p.category ?? "").toLowerCase().includes(q);
       const matchC = category === "all" || p.category === category;
-      return matchQ && matchC;
+      const matchW = wholesalerId === "all" || p.wholesaler_id === wholesalerId;
+      return matchQ && matchC && matchW;
     });
     if (sort === "price-asc")
       list = [...list].sort((a, b) => Number(a.price_ghs) - Number(b.price_ghs));
@@ -503,10 +591,142 @@ function CatalogView({
       list = [...list].sort((a, b) => Number(b.price_ghs) - Number(a.price_ghs));
     if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name));
     return list;
-  }, [query, category, sort, products]);
+  }, [query, category, sort, products, wholesalerId]);
+
+  const filteredWholesalerCount = useMemo(
+    () => new Set(filtered.map((product) => product.wholesaler_id)).size,
+    [filtered],
+  );
 
   return (
     <div>
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Approved Wholesalers
+          </div>
+          <div className="mt-2 font-display text-3xl font-bold">{wholesalers.length}</div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Verified suppliers currently live in the marketplace.
+          </p>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Listed Products
+          </div>
+          <div className="mt-2 font-display text-3xl font-bold">{products.length}</div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Active SKUs available for pharmacies to order.
+          </p>
+        </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Categories</div>
+          <div className="mt-2 font-display text-3xl font-bold">{categoryCount}</div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Therapeutic groups represented in the current catalog.
+          </p>
+        </Card>
+      </div>
+
+      <Card className="mb-6 p-5 shadow-soft">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-foreground">Choose a wholesaler</div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Start with a supplier card, or keep the marketplace wide open and compare across
+              everyone.
+            </p>
+          </div>
+          {wholesalerId !== "all" && (
+            <Button variant="outline" size="sm" onClick={() => setWholesalerId("all")}>
+              Show all wholesalers
+            </Button>
+          )}
+        </div>
+
+        {wholesalers.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+            No approved wholesalers are visible yet. Once a wholesaler is approved and adds active
+            products, it will appear here automatically.
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {wholesalers.map((wholesaler) => {
+              const selected = wholesaler.id === wholesalerId;
+              const location =
+                [wholesaler.city, wholesaler.region].filter(Boolean).join(", ") ||
+                "Location pending";
+
+              return (
+                <Card
+                  key={wholesaler.id}
+                  className={`border-border/70 p-4 transition-all ${
+                    selected ? "border-primary bg-primary/5 shadow-soft" : "hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                        <Building2 className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-semibold">{wholesaler.name}</div>
+                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>{location}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {selected && (
+                      <Badge variant="secondary" className="bg-primary/10 text-primary">
+                        Selected
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-muted px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        Products
+                      </div>
+                      <div className="mt-1 text-sm font-semibold">{wholesaler.productCount}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        Categories
+                      </div>
+                      <div className="mt-1 text-sm font-semibold">{wholesaler.categoryCount}</div>
+                    </div>
+                    <div className="rounded-lg bg-muted px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        Stock
+                      </div>
+                      <div className="mt-1 text-sm font-semibold">{wholesaler.stockTotal}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Starting at </span>
+                      <span className="font-semibold">
+                        {wholesaler.lowestPrice === null ? "—" : formatGHS(wholesaler.lowestPrice)}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={selected ? "outline" : "hero"}
+                      onClick={() => setWholesalerId(selected ? "all" : wholesaler.id)}
+                    >
+                      {selected ? "Show all" : "View products"}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       <Card className="p-4 mb-6 shadow-soft">
         <div className="flex flex-col gap-3 lg:flex-row">
           <div className="relative flex-1">
@@ -532,6 +752,19 @@ function CatalogView({
                 ))}
               </SelectContent>
             </Select>
+            <Select value={wholesalerId} onValueChange={setWholesalerId}>
+              <SelectTrigger className="lg:w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All wholesalers ({wholesalers.length})</SelectItem>
+                {wholesalers.map((wholesaler) => (
+                  <SelectItem key={wholesaler.id} value={wholesaler.id}>
+                    {wholesaler.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={sort} onValueChange={setSort}>
               <SelectTrigger className="lg:w-40">
                 <SelectValue />
@@ -544,6 +777,10 @@ function CatalogView({
               </SelectContent>
             </Select>
           </div>
+        </div>
+        <div className="mt-4 text-sm text-muted-foreground">
+          Showing {filtered.length} product{filtered.length === 1 ? "" : "s"} from{" "}
+          {filteredWholesalerCount} wholesaler{filteredWholesalerCount === 1 ? "" : "s"}.
         </div>
       </Card>
 

@@ -14,16 +14,28 @@ export function SiteFooter() {
               <span className="font-display font-bold">PharmaHub GH</span>
             </Link>
             <p className="mt-3 max-w-md text-sm text-muted-foreground">
-              Ghana's trusted B2B pharmaceutical marketplace. Connecting retail
-              pharmacies with verified wholesalers for faster, smarter procurement.
+              Ghana's trusted B2B pharmaceutical marketplace. Connecting retail pharmacies with
+              verified wholesalers for faster, smarter procurement.
             </p>
           </div>
           <div>
             <h4 className="font-semibold text-sm">Platform</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li><Link to="/pharmacy" className="hover:text-foreground">For Pharmacies</Link></li>
-              <li><Link to="/wholesaler" className="hover:text-foreground">For Wholesalers</Link></li>
-              <li><Link to="/signup" className="hover:text-foreground">Get started</Link></li>
+              <li>
+                <Link to="/pharmacy" className="hover:text-foreground">
+                  For Pharmacies
+                </Link>
+              </li>
+              <li>
+                <Link to="/wholesaler" className="hover:text-foreground">
+                  For Wholesalers
+                </Link>
+              </li>
+              <li>
+                <Link to="/signup" className="hover:text-foreground">
+                  Get started
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
