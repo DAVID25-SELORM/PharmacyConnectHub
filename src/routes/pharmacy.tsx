@@ -10,8 +10,8 @@ import {
   ShieldCheck,
   Building2,
   MapPin,
+  Pill,
 } from "lucide-react";
-import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
@@ -752,19 +753,39 @@ function CatalogView({
                 ))}
               </SelectContent>
             </Select>
-            <Select value={wholesalerId} onValueChange={setWholesalerId}>
-              <SelectTrigger className="lg:w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All wholesalers ({wholesalers.length})</SelectItem>
-                {wholesalers.map((wholesaler) => (
-                  <SelectItem key={wholesaler.id} value={wholesaler.id}>
-                    {wholesaler.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[
+                {
+                  value: "all",
+                  label: `All wholesalers (${wholesalers.length})`,
+                  keywords: ["all", "all wholesalers", "marketplace", "everyone"],
+                  searchText: `all wholesalers ${wholesalers.length}`,
+                },
+                ...wholesalers.map((wholesaler) => {
+                  const location =
+                    [wholesaler.city, wholesaler.region].filter(Boolean).join(", ") ||
+                    "Location pending";
+
+                  return {
+                    value: wholesaler.id,
+                    label: wholesaler.name,
+                    description: `${location} · ${wholesaler.productCount} product${wholesaler.productCount === 1 ? "" : "s"}`,
+                    keywords: [
+                      wholesaler.name,
+                      wholesaler.city ?? "",
+                      wholesaler.region ?? "",
+                      String(wholesaler.productCount),
+                    ],
+                    searchText: `${wholesaler.name} ${location}`,
+                  };
+                }),
+              ]}
+              value={wholesalerId}
+              onValueChange={setWholesalerId}
+              placeholder={`All wholesalers (${wholesalers.length})`}
+              searchPlaceholder="Search wholesalers..."
+              emptyLabel="No wholesaler found."
+            />
             <Select value={sort} onValueChange={setSort}>
               <SelectTrigger className="lg:w-40">
                 <SelectValue />
