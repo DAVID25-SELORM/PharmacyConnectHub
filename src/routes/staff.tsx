@@ -129,12 +129,16 @@ function StaffManagement() {
 
     setInviting(true);
     try {
-      await inviteBusinessStaff({
+      const result = await inviteBusinessStaff({
         businessId: business.id,
         email: inviteEmail.trim().toLowerCase(),
         role: inviteRole,
       });
-      toast.success("Team member added successfully!");
+      toast.success(
+        result.mode === "invited"
+          ? "Invitation email sent! They'll receive a link to set up their account."
+          : "Team member added successfully!",
+      );
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("assistant");
@@ -187,6 +191,28 @@ function StaffManagement() {
       void loadStaff();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to remove team member";
+      toast.error(message);
+    }
+  };
+
+  const handleActivate = async (staffId: string) => {
+    if (!canManageTeam) {
+      toast.error("Only the business owner can activate team members.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("business_staff")
+        .update({ status: "active", joined_at: new Date().toISOString() })
+        .eq("id", staffId);
+
+      if (error) throw error;
+
+      toast.success("Team member activated.");
+      void loadStaff();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to activate team member";
       toast.error(message);
     }
   };
@@ -335,14 +361,27 @@ function StaffManagement() {
                         {timeAgo(member.invited_at)}
                       </TableCell>
                       <TableCell>
-                        {canManageTeam && member.status !== "inactive" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeactivate(member.id)}
-                          >
-                            Cancel
-                          </Button>
+                        {canManageTeam ? (
+                          <div className="flex gap-1">
+                            {member.status === "pending" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleActivate(member.id)}
+                              >
+                                Activate
+                              </Button>
+                            )}
+                            {member.status !== "inactive" && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeactivate(member.id)}
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </div>
                         ) : (
                           "-"
                         )}
@@ -360,8 +399,9 @@ function StaffManagement() {
             <DialogHeader>
               <DialogTitle>Add Team Member</DialogTitle>
               <DialogDescription>
-                Add an existing PharmaHub user by email. If they have not created an account yet,
-                ask them to sign up first and then add them here.
+                Enter the staff member's email address. If they already have a PharmaHub account,
+                they'll be added immediately. Otherwise, they'll receive an email invitation to set
+                up their account.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">

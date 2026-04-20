@@ -23,7 +23,7 @@ type InviteBusinessStaffInput = {
 };
 
 type InviteBusinessStaffResult = {
-  mode: "existing-account";
+  mode: "existing-account" | "invited";
 };
 
 function sortStaffMembers(left: StaffMember, right: StaffMember) {
@@ -59,27 +59,41 @@ export async function listBusinessStaff(businessId: string): Promise<StaffMember
 
 /**
  * Add a staff member to a business by email.
- * Uses the Supabase RPC function 'add_business_staff_by_email' which:
- * - Looks up the user by email
- * - Adds them as active staff immediately (no invitation flow)
- * - Returns error if user doesn't exist
+ * Calls the /api/staff/invite serverless endpoint which:
+ * - Adds existing users as active staff immediately
+ * - Sends an email invite to new users and adds them as pending staff
  */
 export async function inviteBusinessStaff(
   input: InviteBusinessStaffInput,
 ): Promise<InviteBusinessStaffResult> {
-  const { error } = await supabase.rpc("add_business_staff_by_email", {
-    _business_id: input.businessId,
-    _email: input.email.trim().toLowerCase(),
-    _role: input.role,
-  });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  if (error) {
-    throw new Error(error.message || "Failed to add staff member");
+  if (!session) {
+    throw new Error("You must be signed in to add staff.");
   }
 
-  return {
-    mode: "existing-account",
-  };
+  const res = await fetch("/api/staff/invite", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      businessId: input.businessId,
+      email: input.email.trim().toLowerCase(),
+      role: input.role,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to add staff member");
+  }
+
+  return { mode: data.mode };
 }
 
 /**

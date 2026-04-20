@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Upload, FileCheck2, Pill, Loader2 } from "lucide-react";
+import { Upload, FileCheck2, Pill, Loader2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,10 +27,25 @@ function OnboardingPage() {
   const { loading, user, business, refresh } = useSession();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [pendingStaff, setPendingStaff] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
+
+  // Check if the user has a pending staff membership (invited but not yet activated)
+  useEffect(() => {
+    if (!user || business) return;
+    supabase
+      .from("business_staff")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "pending")
+      .limit(1)
+      .then(({ data }) => {
+        setPendingStaff(!!data && data.length > 0);
+      });
+  }, [user, business]);
 
   useEffect(() => {
     if (!business) return;
@@ -78,6 +93,21 @@ function OnboardingPage() {
   }
 
   if (!business) {
+    if (pendingStaff) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+          <Clock className="h-10 w-10 text-amber-500" />
+          <h2 className="text-xl font-semibold">Invitation pending</h2>
+          <p className="max-w-sm text-muted-foreground">
+            You've been invited to join a business on PharmaHub. The business owner needs to
+            activate your access before you can continue.
+          </p>
+          <Button variant="outline" onClick={() => refresh()}>
+            Check again
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <p>We couldn't find a business profile for your account.</p>
