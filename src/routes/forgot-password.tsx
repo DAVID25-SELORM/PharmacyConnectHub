@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getAppUrl } from "@/lib/site-url";
 import logo from "@/assets/logo.jpg";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -21,8 +22,8 @@ function ForgotPasswordPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: getAppUrl("/reset-password"),
     });
     setLoading(false);
     if (error) {

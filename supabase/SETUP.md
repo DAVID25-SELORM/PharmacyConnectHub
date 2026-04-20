@@ -24,6 +24,7 @@ Required client-side variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SITE_URL` for password reset and email confirmation redirects
 
 ## 3. Hosting assumptions
 

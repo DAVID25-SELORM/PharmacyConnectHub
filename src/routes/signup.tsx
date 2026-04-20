@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GH_REGIONS } from "@/lib/format";
+import { getAppUrl } from "@/lib/site-url";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
@@ -65,7 +66,7 @@ function SignupPage() {
       return;
     }
     setLoading(true);
-    const redirectUrl = `${window.location.origin}/dashboard`;
+    const redirectUrl = getAppUrl("/dashboard");
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,

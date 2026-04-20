@@ -43,6 +43,7 @@ npm run dev
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_SITE_URL` for auth email redirects in non-local environments
 
 ## Supabase setup
 
