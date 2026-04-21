@@ -29,7 +29,15 @@ It verifies the flows that matter most for production readiness:
 Run these in the Supabase SQL editor during the test.
 
 ```sql
-select id, owner_id, type, name, verification_status, created_at
+select
+  id,
+  owner_id,
+  type,
+  name,
+  owner_is_superintendent,
+  superintendent_name,
+  verification_status,
+  created_at
 from public.businesses
 order by created_at desc
 limit 20;
@@ -162,9 +170,10 @@ Expected result:
 
 1. Open `/signup`.
 2. Choose `Pharmacy`.
-3. Submit the form with a unique business name and email.
-4. If email confirmation is enabled, confirm the email and sign in.
-5. Open `/dashboard`.
+3. If the owner is not the superintendent pharmacist, turn off `Owner is also the Superintendent Pharmacist` and enter the superintendent's name.
+4. Submit the form with a unique business name and email.
+5. If email confirmation is enabled, confirm the email and sign in.
+6. Open `/dashboard`.
 
 Expected result:
 
@@ -174,7 +183,14 @@ Expected result:
 SQL verification:
 
 ```sql
-select id, owner_id, type, name, verification_status
+select
+  id,
+  owner_id,
+  type,
+  name,
+  owner_is_superintendent,
+  superintendent_name,
+  verification_status
 from public.businesses
 where name = '<PHARMACY_BUSINESS_NAME>';
 ```
@@ -183,6 +199,8 @@ Pass if:
 
 - exactly one `public.businesses` row exists
 - `type = 'pharmacy'`
+- `owner_is_superintendent` matches the checkbox used during signup
+- when `owner_is_superintendent = false`, `superintendent_name` stores the entered name
 - `verification_status = 'pending'`
 
 ## 6. Pharmacy Onboarding And Approval
@@ -196,6 +214,7 @@ Pass if:
 Expected result:
 
 - pharmacy status changes from `pending` to `approved`
+- both onboarding and admin show the superintendent summary correctly
 - the pharmacy owner receives a `business_approved` notification
 
 ## 7. Pharmacy Catalog And Wholesaler Selection

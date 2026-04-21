@@ -16,6 +16,10 @@ In the Supabase SQL editor for your project, run the migration files in this ord
 7. `supabase/migrations/20260419000100_fix_notification_triggers.sql`
 8. `supabase/migrations/20260419000200_bootstrap_business_on_signup.sql`
 9. `supabase/migrations/20260420000000_staff_invite_guard.sql`
+10. `supabase/migrations/20260421020000_add_platform_staff.sql`
+11. `supabase/migrations/20260421030000_reserve_stock_for_marketplace_orders.sql`
+12. `supabase/migrations/20260421040000_add_pharmacy_superintendent_fields.sql`
+13. `supabase/migrations/20260421041000_update_business_context_superintendent_fields.sql`
 
 `supabase/schema.sql` is an older prototype schema and should not be used for the current Supabase app.
 
