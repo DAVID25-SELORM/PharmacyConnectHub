@@ -10,6 +10,8 @@ export type Business = {
   type: "pharmacy" | "wholesaler";
   name: string;
   license_number: string | null;
+  owner_is_superintendent: boolean;
+  superintendent_name: string | null;
   city: string | null;
   region: string | null;
   verification_status: "pending" | "approved" | "rejected";
@@ -228,7 +230,9 @@ async function resolveSession(
 async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQueryResult> {
   const { data, error } = await supabase
     .from("businesses")
-    .select("id,type,name,license_number,city,region,verification_status,rejection_reason")
+    .select(
+      "id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,verification_status,rejection_reason",
+    )
     .eq("owner_id", userId)
     .order("created_at", { ascending: false });
 
@@ -259,7 +263,7 @@ async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryR
   const { data, error } = await supabase
     .from("business_staff")
     .select(
-      "role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(id,type,name,license_number,city,region,verification_status,rejection_reason)",
+      "role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,verification_status,rejection_reason)",
     )
     .eq("user_id", userId)
     .eq("status", "active");

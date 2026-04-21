@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -44,6 +45,8 @@ type Biz = {
   type: "pharmacy" | "wholesaler";
   name: string;
   license_number: string | null;
+  owner_is_superintendent: boolean;
+  superintendent_name: string | null;
   city: string | null;
   region: string | null;
   phone: string | null;
@@ -320,6 +323,8 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
   const [editForm, setEditForm] = useState({
     name: biz.name,
     license_number: biz.license_number ?? "",
+    owner_is_superintendent: biz.owner_is_superintendent,
+    superintendent_name: biz.superintendent_name ?? "",
     city: biz.city ?? "",
     region: biz.region ?? "",
     phone: biz.phone ?? "",
@@ -388,12 +393,25 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
       toast.error("Business name is required");
       return;
     }
+    if (
+      biz.type === "pharmacy" &&
+      !editForm.owner_is_superintendent &&
+      !editForm.superintendent_name.trim()
+    ) {
+      toast.error("Superintendent pharmacist name is required");
+      return;
+    }
     setBusy(true);
     const { error } = await supabase
       .from("businesses")
       .update({
         name: editForm.name.trim(),
         license_number: editForm.license_number.trim() || null,
+        owner_is_superintendent: biz.type === "pharmacy" ? editForm.owner_is_superintendent : true,
+        superintendent_name:
+          biz.type === "pharmacy" && !editForm.owner_is_superintendent
+            ? editForm.superintendent_name.trim() || null
+            : null,
         city: editForm.city.trim() || null,
         region: editForm.region.trim() || null,
         phone: editForm.phone.trim() || null,
@@ -429,6 +447,14 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
               {biz.city ?? "—"}, {biz.region ?? "—"} · License {biz.license_number ?? "—"} ·{" "}
               {biz.phone ?? "—"}
             </div>
+            {biz.type === "pharmacy" && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Superintendent:{" "}
+                {biz.owner_is_superintendent
+                  ? "Owner is also superintendent pharmacist"
+                  : (biz.superintendent_name ?? "—")}
+              </div>
+            )}
             <div className="mt-1 text-xs text-muted-foreground">
               Submitted {timeAgo(biz.created_at)}
             </div>
@@ -448,6 +474,8 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
               setEditForm({
                 name: biz.name,
                 license_number: biz.license_number ?? "",
+                owner_is_superintendent: biz.owner_is_superintendent,
+                superintendent_name: biz.superintendent_name ?? "",
                 city: biz.city ?? "",
                 region: biz.region ?? "",
                 phone: biz.phone ?? "",
@@ -568,6 +596,18 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
                 </div>
                 <div>{biz.phone ?? "—"}</div>
               </div>
+              {biz.type === "pharmacy" && (
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                    Superintendent Pharmacist
+                  </div>
+                  <div>
+                    {biz.owner_is_superintendent
+                      ? "Owner is also superintendent pharmacist"
+                      : (biz.superintendent_name ?? "—")}
+                  </div>
+                </div>
+              )}
               <div>
                 <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-1">
                   City
@@ -696,6 +736,48 @@ function BusinessCard({ biz, reload }: { biz: Biz; reload: () => Promise<void> }
                 />
               </div>
             </div>
+            {biz.type === "pharmacy" && (
+              <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="edit-owner-is-superintendent"
+                    checked={editForm.owner_is_superintendent}
+                    onCheckedChange={(checked) =>
+                      setEditForm((current) => ({
+                        ...current,
+                        owner_is_superintendent: checked === true,
+                        superintendent_name: checked === true ? "" : current.superintendent_name,
+                      }))
+                    }
+                  />
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="edit-owner-is-superintendent"
+                      className="cursor-pointer text-sm font-medium"
+                    >
+                      Owner is also the Superintendent Pharmacist
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Turn this off only when the pharmacy owner and superintendent are different
+                      people.
+                    </p>
+                  </div>
+                </div>
+                {!editForm.owner_is_superintendent && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-superintendent-name">Superintendent Pharmacist Name</Label>
+                    <Input
+                      id="edit-superintendent-name"
+                      value={editForm.superintendent_name}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, superintendent_name: e.target.value })
+                      }
+                      placeholder="Enter the superintendent pharmacist's name"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>

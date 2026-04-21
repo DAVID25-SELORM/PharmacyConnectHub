@@ -262,6 +262,16 @@ function OnboardingPage() {
           <div className="space-y-3 text-sm">
             <Field label="Business name" value={business.name} />
             <Field label="License #" value={business.license_number ?? "—"} />
+            {business.type === "pharmacy" && (
+              <Field
+                label="Superintendent"
+                value={
+                  business.owner_is_superintendent
+                    ? "Owner is also superintendent pharmacist"
+                    : (business.superintendent_name ?? "—")
+                }
+              />
+            )}
             <Field label="Location" value={`${business.city ?? "—"}, ${business.region ?? "—"}`} />
           </div>
         </Card>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Building2, Store, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -38,6 +39,8 @@ const schema = z.object({
   phone: z.string().trim().min(7, "Phone is required").max(20),
   email: z.string().trim().email("Invalid email").max(255),
   password: z.string().min(8, "At least 8 characters").max(100),
+  ownerIsSuperintendent: z.boolean(),
+  superintendentName: z.string().trim().max(100),
 });
 
 function SignupPage() {
@@ -52,17 +55,38 @@ function SignupPage() {
     phone: "",
     email: "",
     password: "",
+    ownerIsSuperintendent: true,
+    superintendentName: "",
   });
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
-  const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
+  type TextField =
+    | "fullName"
+    | "businessName"
+    | "licenseNumber"
+    | "city"
+    | "region"
+    | "phone"
+    | "email"
+    | "password"
+    | "superintendentName";
+
+  const update = (k: TextField, v: string) => setForm((s) => ({ ...s, [k]: v }));
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0]?.message ?? "Check the form");
+      return;
+    }
+    if (
+      role === "pharmacy" &&
+      !form.ownerIsSuperintendent &&
+      form.superintendentName.trim().length < 2
+    ) {
+      toast.error("Superintendent pharmacist name is required");
       return;
     }
     setLoading(true);
@@ -80,6 +104,11 @@ function SignupPage() {
           license_number: form.licenseNumber,
           city: form.city,
           region: form.region,
+          owner_is_superintendent: role === "pharmacy" ? form.ownerIsSuperintendent : true,
+          superintendent_name:
+            role === "pharmacy" && !form.ownerIsSuperintendent
+              ? form.superintendentName.trim()
+              : null,
         },
       },
     });
@@ -206,6 +235,47 @@ function SignupPage() {
                   required
                 />
               </div>
+              {role === "pharmacy" && (
+                <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="owner-is-superintendent"
+                      checked={form.ownerIsSuperintendent}
+                      onCheckedChange={(checked) =>
+                        setForm((current) => ({
+                          ...current,
+                          ownerIsSuperintendent: checked === true,
+                          superintendentName: checked === true ? "" : current.superintendentName,
+                        }))
+                      }
+                    />
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="owner-is-superintendent"
+                        className="cursor-pointer text-sm font-medium"
+                      >
+                        Owner is also the Superintendent Pharmacist
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Leave this on when the pharmacy owner and superintendent are the same
+                        person.
+                      </p>
+                    </div>
+                  </div>
+                  {!form.ownerIsSuperintendent && (
+                    <div className="space-y-2">
+                      <Label htmlFor="superintendentName">Superintendent Pharmacist Name</Label>
+                      <Input
+                        id="superintendentName"
+                        value={form.superintendentName}
+                        onChange={(e) => update("superintendentName", e.target.value)}
+                        placeholder="Enter the superintendent pharmacist's name"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>

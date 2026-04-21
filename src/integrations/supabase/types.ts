@@ -17,9 +17,11 @@ export type Database = {
           license_number: string | null;
           name: string;
           owner_id: string;
+          owner_is_superintendent: boolean;
           phone: string | null;
           region: string | null;
           rejection_reason: string | null;
+          superintendent_name: string | null;
           type: Database["public"]["Enums"]["business_type"];
           updated_at: string;
           verification_status: Database["public"]["Enums"]["verification_status"];
@@ -33,9 +35,11 @@ export type Database = {
           license_number?: string | null;
           name: string;
           owner_id: string;
+          owner_is_superintendent?: boolean;
           phone?: string | null;
           region?: string | null;
           rejection_reason?: string | null;
+          superintendent_name?: string | null;
           type: Database["public"]["Enums"]["business_type"];
           updated_at?: string;
           verification_status?: Database["public"]["Enums"]["verification_status"];
@@ -49,9 +53,11 @@ export type Database = {
           license_number?: string | null;
           name?: string;
           owner_id?: string;
+          owner_is_superintendent?: boolean;
           phone?: string | null;
           region?: string | null;
           rejection_reason?: string | null;
+          superintendent_name?: string | null;
           type?: Database["public"]["Enums"]["business_type"];
           updated_at?: string;
           verification_status?: Database["public"]["Enums"]["verification_status"];
