@@ -20,6 +20,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 
 const WholesalerRoute = WholesalerRouteImport.update({
   id: '/wholesaler',
@@ -76,10 +77,15 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminStaffRoute = AdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -89,10 +95,11 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -102,11 +109,12 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/staff'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/staff'
   id:
     | '__root__'
     | '/'
@@ -157,11 +168,12 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/staff'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
@@ -252,12 +264,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/staff': {
+      id: '/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AdminStaffRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminStaffRoute: typeof AdminStaffRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminStaffRoute: AdminStaffRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,

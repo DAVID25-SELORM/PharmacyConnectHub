@@ -48,6 +48,21 @@ function getInviteRedirectUrl(req: VercelRequest, path: string) {
   return undefined;
 }
 
+async function hasBusinessAccess(admin: ReturnType<typeof createClient>, userId: string) {
+  const [{ data: ownedBusiness }, { data: activeBusinessStaff }] = await Promise.all([
+    admin.from("businesses").select("id").eq("owner_id", userId).limit(1).maybeSingle(),
+    admin
+      .from("business_staff")
+      .select("id")
+      .eq("user_id", userId)
+      .in("status", ["active", "pending"])
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return Boolean(ownedBusiness || activeBusinessStaff);
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -60,7 +75,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Server misconfigured" });
   }
 
-  // 1. Authenticate the caller
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Missing authorization" });
@@ -76,85 +90,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
-  // 2. Validate input
-  const { businessId, email, role } = req.body ?? {};
-  if (!businessId || !email || !role) {
-    return res.status(400).json({ error: "businessId, email, and role are required" });
+  const { email } = req.body ?? {};
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!normalizedEmail) {
+    return res.status(400).json({ error: "email is required" });
   }
-  if (!["manager", "cashier", "assistant"].includes(role)) {
-    return res.status(400).json({ error: "Invalid role" });
-  }
-  const normalizedEmail = String(email).trim().toLowerCase();
 
-  // 3. Prevent self-invite (owner could demote themselves)
   if (caller.email?.toLowerCase() === normalizedEmail) {
     return res.status(400).json({ error: "You cannot invite yourself" });
   }
 
-  // 4. Verify caller manages the business
-  const [{ data: biz }, { data: adminRole }] = await Promise.all([
-    admin.from("businesses").select("id, owner_id").eq("id", businessId).single(),
-    admin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", caller.id)
-      .eq("role", "admin")
-      .maybeSingle(),
-  ]);
+  const { data: adminRole } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", caller.id)
+    .eq("role", "admin")
+    .maybeSingle();
 
-  if (!biz || (biz.owner_id !== caller.id && !adminRole)) {
-    return res.status(403).json({ error: "Only the business owner or an admin can invite staff" });
+  if (!adminRole) {
+    return res.status(403).json({ error: "Only platform admins can invite platform staff" });
   }
 
-  // 5. Look up existing user by email via RPC (avoids loading all users)
   const { data: existingUserId } = await admin.rpc("lookup_user_id_by_email", {
     _email: normalizedEmail,
   });
 
+  if (existingUserId && (await hasBusinessAccess(admin, existingUserId))) {
+    return res.status(400).json({
+      error:
+        "This person already has business workspace access. Keep business staff and platform staff separate.",
+    });
+  }
+
   if (existingUserId) {
-    const { data: platformConflict, error: platformConflictErr } = await admin
-      .from("platform_staff")
-      .select("id")
-      .eq("user_id", existingUserId)
-      .in("status", ["active", "pending"])
-      .limit(1)
-      .maybeSingle();
-
-    if (platformConflictErr) {
-      return res.status(500).json({ error: platformConflictErr.message });
-    }
-
-    if (platformConflict) {
-      return res.status(400).json({
-        error:
-          "This person already has platform admin access. Keep platform staff and business staff separate.",
-      });
-    }
-
-    const { error: staffErr } = await admin.from("business_staff").upsert(
+    const { error: staffErr } = await admin.from("platform_staff").upsert(
       {
-        business_id: businessId,
         user_id: existingUserId,
-        role,
+        role: "admin",
         status: "active",
         invited_by: caller.id,
         joined_at: new Date().toISOString(),
       },
-      { onConflict: "business_id,user_id" },
+      { onConflict: "user_id" },
     );
 
     if (staffErr) {
       return res.status(400).json({ error: staffErr.message });
     }
+
     return res.status(200).json({ mode: "existing-account" });
   }
 
-  // 6. User does not exist yet — invite them into the password setup flow
   const redirectTo = getInviteRedirectUrl(req, "/reset-password");
   const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
     normalizedEmail,
     {
-      data: { is_staff_invite: true },
+      data: { is_staff_invite: true, invite_interface: "platform" },
       ...(redirectTo ? { redirectTo } : {}),
     },
   );
@@ -163,11 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: inviteErr?.message || "Failed to send invite" });
   }
 
-  // 7. Insert staff record as pending
-  const { error: staffErr } = await admin.from("business_staff").insert({
-    business_id: businessId,
+  const { error: staffErr } = await admin.from("platform_staff").insert({
     user_id: invited.user.id,
-    role,
+    role: "admin",
     status: "pending",
     invited_by: caller.id,
   });

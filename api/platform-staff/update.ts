@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-type StaffRole = "owner" | "manager" | "cashier" | "assistant";
-type StaffStatus = "active" | "inactive" | "pending";
+type PlatformStaffRole = "owner" | "admin";
+type PlatformStaffStatus = "active" | "inactive" | "pending";
 
-const validRoles = new Set<StaffRole>(["owner", "manager", "cashier", "assistant"]);
-const validStatuses = new Set<StaffStatus>(["active", "inactive", "pending"]);
+const validRoles = new Set<PlatformStaffRole>(["owner", "admin"]);
+const validStatuses = new Set<PlatformStaffStatus>(["active", "inactive", "pending"]);
 
 function normalizeOptionalText(value: unknown) {
   if (typeof value !== "string") {
@@ -16,7 +16,10 @@ function normalizeOptionalText(value: unknown) {
   return trimmed ? trimmed : null;
 }
 
-function isAllowedStatusTransition(currentStatus: StaffStatus, nextStatus: StaffStatus) {
+function isAllowedStatusTransition(
+  currentStatus: PlatformStaffStatus,
+  nextStatus: PlatformStaffStatus,
+) {
   if (currentStatus === nextStatus) {
     return true;
   }
@@ -30,6 +33,21 @@ function isAllowedStatusTransition(currentStatus: StaffStatus, nextStatus: Staff
   }
 
   return nextStatus === "active";
+}
+
+async function hasBusinessAccess(admin: ReturnType<typeof createClient>, userId: string) {
+  const [{ data: ownedBusiness }, { data: activeBusinessStaff }] = await Promise.all([
+    admin.from("businesses").select("id").eq("owner_id", userId).limit(1).maybeSingle(),
+    admin
+      .from("business_staff")
+      .select("id")
+      .eq("user_id", userId)
+      .in("status", ["active", "pending"])
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return Boolean(ownedBusiness || activeBusinessStaff);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -59,57 +77,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
-  const { businessId, staffId, fullName, email, phone, role, status } = req.body ?? {};
+  const { staffId, fullName, email, phone, role, status } = req.body ?? {};
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
   const normalizedFullName = normalizeOptionalText(fullName);
   const normalizedPhone = normalizeOptionalText(phone);
 
-  if (!businessId || !staffId || !normalizedEmail) {
-    return res.status(400).json({ error: "businessId, staffId, and email are required" });
+  if (!staffId || !normalizedEmail) {
+    return res.status(400).json({ error: "staffId and email are required" });
   }
 
-  if (role !== undefined && (typeof role !== "string" || !validRoles.has(role as StaffRole))) {
+  if (
+    role !== undefined &&
+    (typeof role !== "string" || !validRoles.has(role as PlatformStaffRole))
+  ) {
     return res.status(400).json({ error: "Invalid role" });
   }
 
   if (
     status !== undefined &&
-    (typeof status !== "string" || !validStatuses.has(status as StaffStatus))
+    (typeof status !== "string" || !validStatuses.has(status as PlatformStaffStatus))
   ) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const [{ data: business, error: businessErr }, { data: adminRole, error: adminRoleErr }] =
-    await Promise.all([
-      admin.from("businesses").select("id, owner_id").eq("id", businessId).maybeSingle(),
-      admin
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", caller.id)
-        .eq("role", "admin")
-        .maybeSingle(),
-    ]);
+  const { data: adminRole } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", caller.id)
+    .eq("role", "admin")
+    .maybeSingle();
 
-  if (businessErr) {
-    return res.status(500).json({ error: businessErr.message });
-  }
-
-  if (adminRoleErr) {
-    return res.status(500).json({ error: adminRoleErr.message });
-  }
-
-  const isAdmin = Boolean(adminRole);
-  if (!business || (business.owner_id !== caller.id && !isAdmin)) {
-    return res
-      .status(403)
-      .json({ error: "Only the business owner or an admin can edit staff details" });
+  if (!adminRole) {
+    return res.status(403).json({ error: "Only platform admins can edit platform staff" });
   }
 
   const { data: staffRow, error: staffErr } = await admin
-    .from("business_staff")
+    .from("platform_staff")
     .select("id, user_id, role, status, joined_at")
     .eq("id", staffId)
-    .eq("business_id", businessId)
     .maybeSingle();
 
   if (staffErr) {
@@ -117,53 +122,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!staffRow) {
-    return res.status(404).json({ error: "Staff record not found" });
+    return res.status(404).json({ error: "Platform staff record not found" });
   }
 
-  const nextRole = (typeof role === "string" ? role : staffRow.role) as StaffRole;
-  const nextStatus = (typeof status === "string" ? status : staffRow.status) as StaffStatus;
-  const isOwnerRecord = staffRow.user_id === business.owner_id;
+  const nextRole = (typeof role === "string" ? role : staffRow.role) as PlatformStaffRole;
+  const nextStatus = (typeof status === "string" ? status : staffRow.status) as PlatformStaffStatus;
+  const isOwnerRecord = staffRow.role === "owner";
 
   if (isOwnerRecord && nextRole !== "owner") {
-    return res.status(400).json({ error: "The business owner must keep the owner role" });
+    return res.status(400).json({ error: "The platform owner must keep the owner role" });
   }
 
   if (isOwnerRecord && nextStatus !== "active") {
-    return res.status(400).json({ error: "The business owner must remain active" });
+    return res.status(400).json({ error: "The platform owner must remain active" });
   }
 
   if (!isOwnerRecord && nextRole === "owner") {
-    return res.status(400).json({ error: "Owner role is reserved for the business owner" });
+    return res.status(400).json({ error: "Owner role is reserved for the platform owner" });
   }
 
-  if (!isAllowedStatusTransition(staffRow.status as StaffStatus, nextStatus)) {
+  if (!isAllowedStatusTransition(staffRow.status as PlatformStaffStatus, nextStatus)) {
     return res.status(400).json({ error: "That status change is not allowed" });
   }
 
-  const isGrantingBusinessAccess =
+  const isGrantingPlatformAccess =
     !isOwnerRecord &&
     nextStatus !== "inactive" &&
     (staffRow.status === "inactive" || nextStatus !== staffRow.status);
 
-  if (isGrantingBusinessAccess) {
-    const { data: platformConflict, error: platformConflictErr } = await admin
-      .from("platform_staff")
-      .select("id")
-      .eq("user_id", staffRow.user_id)
-      .in("status", ["active", "pending"])
-      .limit(1)
-      .maybeSingle();
-
-    if (platformConflictErr) {
-      return res.status(500).json({ error: platformConflictErr.message });
-    }
-
-    if (platformConflict) {
-      return res.status(400).json({
-        error:
-          "This person already has platform admin access. Keep platform staff and business staff separate.",
-      });
-    }
+  if (isGrantingPlatformAccess && (await hasBusinessAccess(admin, staffRow.user_id))) {
+    return res.status(400).json({
+      error:
+        "This person already has business workspace access. Keep business staff and platform staff separate.",
+    });
   }
 
   const {
@@ -202,8 +193,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const staffUpdate: {
     joined_at?: string;
-    role?: StaffRole;
-    status?: StaffStatus;
+    role?: PlatformStaffRole;
+    status?: PlatformStaffStatus;
   } = {};
 
   if (nextRole !== staffRow.role) {
@@ -219,10 +210,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (Object.keys(staffUpdate).length > 0) {
     const { error: updateStaffErr } = await admin
-      .from("business_staff")
+      .from("platform_staff")
       .update(staffUpdate)
-      .eq("id", staffId)
-      .eq("business_id", businessId);
+      .eq("id", staffId);
 
     if (updateStaffErr) {
       return res.status(500).json({ error: updateStaffErr.message });

@@ -211,17 +211,33 @@ function AdminPanel() {
                 Add staff from your interface
               </h2>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Open your team workspace to add staff by email, review everyone you have onboarded,
-                and update their access levels.
+                Platform staff and business staff now live on separate routes. Use the admin team
+                page for platform access, and use the workspace team page for pharmacy or wholesaler
+                staff.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Button asChild variant="hero">
-                <Link to="/staff">
-                  <Users className="h-4 w-4" />
-                  Manage team
+                <Link to="/admin/staff">
+                  <ShieldCheck className="h-4 w-4" />
+                  Platform team
                 </Link>
               </Button>
+              {business ? (
+                <Button asChild variant="outline">
+                  <Link to="/staff">
+                    <Users className="h-4 w-4" />
+                    Workspace team
+                  </Link>
+                </Button>
+              ) : businesses.length > 0 ? (
+                <Button asChild variant="outline">
+                  <Link to="/dashboard">
+                    <Users className="h-4 w-4" />
+                    Choose workspace
+                  </Link>
+                </Button>
+              ) : null}
               {business ? (
                 <Button asChild variant="outline">
                   <Link to={workspaceRoute}>

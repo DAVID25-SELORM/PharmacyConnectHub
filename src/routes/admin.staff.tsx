@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
-import { Loader2, Pencil, Trash2, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
@@ -31,73 +31,69 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useSession, type BusinessStaffRole } from "@/hooks/use-session";
-import { timeAgo } from "@/lib/format";
-import { invitePlatformStaff } from "@/lib/platform-staff-actions";
+import { useSession } from "@/hooks/use-session";
 import {
-  inviteBusinessStaff,
-  listBusinessStaff,
-  resendBusinessStaffInvite,
-  updateBusinessStaffMember,
-  type StaffMember,
-  type StaffStatus,
-} from "@/lib/staff-actions";
+  invitePlatformStaff,
+  listPlatformStaff,
+  resendPlatformStaffInvite,
+  updatePlatformStaffMember,
+  type PlatformStaffMember,
+  type PlatformStaffRole,
+  type PlatformStaffStatus,
+} from "@/lib/platform-staff-actions";
+import { inviteBusinessStaff, type ManageableStaffRole } from "@/lib/staff-actions";
+import { timeAgo } from "@/lib/format";
 
-export const Route = createFileRoute("/staff")({
+export const Route = createFileRoute("/admin/staff")({
   head: () => ({
-    meta: [{ title: "Team - PharmaHub GH" }],
+    meta: [{ title: "Platform Team - PharmaHub GH" }],
   }),
-  component: StaffManagement,
+  component: PlatformStaffManagement,
 });
 
-type ManageableStaffRole = Exclude<BusinessStaffRole, "owner">;
 type InviteTarget =
-  | { kind: "business"; label: string; value: `business:${string}`; businessId: string }
-  | { kind: "platform"; label: string; value: "platform" };
+  | { kind: "platform"; label: string; value: "platform" }
+  | { kind: "business"; label: string; value: `business:${string}`; businessId: string };
 
-const roleLabels: Record<BusinessStaffRole, string> = {
+type PlatformStaffEditForm = {
+  fullName: string;
+  email: string;
+  phone: string;
+  role: PlatformStaffRole;
+  status: PlatformStaffStatus;
+};
+
+const roleLabels: Record<PlatformStaffRole, string> = {
   owner: "Owner",
-  manager: "Manager",
-  cashier: "Cashier",
-  assistant: "Assistant",
+  admin: "Admin",
 };
 
-const roleColors: Record<BusinessStaffRole, string> = {
+const roleColors: Record<PlatformStaffRole, string> = {
   owner: "bg-purple-100 text-purple-800",
-  manager: "bg-blue-100 text-blue-800",
-  cashier: "bg-green-100 text-green-800",
-  assistant: "bg-gray-100 text-gray-800",
+  admin: "bg-blue-100 text-blue-800",
 };
 
-const statusLabels: Record<StaffStatus, string> = {
+const statusLabels: Record<PlatformStaffStatus, string> = {
   active: "Active",
   inactive: "Inactive",
   pending: "Pending",
 };
 
-const statusColors: Record<StaffStatus, string> = {
+const statusColors: Record<PlatformStaffStatus, string> = {
   active: "bg-green-100 text-green-800",
   inactive: "bg-slate-100 text-slate-700",
   pending: "bg-amber-100 text-amber-800",
 };
 
-type StaffEditForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  role: BusinessStaffRole;
-  status: StaffStatus;
-};
-
-const emptyEditForm: StaffEditForm = {
+const emptyEditForm: PlatformStaffEditForm = {
   fullName: "",
   email: "",
   phone: "",
-  role: "assistant",
+  role: "admin",
   status: "active",
 };
 
-function createEditForm(member: StaffMember): StaffEditForm {
+function createEditForm(member: PlatformStaffMember): PlatformStaffEditForm {
   return {
     fullName: member.full_name ?? "",
     email: member.user_email ?? "",
@@ -107,7 +103,7 @@ function createEditForm(member: StaffMember): StaffEditForm {
   };
 }
 
-function getEditableStatuses(member: StaffMember): StaffStatus[] {
+function getEditableStatuses(member: PlatformStaffMember): PlatformStaffStatus[] {
   if (member.role === "owner") {
     return ["active"];
   }
@@ -123,23 +119,31 @@ function getEditableStatuses(member: StaffMember): StaffStatus[] {
   return ["active", "inactive"];
 }
 
-function StaffManagement() {
+function PlatformStaffManagement() {
   const navigate = useNavigate();
-  const { loading, user, business, businesses, roles, setActiveBusiness } = useSession();
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const { loading, user, roles, businesses, setActiveBusiness } = useSession();
+  const [staff, setStaff] = useState<PlatformStaffMember[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<ManageableStaffRole>("assistant");
-  const [inviteTarget, setInviteTarget] = useState<InviteTarget["value"] | null>(null);
+  const [inviteTarget, setInviteTarget] = useState<InviteTarget["value"]>("platform");
   const [inviting, setInviting] = useState(false);
   const [resendingStaffId, setResendingStaffId] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<StaffMember | null>(null);
-  const [editForm, setEditForm] = useState<StaffEditForm>(emptyEditForm);
+  const [editingMember, setEditingMember] = useState<PlatformStaffMember | null>(null);
+  const [editForm, setEditForm] = useState<PlatformStaffEditForm>(emptyEditForm);
   const [savingEdit, setSavingEdit] = useState(false);
-  const businessId = business?.id ?? null;
 
-  const canManageTeam = business?.staff_role === "owner" || roles.includes("admin");
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      navigate({ to: "/login" });
+      return;
+    }
+    if (!roles.includes("admin")) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [loading, user, roles, navigate]);
 
   const inviteTargets = useMemo<InviteTarget[]>(() => {
     const businessTargets = businesses.map((workspace) => ({
@@ -149,68 +153,26 @@ function StaffManagement() {
       businessId: workspace.id,
     }));
 
-    if (roles.includes("admin")) {
-      return [
-        ...businessTargets,
-        { kind: "platform" as const, label: "PharmaHub Admin", value: "platform" },
-      ];
-    }
-
-    return businessTargets;
-  }, [businesses, roles]);
+    return [{ kind: "platform", label: "PharmaHub Admin", value: "platform" }, ...businessTargets];
+  }, [businesses]);
 
   useEffect(() => {
-    if (inviteTargets.length === 0) {
-      setInviteTarget(null);
-      return;
+    if (!inviteTargets.some((target) => target.value === inviteTarget)) {
+      setInviteTarget("platform");
     }
+  }, [inviteTarget, inviteTargets]);
 
-    if (inviteTarget && inviteTargets.some((target) => target.value === inviteTarget)) {
-      return;
-    }
-
-    const currentBusinessTarget = business
-      ? (`business:${business.id}` as const)
-      : inviteTargets[0].value;
-    setInviteTarget(
-      inviteTargets.some((target) => target.value === currentBusinessTarget)
-        ? currentBusinessTarget
-        : inviteTargets[0].value,
-    );
-  }, [business, inviteTarget, inviteTargets]);
-
-  const selectedInviteTarget = inviteTarget
-    ? (inviteTargets.find((target) => target.value === inviteTarget) ?? null)
-    : null;
-  const invitingToPlatform = selectedInviteTarget?.kind === "platform";
-
-  useEffect(() => {
-    if (loading) return;
-    if (!user) {
-      navigate({ to: "/login" });
-      return;
-    }
-    if (!business && businesses.length > 1) {
-      navigate({ to: "/dashboard" });
-      return;
-    }
-    if (!business) {
-      if (roles.includes("admin")) {
-        navigate({ to: "/admin" });
-        return;
-      }
-      navigate({ to: "/onboarding" });
-      return;
-    }
-  }, [loading, user, business, businesses, roles, navigate]);
+  const selectedInviteTarget =
+    inviteTargets.find((target) => target.value === inviteTarget) ?? inviteTargets[0];
+  const invitingToBusiness = selectedInviteTarget?.kind === "business";
+  const canManageTeam = roles.includes("admin");
 
   const loadStaff = useEffectEvent(async () => {
-    if (!business) return;
     setLoadingStaff(true);
     try {
-      setStaff(await listBusinessStaff(business.id));
+      setStaff(await listPlatformStaff());
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load team members";
+      const message = err instanceof Error ? err.message : "Failed to load platform staff";
       toast.error(message);
     } finally {
       setLoadingStaff(false);
@@ -218,16 +180,16 @@ function StaffManagement() {
   });
 
   useEffect(() => {
-    if (businessId) {
+    if (roles.includes("admin")) {
       void loadStaff();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId]);
+  }, [roles]);
 
   const handleInvite = async () => {
     if (!selectedInviteTarget || !inviteEmail.trim()) return;
     if (!canManageTeam) {
-      toast.error("Only the business owner or an admin can add team members.");
+      toast.error("Only platform admins can add platform staff.");
       return;
     }
 
@@ -239,10 +201,10 @@ function StaffManagement() {
         });
         toast.success(
           result.mode === "invited"
-            ? "Platform invite sent. They will finish setup inside PharmaHub Admin."
-            : "Platform staff added successfully.",
+            ? "Platform access email sent. They can finish setup from the admin side."
+            : "Platform admin added successfully.",
         );
-        navigate({ to: "/admin/staff" });
+        void loadStaff();
       } else {
         const result = await inviteBusinessStaff({
           businessId: selectedInviteTarget.businessId,
@@ -251,22 +213,19 @@ function StaffManagement() {
         });
         toast.success(
           result.mode === "invited"
-            ? `Invitation email sent for ${selectedInviteTarget.label}.`
-            : `Team member added to ${selectedInviteTarget.label}.`,
+            ? `Business invite sent for ${selectedInviteTarget.label}.`
+            : `Business staff added to ${selectedInviteTarget.label}.`,
         );
-        if (!business || selectedInviteTarget.businessId !== business.id) {
-          setActiveBusiness(selectedInviteTarget.businessId);
-          navigate({ to: "/staff" });
-        } else {
-          void loadStaff();
-        }
+        setActiveBusiness(selectedInviteTarget.businessId);
+        navigate({ to: "/staff" });
       }
 
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("assistant");
+      setInviteTarget("platform");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to add team member";
+      const message = err instanceof Error ? err.message : "Failed to add staff";
       toast.error(message);
     } finally {
       setInviting(false);
@@ -274,30 +233,25 @@ function StaffManagement() {
   };
 
   const saveStaffChanges = async (
-    member: StaffMember,
-    overrides: Partial<StaffEditForm>,
+    member: PlatformStaffMember,
+    overrides: Partial<PlatformStaffEditForm>,
   ): Promise<void> => {
-    if (!business) {
-      throw new Error("Business context is unavailable.");
-    }
-
     const email = (overrides.email ?? member.user_email ?? "").trim().toLowerCase();
     if (!email) {
       throw new Error("Staff email is required.");
     }
 
-    await updateBusinessStaffMember({
-      businessId: business.id,
+    await updatePlatformStaffMember({
       staffId: member.id,
       fullName: overrides.fullName ?? member.full_name ?? "",
       email,
       phone: overrides.phone ?? member.phone ?? "",
-      role: (overrides.role ?? member.role) as BusinessStaffRole,
-      status: (overrides.status ?? member.status) as StaffStatus,
+      role: overrides.role ?? member.role,
+      status: overrides.status ?? member.status,
     });
   };
 
-  const openEditDialog = (member: StaffMember) => {
+  const openEditDialog = (member: PlatformStaffMember) => {
     setEditingMember(member);
     setEditForm(createEditForm(member));
   };
@@ -314,82 +268,62 @@ function StaffManagement() {
 
   const handleSaveEdit = async () => {
     if (!editingMember) return;
-    if (!canManageTeam) {
-      toast.error("Only the business owner or an admin can edit team members.");
-      return;
-    }
 
     setSavingEdit(true);
     try {
       await saveStaffChanges(editingMember, editForm);
-      toast.success("Team member details updated.");
+      toast.success("Platform staff details updated.");
       closeEditDialog(false);
       void loadStaff();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update team member";
+      const message = err instanceof Error ? err.message : "Failed to update platform staff";
       toast.error(message);
       setSavingEdit(false);
     }
   };
 
-  const handleDeactivate = async (member: StaffMember) => {
-    if (!canManageTeam) {
-      toast.error("Only the business owner or an admin can remove team members.");
-      return;
-    }
-
+  const handleDeactivate = async (member: PlatformStaffMember) => {
     try {
       await saveStaffChanges(member, { status: "inactive" });
-      toast.success(member.status === "pending" ? "Invite cancelled." : "Team member deactivated.");
-      void loadStaff();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update team member";
-      toast.error(message);
-    }
-  };
-
-  const handleActivate = async (member: StaffMember) => {
-    if (!canManageTeam) {
-      toast.error("Only the business owner or an admin can activate team members.");
-      return;
-    }
-
-    try {
-      await saveStaffChanges(member, { status: "active" });
       toast.success(
-        member.status === "inactive" ? "Team member reactivated." : "Team member activated.",
+        member.status === "pending" ? "Invite cancelled." : "Platform admin deactivated.",
       );
       void loadStaff();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update team member";
+      const message = err instanceof Error ? err.message : "Failed to update platform staff";
       toast.error(message);
     }
   };
 
-  const handleResendInvite = async (member: StaffMember) => {
-    if (!business) return;
-    if (!canManageTeam) {
-      toast.error("Only the business owner or an admin can resend access emails.");
-      return;
+  const handleActivate = async (member: PlatformStaffMember) => {
+    try {
+      await saveStaffChanges(member, { status: "active" });
+      toast.success(
+        member.status === "inactive" ? "Platform admin reactivated." : "Platform admin activated.",
+      );
+      void loadStaff();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update platform staff";
+      toast.error(message);
     }
+  };
+
+  const handleResendInvite = async (member: PlatformStaffMember) => {
     if (member.status === "inactive") {
-      toast.error("Reactivate this staff member before sending an access email.");
+      toast.error("Reactivate this platform staff member before sending an access email.");
       return;
     }
 
     setResendingStaffId(member.id);
     try {
-      await resendBusinessStaffInvite({
-        businessId: business.id,
-        staffId: member.id,
-      });
+      await resendPlatformStaffInvite({ staffId: member.id });
       toast.success(
         member.user_email
           ? member.status === "pending"
-            ? `Access email resent to ${member.user_email}.`
+            ? `Platform invite resent to ${member.user_email}.`
             : `Reset email sent to ${member.user_email}.`
           : member.status === "pending"
-            ? "Access email resent successfully."
+            ? "Platform invite resent successfully."
             : "Reset email sent successfully.",
       );
     } catch (err) {
@@ -400,7 +334,7 @@ function StaffManagement() {
     }
   };
 
-  if (loading || !user || !business) {
+  if (loading || !user || !roles.includes("admin")) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -410,44 +344,42 @@ function StaffManagement() {
 
   const activeStaff = staff.filter((member) => member.status === "active");
   const otherStaff = staff.filter((member) => member.status !== "active");
-  const editableStatuses: StaffStatus[] = editingMember
+  const editableStatuses: PlatformStaffStatus[] = editingMember
     ? getEditableStatuses(editingMember)
     : ["active"];
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader subtitle={business.name} showNav={true} isAdmin={roles.includes("admin")} />
+      <DashboardHeader subtitle="Platform team" isAdmin={true} />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-2 font-display text-3xl font-bold">
-              <Users className="h-8 w-8" />
-              Team Members
+              <ShieldCheck className="h-8 w-8" />
+              Platform Team
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Manage who can access your business workspace.
+              Manage who can access the PharmaHub Admin interface.
             </p>
           </div>
-          {canManageTeam && (
-            <Button onClick={() => setInviteOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Staff
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => navigate({ to: "/admin" })}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to admin
             </Button>
-          )}
+            {canManageTeam && (
+              <Button onClick={() => setInviteOpen(true)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add Staff
+              </Button>
+            )}
+          </div>
         </div>
 
-        {canManageTeam ? (
-          <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
-            Pending invites appear under Other Access Records. Use the interface dropdown when
-            adding staff so each person lands in the correct side of the product. Active staff can
-            also receive a reset email from the roster.
-          </Card>
-        ) : (
-          <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
-            You can view the team roster, but only the business owner or an admin can add members or
-            change access.
-          </Card>
-        )}
+        <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
+          Platform staff stay on the admin side. Use the interface dropdown when inviting if you
+          want to send someone into a business workspace instead.
+        </Card>
 
         <div className="mt-8 grid gap-6">
           <Card className="p-6">
@@ -457,7 +389,9 @@ function StaffManagement() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : activeStaff.length === 0 ? (
-              <p className="py-12 text-center text-muted-foreground">No active team members yet.</p>
+              <p className="py-12 text-center text-muted-foreground">
+                No active platform staff yet.
+              </p>
             ) : (
               <Table>
                 <TableHeader>
@@ -483,40 +417,36 @@ function StaffManagement() {
                         {member.joined_at ? timeAgo(member.joined_at) : "Not recorded"}
                       </TableCell>
                       <TableCell>
-                        {canManageTeam ? (
-                          <div className="flex flex-wrap gap-2">
-                            {member.user_email && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleResendInvite(member)}
-                                disabled={resendingStaffId === member.id}
-                              >
-                                {resendingStaffId === member.id ? "Sending..." : "Resend email"}
-                              </Button>
-                            )}
+                        <div className="flex flex-wrap gap-2">
+                          {member.user_email && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openEditDialog(member)}
+                              onClick={() => handleResendInvite(member)}
+                              disabled={resendingStaffId === member.id}
                             >
-                              <Pencil className="h-4 w-4" />
-                              Edit
+                              {resendingStaffId === member.id ? "Sending..." : "Resend email"}
                             </Button>
-                            {member.role !== "owner" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeactivate(member)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Deactivate
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(member)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          {member.role !== "owner" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeactivate(member)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Deactivate
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -551,7 +481,7 @@ function StaffManagement() {
                       <TableCell>
                         <Badge className={roleColors[member.role]}>{roleLabels[member.role]}</Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell>
                         <Badge className={statusColors[member.status]}>
                           {statusLabels[member.status]}
                         </Badge>
@@ -560,57 +490,53 @@ function StaffManagement() {
                         {timeAgo(member.invited_at)}
                       </TableCell>
                       <TableCell>
-                        {canManageTeam ? (
-                          <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(member)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          {member.status !== "inactive" && member.user_email && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => openEditDialog(member)}
+                              onClick={() => handleResendInvite(member)}
+                              disabled={resendingStaffId === member.id}
                             >
-                              <Pencil className="h-4 w-4" />
-                              Edit
+                              {resendingStaffId === member.id ? "Sending..." : "Resend email"}
                             </Button>
-                            {member.status !== "inactive" && member.user_email && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleResendInvite(member)}
-                                disabled={resendingStaffId === member.id}
-                              >
-                                {resendingStaffId === member.id ? "Sending..." : "Resend email"}
-                              </Button>
-                            )}
-                            {member.status === "pending" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleActivate(member)}
-                              >
-                                Activate
-                              </Button>
-                            )}
-                            {member.status === "inactive" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleActivate(member)}
-                              >
-                                Reactivate
-                              </Button>
-                            )}
-                            {member.status !== "inactive" && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeactivate(member)}
-                              >
-                                Cancel
-                              </Button>
-                            )}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
+                          )}
+                          {member.status === "pending" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleActivate(member)}
+                            >
+                              Activate
+                            </Button>
+                          )}
+                          {member.status === "inactive" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleActivate(member)}
+                            >
+                              Reactivate
+                            </Button>
+                          )}
+                          {member.status !== "inactive" && member.role !== "owner" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeactivate(member)}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -623,11 +549,11 @@ function StaffManagement() {
         <Dialog open={Boolean(editingMember)} onOpenChange={closeEditDialog}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Edit Team Member</DialogTitle>
+              <DialogTitle>Edit Platform Staff</DialogTitle>
               <DialogDescription>
                 {editingMember?.status === "pending"
                   ? "Update this pending invite before resending the access email."
-                  : "Update the member's contact details and workspace access."}
+                  : "Update the member's contact details and admin access."}
               </DialogDescription>
             </DialogHeader>
             {editingMember && (
@@ -664,7 +590,7 @@ function StaffManagement() {
                     <Input
                       id="edit-email"
                       type="email"
-                      placeholder="staff@example.com"
+                      placeholder="admin@example.com"
                       value={editForm.email}
                       onChange={(event) =>
                         setEditForm((current) => ({ ...current, email: event.target.value }))
@@ -674,34 +600,17 @@ function StaffManagement() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="edit-role">Role</Label>
-                      {editingMember.role === "owner" ? (
-                        <div className="space-y-2 rounded-md border p-3">
-                          <Badge className={roleColors.owner}>{roleLabels.owner}</Badge>
-                          <p className="text-xs text-muted-foreground">
-                            The business owner keeps the owner role.
-                          </p>
-                        </div>
-                      ) : (
-                        <Select
-                          value={editForm.role}
-                          onValueChange={(value) =>
-                            setEditForm((current) => ({
-                              ...current,
-                              role: value as ManageableStaffRole,
-                            }))
-                          }
-                        >
-                          <SelectTrigger id="edit-role">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="manager">Manager</SelectItem>
-                            <SelectItem value="cashier">Cashier</SelectItem>
-                            <SelectItem value="assistant">Assistant</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <Label>Role</Label>
+                      <div className="space-y-2 rounded-md border p-3">
+                        <Badge className={roleColors[editingMember.role]}>
+                          {roleLabels[editingMember.role]}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground">
+                          {editingMember.role === "owner"
+                            ? "The platform owner keeps full admin control."
+                            : "Platform staff use the admin interface only."}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -710,7 +619,7 @@ function StaffManagement() {
                         <div className="space-y-2 rounded-md border p-3">
                           <Badge className={statusColors.active}>{statusLabels.active}</Badge>
                           <p className="text-xs text-muted-foreground">
-                            The business owner must stay active.
+                            The platform owner must stay active.
                           </p>
                         </div>
                       ) : (
@@ -719,7 +628,7 @@ function StaffManagement() {
                           onValueChange={(value) =>
                             setEditForm((current) => ({
                               ...current,
-                              status: value as StaffStatus,
+                              status: value as PlatformStaffStatus,
                             }))
                           }
                         >
@@ -741,7 +650,7 @@ function StaffManagement() {
                   {editingMember.status === "pending" && (
                     <p className="text-xs text-muted-foreground">
                       Save any email changes first, then use the Resend email action in the table to
-                      send a fresh invite.
+                      send a fresh platform invite.
                     </p>
                   )}
                 </div>
@@ -772,21 +681,21 @@ function StaffManagement() {
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Team Member</DialogTitle>
+              <DialogTitle>Add Staff</DialogTitle>
               <DialogDescription>
-                Choose the interface first. Business staff stay in the selected workspace, while
-                platform staff stay inside PharmaHub Admin.
+                Choose the interface first. Platform staff stay inside PharmaHub Admin, while
+                business staff stay inside the selected workspace.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="invite-interface">Interface</Label>
                 <Select
-                  value={inviteTarget ?? undefined}
+                  value={inviteTarget}
                   onValueChange={(value) => setInviteTarget(value as InviteTarget["value"])}
                 >
                   <SelectTrigger id="invite-interface">
-                    <SelectValue placeholder="Select where this staff member should work" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {inviteTargets.map((target) => (
@@ -797,28 +706,26 @@ function StaffManagement() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="invite-email">Email Address</Label>
                 <Input
-                  id="email"
+                  id="invite-email"
                   type="email"
                   placeholder="staff@example.com"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />
               </div>
-              {invitingToPlatform ? (
-                <Card className="border-dashed p-3 text-sm text-muted-foreground">
-                  Platform invites add the person to the admin interface only.
-                </Card>
-              ) : (
+
+              {invitingToBusiness ? (
                 <div className="space-y-2">
-                  <Label htmlFor="role">Business Role</Label>
+                  <Label htmlFor="invite-role">Business Role</Label>
                   <Select
                     value={inviteRole}
                     onValueChange={(value) => setInviteRole(value as ManageableStaffRole)}
                   >
-                    <SelectTrigger id="role">
+                    <SelectTrigger id="invite-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -828,16 +735,17 @@ function StaffManagement() {
                     </SelectContent>
                   </Select>
                 </div>
+              ) : (
+                <Card className="border-dashed p-3 text-sm text-muted-foreground">
+                  Platform invites add the person to the admin interface only.
+                </Card>
               )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviting}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleInvite}
-                disabled={inviting || !inviteEmail.trim() || !selectedInviteTarget}
-              >
+              <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
                 {inviting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

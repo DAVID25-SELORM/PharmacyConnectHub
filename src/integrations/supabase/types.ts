@@ -335,6 +335,42 @@ export type Database = {
           },
         ];
       };
+      platform_staff: {
+        Row: {
+          created_at: string;
+          id: string;
+          invited_at: string;
+          invited_by: string | null;
+          joined_at: string | null;
+          role: Database["public"]["Enums"]["platform_staff_role"];
+          status: Database["public"]["Enums"]["staff_status"];
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          invited_at?: string;
+          invited_by?: string | null;
+          joined_at?: string | null;
+          role?: Database["public"]["Enums"]["platform_staff_role"];
+          status?: Database["public"]["Enums"]["staff_status"];
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          invited_at?: string;
+          invited_by?: string | null;
+          joined_at?: string | null;
+          role?: Database["public"]["Enums"]["platform_staff_role"];
+          status?: Database["public"]["Enums"]["staff_status"];
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       products: {
         Row: {
           active: boolean;
@@ -470,6 +506,18 @@ export type Database = {
         };
         Returns: boolean;
       };
+      is_platform_owner: {
+        Args: {
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
+      is_platform_staff: {
+        Args: {
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
       is_business_staff: {
         Args: {
           _business_id: string;
@@ -500,6 +548,20 @@ export type Database = {
           user_id: string;
         }[];
       };
+      list_platform_staff: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          full_name: string | null;
+          id: string;
+          invited_at: string;
+          joined_at: string | null;
+          phone: string | null;
+          role: Database["public"]["Enums"]["platform_staff_role"];
+          status: Database["public"]["Enums"]["staff_status"];
+          user_email: string | null;
+          user_id: string;
+        }[];
+      };
     };
     Enums: {
       app_role: "admin" | "pharmacy" | "wholesaler";
@@ -507,6 +569,7 @@ export type Database = {
       order_status: "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
       payment_method: "cod" | "paystack";
       payment_status: "unpaid" | "paid" | "refunded" | "failed";
+      platform_staff_role: "owner" | "admin";
       staff_role: "owner" | "manager" | "cashier" | "assistant";
       staff_status: "active" | "inactive" | "pending";
       verification_status: "pending" | "approved" | "rejected";
@@ -640,6 +703,7 @@ export const Constants = {
       order_status: ["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"],
       payment_method: ["cod", "paystack"],
       payment_status: ["unpaid", "paid", "refunded", "failed"],
+      platform_staff_role: ["owner", "admin"],
       staff_role: ["owner", "manager", "cashier", "assistant"],
       staff_status: ["active", "inactive", "pending"],
       verification_status: ["pending", "approved", "rejected"],
