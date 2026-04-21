@@ -37,6 +37,7 @@ import { timeAgo } from "@/lib/format";
 import {
   inviteBusinessStaff,
   listBusinessStaff,
+  resendBusinessStaffInvite,
   type StaffMember,
   type StaffStatus,
 } from "@/lib/staff-actions";
@@ -85,6 +86,7 @@ function StaffManagement() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<ManageableStaffRole>("assistant");
   const [inviting, setInviting] = useState(false);
+  const [resendingStaffId, setResendingStaffId] = useState<string | null>(null);
   const businessId = business?.id ?? null;
 
   const canManageTeam = business?.staff_role === "owner" || roles.includes("admin");
@@ -214,6 +216,36 @@ function StaffManagement() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to activate team member";
       toast.error(message);
+    }
+  };
+
+  const handleResendInvite = async (member: StaffMember) => {
+    if (!business) return;
+    if (!canManageTeam) {
+      toast.error("Only the business owner can resend access emails.");
+      return;
+    }
+    if (member.status !== "pending") {
+      toast.error("Only pending staff records can receive a resend email.");
+      return;
+    }
+
+    setResendingStaffId(member.id);
+    try {
+      await resendBusinessStaffInvite({
+        businessId: business.id,
+        staffId: member.id,
+      });
+      toast.success(
+        member.user_email
+          ? `Access email resent to ${member.user_email}.`
+          : "Access email resent successfully.",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to resend access email";
+      toast.error(message);
+    } finally {
+      setResendingStaffId(null);
     }
   };
 
@@ -363,6 +395,16 @@ function StaffManagement() {
                       <TableCell>
                         {canManageTeam ? (
                           <div className="flex gap-1">
+                            {member.status === "pending" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResendInvite(member)}
+                                disabled={resendingStaffId === member.id}
+                              >
+                                {resendingStaffId === member.id ? "Sending..." : "Resend email"}
+                              </Button>
+                            )}
                             {member.status === "pending" && (
                               <Button
                                 variant="outline"

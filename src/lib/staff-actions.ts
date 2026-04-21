@@ -26,6 +26,23 @@ type InviteBusinessStaffResult = {
   mode: "existing-account" | "invited";
 };
 
+type ResendBusinessStaffInviteInput = {
+  businessId: string;
+  staffId: string;
+};
+
+async function getRequiredSession() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw new Error("You must be signed in to manage staff.");
+  }
+
+  return session;
+}
+
 function sortStaffMembers(left: StaffMember, right: StaffMember) {
   const roleOrder: Record<BusinessStaffRole, number> = {
     owner: 0,
@@ -66,13 +83,7 @@ export async function listBusinessStaff(businessId: string): Promise<StaffMember
 export async function inviteBusinessStaff(
   input: InviteBusinessStaffInput,
 ): Promise<InviteBusinessStaffResult> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    throw new Error("You must be signed in to add staff.");
-  }
+  const session = await getRequiredSession();
 
   const res = await fetch("/api/staff/invite", {
     method: "POST",
@@ -94,6 +105,32 @@ export async function inviteBusinessStaff(
   }
 
   return { mode: data.mode };
+}
+
+export async function resendBusinessStaffInvite(
+  input: ResendBusinessStaffInviteInput,
+): Promise<{ ok: true }> {
+  const session = await getRequiredSession();
+
+  const res = await fetch("/api/staff/resend-invite", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      businessId: input.businessId,
+      staffId: input.staffId,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to resend access email");
+  }
+
+  return { ok: true };
 }
 
 /**

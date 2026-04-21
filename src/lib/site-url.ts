@@ -1,5 +1,6 @@
 function getConfiguredSiteUrl() {
-  const rawSiteUrl = import.meta.env.VITE_SITE_URL;
+  const rawSiteUrl =
+    import.meta.env.VITE_SITE_URL || process.env.VITE_SITE_URL || process.env.SITE_URL;
 
   if (typeof rawSiteUrl === "string" && rawSiteUrl.trim()) {
     return rawSiteUrl.trim();
@@ -25,7 +26,9 @@ export function getAppUrl(path = "") {
     return new URL(normalizedPath, normalizedBaseUrl).toString();
   } catch {
     if (typeof window !== "undefined") {
-      return normalizedPath ? `${window.location.origin}/${normalizedPath}` : window.location.origin;
+      return normalizedPath
+        ? `${window.location.origin}/${normalizedPath}`
+        : window.location.origin;
     }
 
     return normalizedPath ? `/${normalizedPath}` : "/";

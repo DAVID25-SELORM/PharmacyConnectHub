@@ -60,7 +60,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "Server misconfigured" });
   }
 
-  // 1. Authenticate the caller
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Missing authorization" });
@@ -76,22 +75,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
-  // 2. Validate input
-  const { businessId, email, role } = req.body ?? {};
-  if (!businessId || !email || !role) {
-    return res.status(400).json({ error: "businessId, email, and role are required" });
-  }
-  if (!["manager", "cashier", "assistant"].includes(role)) {
-    return res.status(400).json({ error: "Invalid role" });
-  }
-  const normalizedEmail = String(email).trim().toLowerCase();
-
-  // 3. Prevent self-invite (owner could demote themselves)
-  if (caller.email?.toLowerCase() === normalizedEmail) {
-    return res.status(400).json({ error: "You cannot invite yourself" });
+  const { businessId, staffId } = req.body ?? {};
+  if (!businessId || !staffId) {
+    return res.status(400).json({ error: "businessId and staffId are required" });
   }
 
-  // 4. Verify caller owns the business
   const { data: biz } = await admin
     .from("businesses")
     .select("id, owner_id")
@@ -99,59 +87,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .single();
 
   if (!biz || biz.owner_id !== caller.id) {
-    return res.status(403).json({ error: "Only the business owner can invite staff" });
+    return res
+      .status(403)
+      .json({ error: "Only the business owner can resend staff access emails" });
   }
 
-  // 5. Look up existing user by email via RPC (avoids loading all users)
-  const { data: existingUserId } = await admin.rpc("lookup_user_id_by_email", {
-    _email: normalizedEmail,
-  });
-
-  if (existingUserId) {
-    const { error: staffErr } = await admin.from("business_staff").upsert(
-      {
-        business_id: businessId,
-        user_id: existingUserId,
-        role,
-        status: "active",
-        invited_by: caller.id,
-        joined_at: new Date().toISOString(),
-      },
-      { onConflict: "business_id,user_id" },
-    );
-
-    if (staffErr) {
-      return res.status(400).json({ error: staffErr.message });
-    }
-    return res.status(200).json({ mode: "existing-account" });
-  }
-
-  // 6. User does not exist yet — invite them into the password setup flow
-  const redirectTo = getInviteRedirectUrl(req, "/reset-password");
-  const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-    normalizedEmail,
-    {
-      data: { is_staff_invite: true },
-      ...(redirectTo ? { redirectTo } : {}),
-    },
-  );
-
-  if (inviteErr || !invited?.user) {
-    return res.status(500).json({ error: inviteErr?.message || "Failed to send invite" });
-  }
-
-  // 7. Insert staff record as pending
-  const { error: staffErr } = await admin.from("business_staff").insert({
-    business_id: businessId,
-    user_id: invited.user.id,
-    role,
-    status: "pending",
-    invited_by: caller.id,
-  });
+  const { data: staffRow, error: staffErr } = await admin
+    .from("business_staff")
+    .select("id, user_id, status")
+    .eq("id", staffId)
+    .eq("business_id", businessId)
+    .maybeSingle();
 
   if (staffErr) {
     return res.status(500).json({ error: staffErr.message });
   }
 
-  return res.status(200).json({ mode: "invited" });
+  if (!staffRow) {
+    return res.status(404).json({ error: "Staff record not found" });
+  }
+
+  if (staffRow.status !== "pending") {
+    return res.status(400).json({ error: "Only pending staff records can receive a resend email" });
+  }
+
+  const {
+    data: { user: invitedUser },
+    error: invitedUserErr,
+  } = await admin.auth.admin.getUserById(staffRow.user_id);
+
+  if (invitedUserErr) {
+    return res.status(500).json({ error: invitedUserErr.message });
+  }
+
+  if (!invitedUser?.email) {
+    return res.status(400).json({ error: "The invited user does not have an email address" });
+  }
+
+  const redirectTo = getInviteRedirectUrl(req, "/reset-password");
+  const { error: resendErr } = await admin.auth.resetPasswordForEmail(invitedUser.email, {
+    ...(redirectTo ? { redirectTo } : {}),
+  });
+
+  if (resendErr) {
+    return res.status(500).json({ error: resendErr.message || "Failed to resend access email" });
+  }
+
+  return res.status(200).json({ ok: true });
 }

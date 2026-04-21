@@ -15,6 +15,7 @@ In the Supabase SQL editor for your project, run the migration files in this ord
 6. `supabase/migrations/20260419000000_add_notifications.sql`
 7. `supabase/migrations/20260419000100_fix_notification_triggers.sql`
 8. `supabase/migrations/20260419000200_bootstrap_business_on_signup.sql`
+9. `supabase/migrations/20260420000000_staff_invite_guard.sql`
 
 `supabase/schema.sql` is an older prototype schema and should not be used for the current Supabase app.
 
@@ -24,7 +25,8 @@ Required client-side variables:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_SITE_URL` for password reset and email confirmation redirects
+- `VITE_SITE_URL` for client-side password reset and email confirmation redirects
+- `SITE_URL` recommended for server-generated invite emails; use the same public app URL as `VITE_SITE_URL`
 
 ## 3. Hosting assumptions
 
@@ -35,7 +37,7 @@ The current checkout flow is cash on delivery only. No Express server or custom 
 ## 4. Important notes
 
 - `supabase/schema.sql` is legacy reference material, not the source of truth.
-- The active business-staff flows rely on the `add_business_staff_by_email`, `list_business_staff`, and `get_user_business_context` RPC functions from the migrations.
+- The active business-staff flows rely on `list_business_staff`, `get_user_business_context`, `lookup_user_id_by_email`, and the `/api/staff/invite` Vercel function.
 - The notifications UI depends on the notification migrations and the checked-in Supabase types in `src/integrations/supabase/types.ts`.
 - If you add server-side notifications later, prefer Supabase Edge Functions over reintroducing a separate Express backend.
 

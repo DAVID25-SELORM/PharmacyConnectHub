@@ -29,7 +29,11 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  signup_role := COALESCE((NEW.raw_user_meta_data->>'role')::public.app_role, 'pharmacy');
+  signup_role := CASE
+    WHEN COALESCE(NULLIF(BTRIM(NEW.raw_user_meta_data->>'role'), ''), 'pharmacy') IN ('admin', 'pharmacy', 'wholesaler')
+      THEN COALESCE(NULLIF(BTRIM(NEW.raw_user_meta_data->>'role'), ''), 'pharmacy')::public.app_role
+    ELSE 'pharmacy'::public.app_role
+  END;
 
   INSERT INTO public.user_roles (user_id, role)
   VALUES (NEW.id, signup_role)
@@ -91,6 +95,7 @@ REVOKE ALL ON FUNCTION public.lookup_user_id_by_email(TEXT) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.lookup_user_id_by_email(TEXT) TO service_role;
 
 -- Allow users to read their own business_staff rows (needed for pending-invite UX).
+DROP POLICY IF EXISTS "Users view own staff memberships" ON public.business_staff;
 CREATE POLICY "Users view own staff memberships"
   ON public.business_staff
   FOR SELECT

@@ -13,9 +13,14 @@ export const Route = createFileRoute("/reset-password")({
 });
 
 type ResetLinkStatus = "verifying" | "ready" | "error";
+type PasswordLinkType = "invite" | "recovery";
 
 const DEFAULT_RESET_LINK_ERROR =
   "This password reset link is invalid or has expired. Request a new link and try again.";
+
+function isPasswordLinkType(value: string | null): value is PasswordLinkType {
+  return value === "invite" || value === "recovery";
+}
 
 function getRecoveryParams() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -27,8 +32,7 @@ function getRecoveryParams() {
     type: searchParams.get("type") ?? hashParams.get("type"),
     accessToken: hashParams.get("access_token") ?? searchParams.get("access_token"),
     refreshToken: hashParams.get("refresh_token") ?? searchParams.get("refresh_token"),
-    errorDescription:
-      searchParams.get("error_description") ?? hashParams.get("error_description"),
+    errorDescription: searchParams.get("error_description") ?? hashParams.get("error_description"),
   };
 }
 
@@ -72,6 +76,7 @@ function ResetPasswordPage() {
     void (async () => {
       const { code, tokenHash, type, accessToken, refreshToken, errorDescription } =
         getRecoveryParams();
+      const passwordLinkType = isPasswordLinkType(type) ? type : null;
 
       if (errorDescription) {
         clearRecoveryParams();
@@ -86,10 +91,10 @@ function ResetPasswordPage() {
           markError(error.message);
           return;
         }
-      } else if (tokenHash && type === "recovery") {
+      } else if (tokenHash && passwordLinkType) {
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
-          type: "recovery",
+          type: passwordLinkType,
         });
         if (error) {
           clearRecoveryParams();
@@ -210,9 +215,7 @@ function ResetPasswordPage() {
 
           <Card className="p-8 shadow-elegant text-center space-y-3">
             <h1 className="font-display text-2xl font-bold">Reset link unavailable</h1>
-            <p className="text-sm text-muted-foreground">
-              {linkError ?? DEFAULT_RESET_LINK_ERROR}
-            </p>
+            <p className="text-sm text-muted-foreground">{linkError ?? DEFAULT_RESET_LINK_ERROR}</p>
             <div className="pt-2 space-y-2">
               <Button asChild variant="hero" size="lg" className="w-full">
                 <Link to="/forgot-password">Request a new reset link</Link>

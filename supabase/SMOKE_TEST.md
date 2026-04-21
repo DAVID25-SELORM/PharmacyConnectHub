@@ -9,6 +9,7 @@ It verifies the flows that matter most for production readiness:
 - pharmacy users can see and choose approved wholesalers
 - orders can be placed and fulfilled
 - notifications are created and shown in the app
+- staff invites land on the password setup flow and pending access is visible
 
 ## Preconditions
 
@@ -18,6 +19,7 @@ It verifies the flows that matter most for production readiness:
 - Prepare two fresh test email addresses:
   - one wholesaler account
   - one pharmacy account
+- Prepare one additional fresh staff email address for the invite flow test
 - Prepare small test files for onboarding uploads:
   - PDF, JPG, or PNG
   - under 10 MB each
@@ -51,6 +53,13 @@ limit 30;
 select user_id, role
 from public.user_roles
 where role = 'admin';
+```
+
+```sql
+select business_id, user_id, role, status, invited_at, joined_at
+from public.business_staff
+order by invited_at desc
+limit 20;
 ```
 
 ## 1. Wholesaler Signup Bootstrap
@@ -312,7 +321,25 @@ limit 20;
 
 Pass if newly opened notifications now show `read = true`.
 
-## 11. Final Pass Criteria
+## 11. Staff Invite And Password Setup
+
+1. While signed in as an approved business owner, open `/staff`.
+2. Invite the fresh staff email address.
+3. Open the invite email and confirm the link lands on `/reset-password`.
+4. Set a password for the invited user.
+5. After password update, confirm the app redirects into the workspace flow.
+6. Before owner activation, confirm the invited user sees the pending-access state.
+7. Back in the owner account, activate the pending staff record.
+8. Sign back in as the invited user and confirm the workspace now opens normally.
+
+Expected result:
+
+- the email link resolves to the password setup page, not an unrelated route
+- the invited user can set their password successfully
+- pending staff members see the pending-access message until activation
+- once activated, the invited user can reach the correct business workspace
+
+## 12. Final Pass Criteria
 
 The release smoke test passes if all of the following are true:
 
@@ -325,6 +352,7 @@ The release smoke test passes if all of the following are true:
 - the wholesaler receives `new_order` notifications
 - the pharmacy receives `order_status` notifications
 - the notification bell shows and marks notifications read
+- staff invite emails open the password setup route and invited staff can access the workspace after activation
 
 If any step fails, capture:
 
