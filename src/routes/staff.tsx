@@ -808,9 +808,17 @@ function StaffManagement() {
                 />
               </div>
               {invitingToPlatform ? (
-                <Card className="border-dashed p-3 text-sm text-muted-foreground">
-                  Platform invites add the person to the admin interface only.
-                </Card>
+                <div className="space-y-2">
+                  <Label>Platform Role</Label>
+                  <Card className="border-dashed p-3 text-sm text-muted-foreground">
+                    <div className="font-medium text-foreground">Platform Admin</div>
+                    <div className="mt-1">
+                      Platform invites add the person to the admin interface only. The
+                      <span className="font-medium text-foreground"> Platform Owner </span>
+                      role is reserved for you.
+                    </div>
+                  </Card>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <Label htmlFor="role">Business Role</Label>
