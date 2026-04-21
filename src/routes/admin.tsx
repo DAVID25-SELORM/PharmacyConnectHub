@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Outlet, createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -57,6 +57,7 @@ type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at:
 
 function AdminPanel() {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { loading, user, roles, business, businesses } = useSession();
   const [businessRows, setBusinessRows] = useState<Biz[]>([]);
   const [stats, setStats] = useState({
@@ -111,8 +112,8 @@ function AdminPanel() {
   };
 
   useEffect(() => {
-    if (roles.includes("admin")) void load();
-  }, [roles]);
+    if (pathname === "/admin" && roles.includes("admin")) void load();
+  }, [roles, pathname]);
 
   if (loading || !user || !roles.includes("admin")) {
     return (
@@ -121,6 +122,10 @@ function AdminPanel() {
         <span className="ml-2">Loading…</span>
       </div>
     );
+  }
+
+  if (pathname !== "/admin") {
+    return <Outlet />;
   }
 
   const pending = businessRows.filter((b) => b.verification_status === "pending");
