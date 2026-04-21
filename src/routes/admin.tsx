@@ -57,8 +57,8 @@ type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at:
 
 function AdminPanel() {
   const navigate = useNavigate();
-  const { loading, user, roles, business } = useSession();
-  const [businesses, setBusinesses] = useState<Biz[]>([]);
+  const { loading, user, roles, business, businesses } = useSession();
+  const [businessRows, setBusinessRows] = useState<Biz[]>([]);
   const [stats, setStats] = useState({
     pharmacies: { total: 0, pending: 0, approved: 0, rejected: 0 },
     wholesalers: { total: 0, pending: 0, approved: 0, rejected: 0 },
@@ -84,7 +84,7 @@ function AdminPanel() {
       .select("*")
       .order("created_at", { ascending: false });
     const all = (bizData as Biz[]) ?? [];
-    setBusinesses(all);
+    setBusinessRows(all);
 
     const pharmacies = all.filter((b) => b.type === "pharmacy");
     const wholesalers = all.filter((b) => b.type === "wholesaler");
@@ -123,9 +123,9 @@ function AdminPanel() {
     );
   }
 
-  const pending = businesses.filter((b) => b.verification_status === "pending");
-  const approved = businesses.filter((b) => b.verification_status === "approved");
-  const rejected = businesses.filter((b) => b.verification_status === "rejected");
+  const pending = businessRows.filter((b) => b.verification_status === "pending");
+  const approved = businessRows.filter((b) => b.verification_status === "approved");
+  const rejected = businessRows.filter((b) => b.verification_status === "rejected");
   const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
 
   return (
@@ -222,17 +222,24 @@ function AdminPanel() {
                   Manage team
                 </Link>
               </Button>
-              {business && (
+              {business ? (
                 <Button asChild variant="outline">
                   <Link to={workspaceRoute}>
                     Open workspace
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
-              )}
+              ) : businesses.length > 0 ? (
+                <Button asChild variant="outline">
+                  <Link to="/dashboard">
+                    Choose workspace
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : null}
             </div>
           </div>
-          {!business && (
+          {!business && businesses.length === 0 && (
             <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
               Team management appears after your account has a business workspace.
             </div>

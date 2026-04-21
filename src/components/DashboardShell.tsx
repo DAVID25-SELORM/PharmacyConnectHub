@@ -14,9 +14,16 @@ import { useEffect, useRef, useState } from "react";
 import logo from "@/assets/logo.jpg";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import type { Business } from "@/hooks/use-session";
+import { useSession, type Business } from "@/hooks/use-session";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type NotificationRow = {
@@ -162,11 +169,24 @@ export function DashboardHeader({
   isAdmin?: boolean;
 }) {
   const navigate = useNavigate();
+  const { business, businesses, setActiveBusiness } = useSession();
+  const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
+  const workspaceLabel = business?.type === "wholesaler" ? "Workspace" : "Browse";
+  const canSwitchWorkspaces = showNav && businesses.length > 1 && business;
 
   const onSignOut = async () => {
     await supabase.auth.signOut();
     toast.success("Signed out");
     navigate({ to: "/" });
+  };
+
+  const onWorkspaceChange = (businessId: string) => {
+    if (!business || businessId === business.id) {
+      return;
+    }
+
+    setActiveBusiness(businessId);
+    navigate({ to: "/dashboard" });
   };
 
   return (
@@ -183,6 +203,21 @@ export function DashboardHeader({
             </div>
           </Link>
 
+          {canSwitchWorkspaces && (
+            <Select value={business.id} onValueChange={onWorkspaceChange}>
+              <SelectTrigger className="w-[180px] sm:w-[240px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {businesses.map((workspace) => (
+                  <SelectItem key={workspace.id} value={workspace.id}>
+                    {workspace.name} · {workspace.type} · {workspace.staff_role}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {showNav && (
             <nav className="hidden md:flex items-center gap-1">
               <Link
@@ -193,11 +228,11 @@ export function DashboardHeader({
                 Dashboard
               </Link>
               <Link
-                to="/pharmacy"
+                to={workspaceRoute}
                 className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
               >
                 <Package className="h-4 w-4 inline mr-2" />
-                Browse
+                {workspaceLabel}
               </Link>
               <Link
                 to="/staff"

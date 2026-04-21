@@ -24,7 +24,7 @@ type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at:
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const { loading, user, business, refresh } = useSession();
+  const { loading, user, business, businesses, refresh } = useSession();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [pendingStaff, setPendingStaff] = useState<boolean | null>(null);
@@ -35,7 +35,7 @@ function OnboardingPage() {
 
   // Check if the user has a pending staff membership (invited but not yet activated)
   useEffect(() => {
-    if (!user || business) return;
+    if (!user || business || businesses.length > 0) return;
     supabase
       .from("business_staff")
       .select("id")
@@ -45,7 +45,7 @@ function OnboardingPage() {
       .then(({ data }) => {
         setPendingStaff(!!data && data.length > 0);
       });
-  }, [user, business]);
+  }, [user, business, businesses.length]);
 
   useEffect(() => {
     if (!business) return;
@@ -88,6 +88,19 @@ function OnboardingPage() {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         <Pill className="h-5 w-5 animate-pulse" /> <span className="ml-2">Loading…</span>
+      </div>
+    );
+  }
+
+  if (!business && businesses.length > 1) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <h2 className="text-xl font-semibold">Choose a workspace first</h2>
+        <p className="max-w-md text-muted-foreground">
+          This account can access more than one business. Select the workspace you want before
+          opening onboarding.
+        </p>
+        <Button onClick={() => navigate({ to: "/dashboard" })}>Choose workspace</Button>
       </div>
     );
   }

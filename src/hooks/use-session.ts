@@ -23,6 +23,7 @@ export type SessionState = {
   user: User | null;
   roles: AppRole[];
   business: Business | null;
+  businesses: Business[];
 };
 
 type QueryError = {
@@ -33,8 +34,8 @@ type QueryError = {
   status?: number | null;
 };
 
-type BusinessQueryResult = {
-  business: Business | null;
+type BusinessesQueryResult = {
+  businesses: Business[];
   error: QueryError | null;
 };
 
@@ -45,9 +46,19 @@ type RolesQueryResult = {
 
 type WorkspaceQueryResult = {
   business: Business | null;
+  businesses: Business[];
   roles: AppRole[];
   unauthorized: boolean;
 };
+
+type BusinessMembershipRow = {
+  business: Omit<Business, "staff_role"> | null;
+  invited_at: string;
+  joined_at: string | null;
+  role: BusinessStaffRole;
+};
+
+const ACTIVE_BUSINESS_STORAGE_KEY = "pharmahub.active_business_id";
 
 const initialState: SessionState = {
   loading: true,
@@ -55,9 +66,9 @@ const initialState: SessionState = {
   user: null,
   roles: [],
   business: null,
+  businesses: [],
 };
 
-const unavailableRpcNames = new Set<string>();
 const listeners = new Set<() => void>();
 
 let sessionState: SessionState = initialState;
@@ -86,16 +97,76 @@ function subscribeToSessionState(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-function isMissingRpcError(error: QueryError | null, rpcName: string) {
-  if (!error) return false;
+function readStoredBusinessId() {
+  if (typeof window === "undefined") {
+    return null;
+  }
 
-  const description = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
-  return (
-    error.code === "PGRST202" ||
-    description.includes("could not find the function") ||
-    description.includes("schema cache") ||
-    description.includes(rpcName.toLowerCase())
-  );
+  try {
+    return window.localStorage.getItem(ACTIVE_BUSINESS_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredBusinessId(businessId: string | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (businessId) {
+      window.localStorage.setItem(ACTIVE_BUSINESS_STORAGE_KEY, businessId);
+    } else {
+      window.localStorage.removeItem(ACTIVE_BUSINESS_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage failures and keep the session usable.
+  }
+}
+
+function sortBusinesses(left: Business, right: Business) {
+  const roleOrder: Record<BusinessStaffRole, number> = {
+    owner: 0,
+    manager: 1,
+    cashier: 2,
+    assistant: 3,
+  };
+
+  const leftRole = roleOrder[left.staff_role] ?? 99;
+  const rightRole = roleOrder[right.staff_role] ?? 99;
+  if (leftRole !== rightRole) {
+    return leftRole - rightRole;
+  }
+
+  if (left.type !== right.type) {
+    return left.type.localeCompare(right.type);
+  }
+
+  return left.name.localeCompare(right.name);
+}
+
+function chooseActiveBusiness(businesses: Business[]) {
+  if (businesses.length === 0) {
+    writeStoredBusinessId(null);
+    return null;
+  }
+
+  const storedBusinessId = readStoredBusinessId();
+  if (storedBusinessId) {
+    const storedBusiness = businesses.find((business) => business.id === storedBusinessId);
+    if (storedBusiness) {
+      return storedBusiness;
+    }
+  }
+
+  if (businesses.length === 1) {
+    writeStoredBusinessId(businesses[0].id);
+    return businesses[0];
+  }
+
+  writeStoredBusinessId(null);
+  return null;
 }
 
 function isUnauthorizedError(error: QueryError | null) {
@@ -154,72 +225,99 @@ async function resolveSession(
   }
 }
 
-async function loadOwnerBusinessFallback(userId: string): Promise<BusinessQueryResult> {
+async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQueryResult> {
   const { data, error } = await supabase
     .from("businesses")
     .select("id,type,name,license_number,city,region,verification_status,rejection_reason")
     .eq("owner_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
 
   if (error) {
     return {
-      business: null,
+      businesses: [],
       error,
     };
   }
 
-  if (!data) {
+  if (!data || data.length === 0) {
     return {
-      business: null,
+      businesses: [],
       error: null,
     };
   }
 
   return {
-    business: {
-      ...(data as Omit<Business, "staff_role">),
+    businesses: (data as Omit<Business, "staff_role">[]).map((business) => ({
+      ...business,
       staff_role: "owner",
-    },
+    })),
     error: null,
   };
 }
 
-async function loadBusinessContext(userId: string): Promise<BusinessQueryResult> {
-  const rpcName = "get_user_business_context";
-  const ownerBusiness = await loadOwnerBusinessFallback(userId);
-
-  if (ownerBusiness.error || ownerBusiness.business) {
-    return ownerBusiness;
-  }
-
-  if (unavailableRpcNames.has(rpcName)) {
-    return {
-      business: null,
-      error: null,
-    };
-  }
-
-  const { data, error } = await supabase.rpc(rpcName).maybeSingle();
-
-  if (isMissingRpcError(error, rpcName)) {
-    unavailableRpcNames.add(rpcName);
-    return {
-      business: null,
-      error: null,
-    };
-  }
+async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryResult> {
+  const { data, error } = await supabase
+    .from("business_staff")
+    .select(
+      "role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(id,type,name,license_number,city,region,verification_status,rejection_reason)",
+    )
+    .eq("user_id", userId)
+    .eq("status", "active");
 
   if (error) {
     return {
-      business: null,
+      businesses: [],
       error,
     };
   }
 
+  const businesses = ((data ?? []) as BusinessMembershipRow[])
+    .flatMap((membership) =>
+      membership.business
+        ? [
+            {
+              ...membership.business,
+              staff_role: membership.role,
+            },
+          ]
+        : [],
+    )
+    .sort(sortBusinesses);
+
   return {
-    business: (data as Business | null) ?? null,
+    businesses,
+    error: null,
+  };
+}
+
+async function loadBusinessContexts(userId: string): Promise<BusinessesQueryResult> {
+  const [membershipResult, ownerFallbackResult] = await Promise.all([
+    loadBusinessMemberships(userId),
+    loadOwnerBusinessFallback(userId),
+  ]);
+
+  if (membershipResult.error) {
+    return membershipResult;
+  }
+
+  if (ownerFallbackResult.error && membershipResult.businesses.length === 0) {
+    return ownerFallbackResult;
+  }
+
+  const merged = new Map<string, Business>();
+
+  for (const business of membershipResult.businesses) {
+    merged.set(business.id, business);
+  }
+
+  for (const business of ownerFallbackResult.businesses) {
+    if (!merged.has(business.id)) {
+      merged.set(business.id, business);
+    }
+  }
+
+  return {
+    businesses: Array.from(merged.values()).sort(sortBusinesses),
     error: null,
   };
 }
@@ -234,24 +332,25 @@ async function loadRoles(userId: string): Promise<RolesQueryResult> {
 }
 
 async function loadWorkspace(userId: string): Promise<WorkspaceQueryResult> {
-  const [rolesResult, businessResult] = await Promise.all([
+  const [rolesResult, businessesResult] = await Promise.all([
     loadRoles(userId),
-    loadBusinessContext(userId),
+    loadBusinessContexts(userId),
   ]);
 
   const unauthorized =
-    isUnauthorizedError(rolesResult.error) || isUnauthorizedError(businessResult.error);
+    isUnauthorizedError(rolesResult.error) || isUnauthorizedError(businessesResult.error);
 
   if (rolesResult.error && !isUnauthorizedError(rolesResult.error)) {
     console.error("Failed to load user roles.", rolesResult.error);
   }
 
-  if (businessResult.error && !isUnauthorizedError(businessResult.error)) {
-    console.error("Failed to load business context.", businessResult.error);
+  if (businessesResult.error && !isUnauthorizedError(businessesResult.error)) {
+    console.error("Failed to load business contexts.", businessesResult.error);
   }
 
   return {
-    business: businessResult.business,
+    business: chooseActiveBusiness(businessesResult.businesses),
+    businesses: businessesResult.businesses,
     roles: rolesResult.roles,
     unauthorized,
   };
@@ -268,6 +367,7 @@ async function clearBrokenSession(loadId: number) {
     user: null,
     roles: [],
     business: null,
+    businesses: [],
   });
 
   await supabase.auth.signOut().catch(() => undefined);
@@ -284,6 +384,7 @@ function applyLoadedSession(loadId: number, session: Session, workspace: Workspa
     user: session.user,
     roles: workspace.roles,
     business: workspace.business,
+    businesses: workspace.businesses,
   });
 }
 
@@ -305,6 +406,7 @@ async function hydrateSessionState(
       user: null,
       roles: [],
       business: null,
+      businesses: [],
     });
     return;
   }
@@ -361,6 +463,7 @@ function initializeSessionStore() {
         user: null,
         roles: [],
         business: null,
+        businesses: [],
       });
       return;
     }
@@ -399,7 +502,21 @@ async function refreshSessionState() {
   await hydrateSessionState(undefined, true);
 }
 
-export function useSession(): SessionState & { refresh: () => Promise<void> } {
+function setActiveBusinessSelection(businessId: string | null) {
+  writeStoredBusinessId(businessId);
+
+  setSessionState((current) => ({
+    ...current,
+    business: businessId
+      ? (current.businesses.find((business) => business.id === businessId) ?? null)
+      : chooseActiveBusiness(current.businesses),
+  }));
+}
+
+export function useSession(): SessionState & {
+  refresh: () => Promise<void>;
+  setActiveBusiness: (businessId: string | null) => void;
+} {
   const snapshot = useSyncExternalStore(
     subscribeToSessionState,
     getSessionState,
@@ -409,5 +526,6 @@ export function useSession(): SessionState & { refresh: () => Promise<void> } {
   return {
     ...snapshot,
     refresh: refreshSessionState,
+    setActiveBusiness: setActiveBusinessSelection,
   };
 }

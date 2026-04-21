@@ -182,6 +182,11 @@ function ResetPasswordPage() {
       return;
     }
     toast.success("Password updated. Opening your workspace.");
+    try {
+      window.localStorage.removeItem("pharmahub.active_business_id");
+    } catch {
+      // Ignore storage failures and continue into the workspace flow.
+    }
     navigate({ to: "/dashboard", replace: true });
   };
 

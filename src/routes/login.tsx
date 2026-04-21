@@ -43,6 +43,11 @@ function LoginPage() {
       return;
     }
     toast.success("Welcome back!");
+    try {
+      window.localStorage.removeItem("pharmahub.active_business_id");
+    } catch {
+      // Ignore storage failures and continue into the workspace flow.
+    }
     navigate({ to: "/dashboard" });
   };
 

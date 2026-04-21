@@ -104,7 +104,7 @@ type OrderRow = {
 
 function PharmacyDashboard() {
   const navigate = useNavigate();
-  const { loading, user, business, roles } = useSession();
+  const { loading, user, business, businesses, roles } = useSession();
   const businessId = business?.id ?? null;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -117,8 +117,16 @@ function PharmacyDashboard() {
       navigate({ to: "/login" });
       return;
     }
-    if (roles.includes("admin") && !business) {
-      navigate({ to: "/admin" });
+    if (!business) {
+      if (businesses.length > 1) {
+        navigate({ to: "/dashboard" });
+        return;
+      }
+      if (roles.includes("admin")) {
+        navigate({ to: "/admin" });
+        return;
+      }
+      navigate({ to: "/onboarding" });
       return;
     }
     if (business && business.type !== "pharmacy") {
@@ -129,7 +137,7 @@ function PharmacyDashboard() {
       navigate({ to: "/onboarding" });
       return;
     }
-  }, [loading, user, business, roles, navigate]);
+  }, [loading, user, business, businesses, roles, navigate]);
 
   useEffect(() => {
     void supabase

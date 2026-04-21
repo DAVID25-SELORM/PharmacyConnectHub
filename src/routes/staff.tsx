@@ -121,7 +121,7 @@ function getEditableStatuses(member: StaffMember): StaffStatus[] {
 
 function StaffManagement() {
   const navigate = useNavigate();
-  const { loading, user, business, roles } = useSession();
+  const { loading, user, business, businesses, roles } = useSession();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -142,10 +142,19 @@ function StaffManagement() {
       navigate({ to: "/login" });
       return;
     }
-    if (!business) {
-      navigate({ to: "/onboarding" });
+    if (!business && businesses.length > 1) {
+      navigate({ to: "/dashboard" });
+      return;
     }
-  }, [loading, user, business, navigate]);
+    if (!business) {
+      if (roles.includes("admin")) {
+        navigate({ to: "/admin" });
+        return;
+      }
+      navigate({ to: "/onboarding" });
+      return;
+    }
+  }, [loading, user, business, businesses, roles, navigate]);
 
   const loadStaff = useEffectEvent(async () => {
     if (!business) return;
