@@ -11,7 +11,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   PaymentBadge,
@@ -201,6 +201,8 @@ async function loadWholesalerOrderSummaries(
 function WorkspaceDashboard() {
   const { loading, user, roles, business, businesses, setActiveBusiness } = useSession();
   const navigate = useNavigate();
+  const businessId = business?.id ?? null;
+  const businessType = business?.type ?? null;
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -227,81 +229,85 @@ function WorkspaceDashboard() {
     }
   }, [loading, user, roles, business, businesses, navigate]);
 
-  const loadSnapshot = useEffectEvent(async () => {
-    if (!business) {
+  useEffect(() => {
+    if (!businessId || !businessType) {
       setSnapshot(null);
+      setSnapshotError(null);
+      setSnapshotNotice(null);
+      setLoadingSnapshot(false);
       return;
     }
 
-    setLoadingSnapshot(true);
-    setSnapshotError(null);
-    setSnapshotNotice(null);
+    let cancelled = false;
 
-    try {
-      if (business.type === "pharmacy") {
+    const loadSnapshot = async () => {
+      setLoadingSnapshot(true);
+      setSnapshotError(null);
+      setSnapshotNotice(null);
+
+      try {
+        if (businessType === "pharmacy") {
+          const [{ data: productRows, error: productErr }, ordersResult] = await Promise.all([
+            supabase
+              .from("products")
+              .select(
+                "id, category, wholesaler_id, wholesaler:businesses!products_wholesaler_id_fkey(verification_status)",
+              )
+              .eq("active", true),
+            loadPharmacyOrderSummaries(businessId),
+          ]);
+
+          if (productErr) {
+            throw productErr;
+          }
+
+          const orderRows = ordersResult.rows;
+          const approvedProducts = (
+            (productRows ?? []) as {
+              id: string;
+              category: string | null;
+              wholesaler_id: string;
+              wholesaler: { verification_status: string } | null;
+            }[]
+          ).filter((product) => product.wholesaler?.verification_status === "approved");
+
+          const nextSnapshot: PharmacySnapshot = {
+            type: "pharmacy",
+            approvedWholesalers: new Set(approvedProducts.map((product) => product.wholesaler_id))
+              .size,
+            listedProducts: approvedProducts.length,
+            categoryCount: new Set(
+              approvedProducts.map((product) => product.category).filter(Boolean),
+            ).size,
+            openOrders: orderRows.filter(
+              (order) => order.status !== "delivered" && order.status !== "cancelled",
+            ).length,
+            awaitingReceipts: orderRows.filter(
+              (order) => order.status === "delivered" && !order.receipt_sent_at,
+            ).length,
+            recentOrders: orderRows.slice(0, 5),
+          };
+
+          if (cancelled) {
+            return;
+          }
+
+          setSnapshot(nextSnapshot);
+          setSnapshotNotice(
+            ordersResult.legacyReceiptTracking
+              ? "Receipt metrics are limited until the latest order receipt migration is applied in Supabase."
+              : null,
+          );
+          return;
+        }
+
         const [{ data: productRows, error: productErr }, ordersResult] = await Promise.all([
-          supabase
-            .from("products")
-            .select(
-              "id, category, wholesaler_id, wholesaler:businesses!products_wholesaler_id_fkey(verification_status)",
-            )
-            .eq("active", true),
-          loadPharmacyOrderSummaries(business.id),
+          supabase.from("products").select("id, active, stock").eq("wholesaler_id", businessId),
+          loadWholesalerOrderSummaries(businessId),
         ]);
 
         if (productErr) {
           throw productErr;
-        }
-
-        if (ordersResult.legacyReceiptTracking) {
-          setSnapshotNotice(
-            "Receipt metrics are limited until the latest order receipt migration is applied in Supabase.",
-          );
-        }
-
-        const orderRows = ordersResult.rows;
-
-        const approvedProducts = (
-          (productRows ?? []) as {
-            id: string;
-            category: string | null;
-            wholesaler_id: string;
-            wholesaler: { verification_status: string } | null;
-          }[]
-        ).filter((product) => product.wholesaler?.verification_status === "approved");
-
-        const pharmacyOrders = ((orderRows ?? []) as PharmacyOrderSummary[]).slice(0, 5);
-
-        setSnapshot({
-          type: "pharmacy",
-          approvedWholesalers: new Set(approvedProducts.map((product) => product.wholesaler_id))
-            .size,
-          listedProducts: approvedProducts.length,
-          categoryCount: new Set(
-            approvedProducts.map((product) => product.category).filter(Boolean),
-          ).size,
-          openOrders: (orderRows ?? []).filter(
-            (order) => order.status !== "delivered" && order.status !== "cancelled",
-          ).length,
-          awaitingReceipts: (orderRows ?? []).filter(
-            (order) => order.status === "delivered" && !order.receipt_sent_at,
-          ).length,
-          recentOrders: pharmacyOrders,
-        });
-      } else {
-        const [{ data: productRows, error: productErr }, ordersResult] = await Promise.all([
-          supabase.from("products").select("id, active, stock").eq("wholesaler_id", business.id),
-          loadWholesalerOrderSummaries(business.id),
-        ]);
-
-        if (productErr) {
-          throw productErr;
-        }
-
-        if (ordersResult.legacyReceiptTracking) {
-          setSnapshotNotice(
-            "Receipt metrics are limited until the latest order receipt migration is applied in Supabase.",
-          );
         }
 
         const wholesalerProducts = (productRows ?? []) as {
@@ -311,7 +317,7 @@ function WorkspaceDashboard() {
         }[];
         const wholesalerOrders = ordersResult.rows;
 
-        setSnapshot({
+        const nextSnapshot: WholesalerSnapshot = {
           type: "wholesaler",
           pendingOrders: wholesalerOrders.filter((order) => order.status === "pending").length,
           activeSkus: wholesalerProducts.filter((product) => product.active).length,
@@ -326,28 +332,45 @@ function WorkspaceDashboard() {
             .filter((order) => order.payment_status === "paid")
             .reduce((sum, order) => sum + Number(order.total_ghs), 0),
           recentOrders: wholesalerOrders.slice(0, 5),
-        });
-      }
-    } catch (error) {
-      setSnapshot(null);
-      const message =
-        error &&
-        typeof error === "object" &&
-        "message" in error &&
-        typeof error.message === "string"
-          ? error.message
-          : "Dashboard data could not be loaded.";
-      setSnapshotError(message);
-    } finally {
-      setLoadingSnapshot(false);
-    }
-  });
+        };
 
-  useEffect(() => {
-    if (business) {
-      void loadSnapshot();
-    }
-  }, [business, loadSnapshot]);
+        if (cancelled) {
+          return;
+        }
+
+        setSnapshot(nextSnapshot);
+        setSnapshotNotice(
+          ordersResult.legacyReceiptTracking
+            ? "Receipt metrics are limited until the latest order receipt migration is applied in Supabase."
+            : null,
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setSnapshot(null);
+        const message =
+          error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : "Dashboard data could not be loaded.";
+        setSnapshotError(message);
+      } finally {
+        if (!cancelled) {
+          setLoadingSnapshot(false);
+        }
+      }
+    };
+
+    void loadSnapshot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId, businessType]);
 
   const openWorkspace = (workspace: Business) => {
     setActiveBusiness(workspace.id);
