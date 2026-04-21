@@ -111,8 +111,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ error: "Staff record not found" });
   }
 
-  if (staffRow.status !== "pending") {
-    return res.status(400).json({ error: "Only pending staff records can receive a resend email" });
+  if (staffRow.status === "inactive") {
+    return res
+      .status(400)
+      .json({ error: "Reactivate this staff member before sending an access email" });
   }
 
   const {

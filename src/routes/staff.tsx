@@ -297,8 +297,8 @@ function StaffManagement() {
       toast.error("Only the business owner or an admin can resend access emails.");
       return;
     }
-    if (member.status !== "pending") {
-      toast.error("Only pending staff records can receive a resend email.");
+    if (member.status === "inactive") {
+      toast.error("Reactivate this staff member before sending an access email.");
       return;
     }
 
@@ -310,8 +310,12 @@ function StaffManagement() {
       });
       toast.success(
         member.user_email
-          ? `Access email resent to ${member.user_email}.`
-          : "Access email resent successfully.",
+          ? member.status === "pending"
+            ? `Access email resent to ${member.user_email}.`
+            : `Reset email sent to ${member.user_email}.`
+          : member.status === "pending"
+            ? "Access email resent successfully."
+            : "Reset email sent successfully.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to resend access email";
@@ -359,8 +363,8 @@ function StaffManagement() {
 
         {canManageTeam ? (
           <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
-            Pending invites appear under Other Access Records. Use Edit to update name, email,
-            phone, role, or status, and use Resend email to send the setup link again.
+            Pending invites appear under Other Access Records. Active staff can also receive a reset
+            email from the roster. Use Edit to update name, email, phone, role, or status.
           </Card>
         ) : (
           <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
@@ -405,6 +409,16 @@ function StaffManagement() {
                       <TableCell>
                         {canManageTeam ? (
                           <div className="flex flex-wrap gap-2">
+                            {member.user_email && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResendInvite(member)}
+                                disabled={resendingStaffId === member.id}
+                              >
+                                {resendingStaffId === member.id ? "Sending..." : "Resend email"}
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -480,7 +494,7 @@ function StaffManagement() {
                               <Pencil className="h-4 w-4" />
                               Edit
                             </Button>
-                            {member.status === "pending" && (
+                            {member.status !== "inactive" && member.user_email && (
                               <Button
                                 variant="outline"
                                 size="sm"
