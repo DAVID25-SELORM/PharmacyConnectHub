@@ -43,6 +43,7 @@ import {
 } from "@/lib/platform-staff-actions";
 import { inviteBusinessStaff, type ManageableStaffRole } from "@/lib/staff-actions";
 import { timeAgo } from "@/lib/format";
+import { shouldShowPrivateTeamGuidance } from "@/lib/private-team-guidance";
 
 export const Route = createFileRoute("/admin/staff")({
   head: () => ({
@@ -166,6 +167,7 @@ function PlatformStaffManagement() {
     inviteTargets.find((target) => target.value === inviteTarget) ?? inviteTargets[0];
   const invitingToBusiness = selectedInviteTarget?.kind === "business";
   const canManageTeam = roles.includes("admin");
+  const showPrivateTeamGuidance = shouldShowPrivateTeamGuidance(user?.email);
 
   const loadStaff = useEffectEvent(async () => {
     setLoadingStaff(true);
@@ -376,10 +378,12 @@ function PlatformStaffManagement() {
           </div>
         </div>
 
-        <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
-          Platform staff stay on the admin side. Use the interface dropdown when inviting if you
-          want to send someone into a business workspace instead.
-        </Card>
+        {showPrivateTeamGuidance && (
+          <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
+            Platform staff stay on the admin side. Use the interface dropdown when inviting if you
+            want to send someone into a business workspace instead.
+          </Card>
+        )}
 
         <div className="mt-8 grid gap-6">
           <Card className="p-6">
@@ -683,8 +687,9 @@ function PlatformStaffManagement() {
             <DialogHeader>
               <DialogTitle>Add Staff</DialogTitle>
               <DialogDescription>
-                Choose the interface first. Platform staff stay inside PharmaHub Admin, while
-                business staff stay inside the selected workspace.
+                {showPrivateTeamGuidance
+                  ? "Choose the interface first. Platform staff stay inside PharmaHub Admin, while business staff stay inside the selected workspace."
+                  : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -741,9 +746,15 @@ function PlatformStaffManagement() {
                   <Card className="border-dashed p-3 text-sm text-muted-foreground">
                     <div className="font-medium text-foreground">Platform Admin</div>
                     <div className="mt-1">
-                      Platform invites add the person to the admin interface only. The
-                      <span className="font-medium text-foreground"> Platform Owner </span>
-                      role is reserved for you.
+                      {showPrivateTeamGuidance ? (
+                        <>
+                          Platform invites add the person to the admin interface only. The
+                          <span className="font-medium text-foreground"> Platform Owner </span>
+                          role is reserved for you.
+                        </>
+                      ) : (
+                        "This invite grants admin access to the platform."
+                      )}
                     </div>
                   </Card>
                 </div>

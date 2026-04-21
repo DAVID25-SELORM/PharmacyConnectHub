@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { timeAgo, formatGHS } from "@/lib/format";
+import { shouldShowPrivateTeamGuidance } from "@/lib/private-team-guidance";
 import { DashboardHeader } from "@/components/DashboardShell";
 
 export const Route = createFileRoute("/admin")({
@@ -135,6 +136,7 @@ function AdminPanel() {
   const approved = businessRows.filter((b) => b.verification_status === "approved");
   const rejected = businessRows.filter((b) => b.verification_status === "rejected");
   const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
+  const showPrivateTeamManagementCard = shouldShowPrivateTeamGuidance(user.email);
 
   return (
     <div className="min-h-screen bg-background">
@@ -208,67 +210,69 @@ function AdminPanel() {
           </div>
         </div>
 
-        <Card className="mb-8 border-border/70 p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Users className="h-4 w-4 text-primary" />
-                Team Management
+        {showPrivateTeamManagementCard && (
+          <Card className="mb-8 border-border/70 p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Users className="h-4 w-4 text-primary" />
+                  Team Management
+                </div>
+                <h2 className="mt-2 font-display text-2xl font-bold">
+                  Add staff from your interface
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+                  Platform staff and business staff now live on separate routes. Use the admin team
+                  page for platform access, and use the workspace team page for pharmacy or
+                  wholesaler staff.
+                </p>
               </div>
-              <h2 className="mt-2 font-display text-2xl font-bold">
-                Add staff from your interface
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Platform staff and business staff now live on separate routes. Use the admin team
-                page for platform access, and use the workspace team page for pharmacy or wholesaler
-                staff.
-              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button asChild variant="hero">
+                  <Link to="/admin/staff">
+                    <ShieldCheck className="h-4 w-4" />
+                    Platform team
+                  </Link>
+                </Button>
+                {business ? (
+                  <Button asChild variant="outline">
+                    <Link to="/staff">
+                      <Users className="h-4 w-4" />
+                      Workspace team
+                    </Link>
+                  </Button>
+                ) : businesses.length > 0 ? (
+                  <Button asChild variant="outline">
+                    <Link to="/dashboard">
+                      <Users className="h-4 w-4" />
+                      Choose workspace
+                    </Link>
+                  </Button>
+                ) : null}
+                {business ? (
+                  <Button asChild variant="outline">
+                    <Link to={workspaceRoute}>
+                      Open workspace
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : businesses.length > 0 ? (
+                  <Button asChild variant="outline">
+                    <Link to="/dashboard">
+                      Choose workspace
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button asChild variant="hero">
-                <Link to="/admin/staff">
-                  <ShieldCheck className="h-4 w-4" />
-                  Platform team
-                </Link>
-              </Button>
-              {business ? (
-                <Button asChild variant="outline">
-                  <Link to="/staff">
-                    <Users className="h-4 w-4" />
-                    Workspace team
-                  </Link>
-                </Button>
-              ) : businesses.length > 0 ? (
-                <Button asChild variant="outline">
-                  <Link to="/dashboard">
-                    <Users className="h-4 w-4" />
-                    Choose workspace
-                  </Link>
-                </Button>
-              ) : null}
-              {business ? (
-                <Button asChild variant="outline">
-                  <Link to={workspaceRoute}>
-                    Open workspace
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              ) : businesses.length > 0 ? (
-                <Button asChild variant="outline">
-                  <Link to="/dashboard">
-                    Choose workspace
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
-          </div>
-          {!business && businesses.length === 0 && (
-            <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-              Team management appears after your account has a business workspace.
-            </div>
-          )}
-        </Card>
+            {!business && businesses.length === 0 && (
+              <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                Team management appears after your account has a business workspace.
+              </div>
+            )}
+          </Card>
+        )}
 
         <Tabs defaultValue="pending">
           <TabsList className="mb-6">

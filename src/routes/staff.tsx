@@ -34,6 +34,7 @@ import {
 import { useSession, type BusinessStaffRole } from "@/hooks/use-session";
 import { timeAgo } from "@/lib/format";
 import { invitePlatformStaff } from "@/lib/platform-staff-actions";
+import { shouldShowPrivateTeamGuidance } from "@/lib/private-team-guidance";
 import {
   inviteBusinessStaff,
   listBusinessStaff,
@@ -140,6 +141,7 @@ function StaffManagement() {
   const businessId = business?.id ?? null;
 
   const canManageTeam = business?.staff_role === "owner" || roles.includes("admin");
+  const showPrivateTeamGuidance = shouldShowPrivateTeamGuidance(user?.email);
 
   const inviteTargets = useMemo<InviteTarget[]>(() => {
     const businessTargets = businesses.map((workspace) => ({
@@ -438,9 +440,9 @@ function StaffManagement() {
 
         {canManageTeam ? (
           <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
-            Pending invites appear under Other Access Records. Use the interface dropdown when
-            adding staff so each person lands in the correct side of the product. Active staff can
-            also receive a reset email from the roster.
+            {showPrivateTeamGuidance
+              ? "Pending invites appear under Other Access Records. Use the interface dropdown when adding staff so each person lands in the correct side of the product. Active staff can also receive a reset email from the roster."
+              : "Pending invites appear under Other Access Records. Active staff can also receive a reset email from the roster."}
           </Card>
         ) : (
           <Card className="mt-6 border-dashed p-4 text-sm text-muted-foreground">
@@ -774,8 +776,9 @@ function StaffManagement() {
             <DialogHeader>
               <DialogTitle>Add Team Member</DialogTitle>
               <DialogDescription>
-                Choose the interface first. Business staff stay in the selected workspace, while
-                platform staff stay inside PharmaHub Admin.
+                {showPrivateTeamGuidance
+                  ? "Choose the interface first. Business staff stay in the selected workspace, while platform staff stay inside PharmaHub Admin."
+                  : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -813,9 +816,15 @@ function StaffManagement() {
                   <Card className="border-dashed p-3 text-sm text-muted-foreground">
                     <div className="font-medium text-foreground">Platform Admin</div>
                     <div className="mt-1">
-                      Platform invites add the person to the admin interface only. The
-                      <span className="font-medium text-foreground"> Platform Owner </span>
-                      role is reserved for you.
+                      {showPrivateTeamGuidance ? (
+                        <>
+                          Platform invites add the person to the admin interface only. The
+                          <span className="font-medium text-foreground"> Platform Owner </span>
+                          role is reserved for you.
+                        </>
+                      ) : (
+                        "This invite grants admin access to the platform."
+                      )}
                     </div>
                   </Card>
                 </div>
