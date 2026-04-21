@@ -22,6 +22,10 @@ export const Route = createFileRoute("/onboarding")({
 
 type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at: string };
 
+function workspaceRoute(type: "pharmacy" | "wholesaler") {
+  return type === "wholesaler" ? "/wholesaler" : "/pharmacy";
+}
+
 function OnboardingPage() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, refresh } = useSession();
@@ -75,6 +79,14 @@ function OnboardingPage() {
       .order("uploaded_at", { ascending: false })
       .then(({ data }) => setDocs((data as DocRow[]) ?? []));
   }, [business]);
+
+  useEffect(() => {
+    if (loading || !business || business.verification_status !== "approved") {
+      return;
+    }
+
+    navigate({ to: workspaceRoute(business.type) });
+  }, [loading, business, navigate]);
 
   const onUpload = async (docType: string, file: File) => {
     if (!user || !business) return;
@@ -145,6 +157,15 @@ function OnboardingPage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
         <p>We couldn't find a business profile for your account.</p>
         <Button onClick={() => navigate({ to: "/signup" })}>Complete signup</Button>
+      </div>
+    );
+  }
+
+  if (business.verification_status === "approved") {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        <Pill className="h-5 w-5 animate-pulse" />
+        <span className="ml-2">Opening your dashboard…</span>
       </div>
     );
   }
@@ -242,7 +263,7 @@ function OnboardingPage() {
           </Button>
           <Button
             variant="hero"
-            onClick={() => navigate({ to: "/dashboard" })}
+            onClick={() => navigate({ to: workspaceRoute(business.type) })}
             disabled={docs.length === 0}
           >
             Continue to dashboard
