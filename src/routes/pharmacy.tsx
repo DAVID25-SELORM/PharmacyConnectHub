@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
+import { createMarketplaceOrders } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -216,87 +217,98 @@ function PharmacyDashboard() {
   }, [products]);
 
   const addToCart = (productId: string) => {
+    const product = productMap[productId];
+    if (!product) {
+      return;
+    }
+
+    if (product.stock <= 0) {
+      toast.error(`${product.name} is currently out of stock.`);
+      return;
+    }
+
+    let added = false;
     setCart((prev) => {
       const existing = prev.find((c) => c.productId === productId);
-      if (existing)
+      if (existing) {
+        if (existing.quantity >= product.stock) {
+          return prev;
+        }
+
+        added = true;
         return prev.map((c) =>
           c.productId === productId ? { ...c, quantity: c.quantity + 1 } : c,
         );
+      }
+
+      added = true;
       return [...prev, { productId, quantity: 1 }];
     });
-    toast.success("Added to cart");
+
+    if (added) {
+      toast.success("Added to cart");
+      return;
+    }
+
+    toast.error(`Only ${product.stock} unit(s) of ${product.name} are available right now.`);
   };
 
   const updateQty = (productId: string, qty: number) => {
+    const product = productMap[productId];
     if (qty <= 0) {
       setCart((prev) => prev.filter((c) => c.productId !== productId));
       return;
     }
-    setCart((prev) => prev.map((c) => (c.productId === productId ? { ...c, quantity: qty } : c)));
+
+    if (!product) {
+      setCart((prev) => prev.filter((c) => c.productId !== productId));
+      return;
+    }
+
+    const clampedQty = Math.min(qty, product.stock);
+    if (clampedQty !== qty) {
+      toast.error(`Only ${product.stock} unit(s) of ${product.name} are available right now.`);
+    }
+
+    setCart((prev) =>
+      prev.map((c) => (c.productId === productId ? { ...c, quantity: clampedQty } : c)),
+    );
   };
 
   const placeOrder = async () => {
-    if (!business) return;
+    if (!business) return false;
     if (business.staff_role === "assistant") {
       toast.error("Your role is view-only and cannot place orders.");
-      return;
+      return false;
     }
     if (business.verification_status !== "approved") {
       toast.error("Your business must be verified to place orders");
-      return;
+      return false;
+    }
+    if (cart.length === 0) {
+      toast.error("Your cart is empty.");
+      return false;
     }
     setPlacing(true);
     try {
-      const grouped: Record<string, CartItem[]> = {};
-      for (const c of cart) {
-        const p = productMap[c.productId];
-        if (!p) continue;
-        (grouped[p.wholesaler_id] ??= []).push(c);
-      }
-      const placedOrders: { id: string }[] = [];
-      for (const [wid, items] of Object.entries(grouped)) {
-        const total = items.reduce((s, c) => {
-          const p = productMap[c.productId];
-          return s + (p ? Number(p.price_ghs) * c.quantity : 0);
-        }, 0);
-        const { data: order, error } = await supabase
-          .from("orders")
-          .insert({
-            pharmacy_id: business.id,
-            wholesaler_id: wid,
-            total_ghs: total,
-            payment_method: "cod",
-          })
-          .select()
-          .single();
-        if (error) {
-          toast.error(error.message);
-          continue;
-        }
-        const itemRows = items.map((c) => {
-          const p = productMap[c.productId]!;
-          return {
-            order_id: order.id,
-            product_id: p.id,
-            product_name: p.name,
-            unit_price_ghs: p.price_ghs,
-            quantity: c.quantity,
-          };
-        });
-        const { error: iErr } = await supabase.from("order_items").insert(itemRows);
-        if (iErr) {
-          toast.error(iErr.message);
-          continue;
-        }
-        placedOrders.push({ id: order.id });
-      }
-      if (placedOrders.length === 0) return;
+      const result = await createMarketplaceOrders({
+        pharmacyId: business.id,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+      });
 
       toast.success(
-        `Placed ${placedOrders.length} order${placedOrders.length > 1 ? "s" : ""} (Pay on Delivery)`,
+        `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`,
       );
       setCart([]);
       void loadOrders();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to place order.";
+      toast.error(message);
+      return false;
     } finally {
       setPlacing(false);
     }
@@ -420,7 +432,7 @@ function CartSheet({
   subtotal: number;
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
-  placeOrder: () => Promise<void>;
+  placeOrder: () => Promise<boolean>;
   placing: boolean;
   canPlaceOrders: boolean;
 }) {
@@ -539,8 +551,10 @@ function CartSheet({
                   className="w-full"
                   disabled={placing || !canPlaceOrders}
                   onClick={async () => {
-                    await placeOrder();
-                    setOpen(false);
+                    const placed = await placeOrder();
+                    if (placed) {
+                      setOpen(false);
+                    }
                   }}
                 >
                   {placing ? "Placing…" : `Place order · ${formatGHS(subtotal)}`}
@@ -845,6 +859,14 @@ function CatalogView({
                     Low stock
                   </Badge>
                 )}
+                {p.stock <= 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="absolute left-2 top-2 bg-destructive text-destructive-foreground"
+                  >
+                    Out of stock
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-1 flex-col p-4">
                 <div className="text-xs text-muted-foreground">{p.category ?? "—"}</div>
@@ -865,9 +887,9 @@ function CatalogView({
                     size="sm"
                     variant="hero"
                     onClick={() => addToCart(p.id)}
-                    disabled={!canOrder}
+                    disabled={!canOrder || p.stock <= 0}
                   >
-                    <Plus className="h-4 w-4" /> Add
+                    <Plus className="h-4 w-4" /> {p.stock <= 0 ? "Out" : "Add"}
                   </Button>
                 </div>
               </div>

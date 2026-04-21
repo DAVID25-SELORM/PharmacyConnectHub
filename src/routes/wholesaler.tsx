@@ -41,6 +41,7 @@ import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
+import { parseProductImportFile, parseProductImportText } from "@/lib/product-import";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -989,6 +990,8 @@ function BulkUploadDialog({
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [sourceMode, setSourceMode] = useState<"file" | "paste">("file");
 
   const downloadTemplate = () => {
     const csvContent = `name,brand,category,form,pack_size,price_ghs,stock,image_hue
@@ -1005,87 +1008,79 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
     window.URL.revokeObjectURL(url);
   };
 
-  const parseCSV = (text: string): Array<Record<string, string>> => {
-    const lines = text.trim().split("\n");
-    if (lines.length < 2) return [];
+  const resetForm = () => {
+    setFile(null);
+    setPasteText("");
+    setSourceMode("file");
+  };
 
-    const headers = lines[0].split(",").map((h) => h.trim());
-    const rows: Array<Record<string, string>> = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",").map((v) => v.trim());
-      if (values.length !== headers.length) continue;
-
-      const row: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        row[header] = values[index];
-      });
-      rows.push(row);
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen && !uploading) {
+      resetForm();
     }
-
-    return rows;
   };
 
   const onUpload = async () => {
-    if (!file) {
-      toast.error("Please select a CSV file");
+    if (sourceMode === "file" && !file) {
+      toast.error("Select a file to import.");
+      return;
+    }
+
+    if (sourceMode === "paste" && !pasteText.trim()) {
+      toast.error("Paste a product table before importing.");
       return;
     }
 
     setUploading(true);
     try {
-      const text = await file.text();
-      const rows = parseCSV(text);
+      const result =
+        sourceMode === "file" && file
+          ? await parseProductImportFile(file)
+          : parseProductImportText(pasteText);
 
-      if (rows.length === 0) {
-        toast.error("No valid products found in CSV");
-        setUploading(false);
+      if (result.products.length === 0) {
+        toast.error("No valid products were detected. Use the template headers and try again.");
         return;
       }
 
-      const products = rows.map((row) => ({
-        wholesaler_id: businessId,
-        name: row.name?.trim() || "",
-        brand: row.brand?.trim() || null,
-        category: row.category?.trim() || "Other",
-        form: row.form?.trim() || "Tablet",
-        pack_size: row.pack_size?.trim() || null,
-        price_ghs: Number(row.price_ghs) || 0,
-        stock: Number(row.stock) || 0,
-        image_hue: Number(row.image_hue) || 200,
-      }));
-
-      // Validate required fields
-      const invalid = products.filter((p) => !p.name || p.price_ghs <= 0);
-      if (invalid.length > 0) {
+      if (result.invalidRows.length > 0) {
+        const preview = result.invalidRows.slice(0, 8).join(", ");
+        const suffix = result.invalidRows.length > 8 ? "..." : "";
         toast.error(
-          `${invalid.length} product(s) missing name or valid price. Please fix and retry.`,
+          `Rows ${preview}${suffix} are missing a valid name or price. Fix them and retry.`,
         );
-        setUploading(false);
         return;
       }
 
-      const { error } = await supabase.from("products").insert(products);
+      const { error } = await supabase.from("products").insert(
+        result.products.map((product) => ({
+          wholesaler_id: businessId,
+          ...product,
+        })),
+      );
 
       if (error) {
         toast.error(error.message);
-        setUploading(false);
         return;
       }
 
-      toast.success(`Successfully uploaded ${products.length} product(s)`);
-      setOpen(false);
-      setFile(null);
+      toast.success(`Imported ${result.products.length} product(s) from ${result.sourceLabel}.`);
+      if (result.warnings[0]) {
+        toast.warning(result.warnings[0]);
+      }
+
+      handleOpenChange(false);
       void reload();
     } catch (err) {
-      toast.error("Failed to parse CSV file. Please check the format.");
+      toast.error(err instanceof Error ? err.message : "Failed to import products.");
     } finally {
       setUploading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline">
           <Upload className="h-4 w-4" /> Bulk upload
@@ -1094,13 +1089,17 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bulk upload products</DialogTitle>
-          <DialogDescription>Upload multiple products at once using a CSV file.</DialogDescription>
+          <DialogDescription>
+            Import products from CSV, Excel, PDF, or a pasted table. Manual product entry is also
+            available from the inventory screen.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-muted/30 p-4">
             <h4 className="mb-2 text-sm font-medium">Step 1: Download template</h4>
             <p className="mb-3 text-xs text-muted-foreground">
-              Download our CSV template with sample products to see the required format.
+              Start from our template if you want the safest format for CSV, Excel, and pasted
+              tables.
             </p>
             <Button variant="outline" size="sm" onClick={downloadTemplate}>
               <Download className="h-4 w-4" /> Download template
@@ -1108,39 +1107,69 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
           </div>
 
           <div className="rounded-xl border border-border bg-muted/30 p-4">
-            <h4 className="mb-2 text-sm font-medium">Step 2: Fill in your products</h4>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Open the template in Excel or Google Sheets and add your products.
-            </p>
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              <li>
-                • <strong>name</strong> and <strong>price_ghs</strong> are required
-              </li>
-              <li>• Use exact category names from the dropdown</li>
-              <li>• Save as CSV format when done</li>
-            </ul>
+            <h4 className="mb-2 text-sm font-medium">Step 2: Choose an import method</h4>
+            <div className="space-y-2 text-xs text-muted-foreground">
+              <p>Best results come from CSV or Excel using the template headers.</p>
+              <p>
+                PDF import works for selectable text tables with clear headers such as{" "}
+                <span className="font-medium">name</span> and{" "}
+                <span className="font-medium">price_ghs</span>.
+              </p>
+              <p>Other supported options: paste a table from Excel, Google Sheets, or WhatsApp.</p>
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-muted/30 p-4">
-            <h4 className="mb-2 text-sm font-medium">Step 3: Upload CSV file</h4>
-            <Input
-              type="file"
-              accept=".csv"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-            {file && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
-              </p>
-            )}
+            <h4 className="mb-3 text-sm font-medium">Step 3: Import products</h4>
+            <Tabs
+              value={sourceMode}
+              onValueChange={(value) => setSourceMode(value as "file" | "paste")}
+            >
+              <TabsList className="mb-4 grid w-full grid-cols-2">
+                <TabsTrigger value="file">Upload file</TabsTrigger>
+                <TabsTrigger value="paste">Paste table</TabsTrigger>
+              </TabsList>
+              <TabsContent value="file" className="space-y-3">
+                <Input
+                  type="file"
+                  accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Accepted: CSV, TSV, TXT, XLSX, XLS, PDF
+                </p>
+                {file && (
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </TabsContent>
+              <TabsContent value="paste" className="space-y-3">
+                <Textarea
+                  rows={8}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder={`name,brand,category,form,pack_size,price_ghs,stock
+Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Paste rows copied from Excel, Google Sheets, or any table with headers.
+                </p>
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" variant="hero" onClick={onUpload} disabled={uploading || !file}>
-            {uploading && <Loader2 className="h-4 w-4 animate-spin" />} Upload products
+          <Button
+            type="button"
+            variant="hero"
+            onClick={onUpload}
+            disabled={uploading || (sourceMode === "file" ? !file : !pasteText.trim())}
+          >
+            {uploading && <Loader2 className="h-4 w-4 animate-spin" />} Import products
           </Button>
         </DialogFooter>
       </DialogContent>

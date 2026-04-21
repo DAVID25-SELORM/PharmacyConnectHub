@@ -21,6 +21,12 @@ export const Route = createFileRoute("/onboarding")({
 });
 
 type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at: string };
+type AccessState =
+  | "checking"
+  | "none"
+  | "pending-business"
+  | "pending-platform"
+  | "active-platform";
 
 function workspaceRoute(type: "pharmacy" | "wholesaler") {
   return type === "wholesaler" ? "/wholesaler" : "/pharmacy";
@@ -28,19 +34,34 @@ function workspaceRoute(type: "pharmacy" | "wholesaler") {
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const { loading, user, business, businesses, refresh } = useSession();
+  const { loading, user, business, businesses, roles, refresh } = useSession();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
-  const [pendingAccess, setPendingAccess] = useState<"business" | "platform" | null>(null);
+  const [accessState, setAccessState] = useState<AccessState>("checking");
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
   }, [loading, user, navigate]);
 
-  // Check if the user has a pending staff membership (invited but not yet activated)
   useEffect(() => {
-    if (!user || business || businesses.length > 0) return;
-    Promise.all([
+    if (loading || !user) {
+      return;
+    }
+
+    if (business || businesses.length > 0) {
+      setAccessState("none");
+      return;
+    }
+
+    if (roles.includes("admin")) {
+      setAccessState("active-platform");
+      return;
+    }
+
+    let cancelled = false;
+    setAccessState("checking");
+
+    void Promise.all([
       supabase
         .from("business_staff")
         .select("id")
@@ -50,25 +71,42 @@ function OnboardingPage() {
         .maybeSingle(),
       supabase
         .from("platform_staff")
-        .select("id")
+        .select("status")
         .eq("user_id", user.id)
-        .eq("status", "pending")
+        .in("status", ["pending", "active"])
         .limit(1)
         .maybeSingle(),
-    ]).then(([businessInvite, platformInvite]) => {
-      if (businessInvite.data) {
-        setPendingAccess("business");
-        return;
-      }
+    ])
+      .then(([businessInvite, platformAccess]) => {
+        if (cancelled) return;
 
-      if (platformInvite.data) {
-        setPendingAccess("platform");
-        return;
-      }
+        if (platformAccess.data?.status === "active") {
+          setAccessState("active-platform");
+          return;
+        }
 
-      setPendingAccess(null);
-    });
-  }, [user, business, businesses.length]);
+        if (businessInvite.data) {
+          setAccessState("pending-business");
+          return;
+        }
+
+        if (platformAccess.data?.status === "pending") {
+          setAccessState("pending-platform");
+          return;
+        }
+
+        setAccessState("none");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccessState("none");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user, business, businesses.length, roles]);
 
   useEffect(() => {
     if (!business) return;
@@ -87,6 +125,14 @@ function OnboardingPage() {
 
     navigate({ to: workspaceRoute(business.type) });
   }, [loading, business, navigate]);
+
+  useEffect(() => {
+    if (loading || business || businesses.length > 0 || accessState !== "active-platform") {
+      return;
+    }
+
+    navigate({ to: "/admin" });
+  }, [loading, business, businesses.length, accessState, navigate]);
 
   const onUpload = async (docType: string, file: File) => {
     if (!user || !business) return;
@@ -137,13 +183,22 @@ function OnboardingPage() {
   }
 
   if (!business) {
-    if (pendingAccess) {
+    if (accessState === "checking" || accessState === "active-platform") {
+      return (
+        <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+          <Pill className="h-5 w-5 animate-pulse" />
+          <span className="ml-2">Opening your interface…</span>
+        </div>
+      );
+    }
+
+    if (accessState === "pending-business" || accessState === "pending-platform") {
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
           <Clock className="h-10 w-10 text-amber-500" />
           <h2 className="text-xl font-semibold">Invitation pending</h2>
           <p className="max-w-sm text-muted-foreground">
-            {pendingAccess === "platform"
+            {accessState === "pending-platform"
               ? "You've been invited to join the PharmaHub Admin interface. The owner needs to activate your access before you can continue."
               : "You've been invited to join a business on PharmaHub. The business owner needs to activate your access before you can continue."}
           </p>
