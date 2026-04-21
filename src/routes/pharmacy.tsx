@@ -99,6 +99,9 @@ type OrderRow = {
   delivered_at: string | null;
   cancelled_at: string | null;
   paid_at: string | null;
+  payment_confirmed_at: string | null;
+  receipt_sent_at: string | null;
+  receipt_sent_to: string | null;
   wholesaler: { name: string } | null;
   order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
 };
@@ -160,7 +163,7 @@ function PharmacyDashboard() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,paystack_reference,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,paid_at,wholesaler:businesses!orders_wholesaler_id_fkey(name),order_items(product_name,quantity,unit_price_ghs)",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,paystack_reference,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,wholesaler:businesses!orders_wholesaler_id_fkey(name),order_items(product_name,quantity,unit_price_ghs)",
       )
       .eq("pharmacy_id", business.id)
       .order("created_at", { ascending: false });
@@ -934,6 +937,8 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
 
           <OrderTimeline o={o} />
 
+          <ReceiptStatusPanel order={o} />
+
           <div className="mt-4 divide-y divide-border rounded-xl border border-border">
             {o.order_items.map((it, i) => (
               <div key={i} className="flex items-center justify-between p-3 text-sm">
@@ -951,6 +956,29 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
           </div>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function ReceiptStatusPanel({ order }: { order: OrderRow }) {
+  let title = "Receipt pending";
+  let body = "Your receipt will be emailed after the wholesaler confirms payment.";
+
+  if (order.payment_status === "paid" && order.receipt_sent_at) {
+    title = "Receipt emailed";
+    body = `The receipt was emailed ${timeAgo(order.receipt_sent_at)}${order.receipt_sent_to ? ` to ${order.receipt_sent_to}` : ""}.`;
+  } else if (order.payment_status === "paid") {
+    title = "Payment confirmed";
+    body = "Payment has been confirmed. Your receipt email is being prepared by the wholesaler.";
+  } else if (order.status !== "delivered") {
+    title = "Receipt locked";
+    body = "The receipt will only be issued after the order is delivered and payment is confirmed.";
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 text-sm">
+      <div className="font-medium">{title}</div>
+      <div className="mt-1 text-muted-foreground">{body}</div>
     </div>
   );
 }

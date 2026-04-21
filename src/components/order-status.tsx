@@ -75,12 +75,24 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
 
 export function PaymentBadge({ method, status }: { method: PaymentMethod; status: PaymentStatus }) {
   if (method === "cod") {
+    const cfg =
+      status === "paid"
+        ? { cls: "bg-success/15 text-success border-success/30", label: "COD paid" }
+        : status === "failed"
+          ? {
+              cls: "bg-destructive/15 text-destructive border-destructive/30",
+              label: "COD failed",
+            }
+          : status === "refunded"
+            ? { cls: "bg-muted text-muted-foreground border-border", label: "COD refunded" }
+            : {
+                cls: "bg-muted text-muted-foreground border-border",
+                label: "Pay on delivery",
+              };
+
     return (
-      <Badge
-        variant="secondary"
-        className="gap-1 border border-border bg-muted text-muted-foreground"
-      >
-        <Banknote className="h-3 w-3" /> Pay on delivery
+      <Badge variant="secondary" className={`gap-1 border ${cfg.cls}`}>
+        <Banknote className="h-3 w-3" /> {cfg.label}
       </Badge>
     );
   }

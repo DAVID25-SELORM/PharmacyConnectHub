@@ -42,6 +42,7 @@ import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
 import { parseProductImportFile, parseProductImportText } from "@/lib/product-import";
+import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -85,6 +86,10 @@ type OrderRow = {
   packed_at: string | null;
   dispatched_at: string | null;
   delivered_at: string | null;
+  paid_at: string | null;
+  payment_confirmed_at: string | null;
+  receipt_sent_at: string | null;
+  receipt_sent_to: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
   pharmacy: { name: string; city: string | null } | null;
@@ -97,6 +102,8 @@ function WholesalerDashboard() {
   const businessId = business?.id ?? null;
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [confirmingPaymentOrderId, setConfirmingPaymentOrderId] = useState<string | null>(null);
+  const [sendingReceiptOrderId, setSendingReceiptOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -141,7 +148,7 @@ function WholesalerDashboard() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,cancellation_reason,pharmacy:businesses!orders_pharmacy_id_fkey(name,city),order_items(product_name,quantity,unit_price_ghs)",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,pharmacy:businesses!orders_pharmacy_id_fkey(name,city),order_items(product_name,quantity,unit_price_ghs)",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
@@ -177,6 +184,41 @@ function WholesalerDashboard() {
     }
     toast.success("Order cancelled");
     void loadOrders();
+  };
+
+  const confirmPaymentReceived = async (id: string) => {
+    setConfirmingPaymentOrderId(id);
+    try {
+      const result = await confirmOrderPayment({ orderId: id });
+      toast.success(
+        result.receiptSent
+          ? "Payment confirmed and receipt emailed."
+          : "Payment confirmed. Receipt email still needs to be sent.",
+      );
+      if (result.warning) {
+        toast.error(result.warning);
+      }
+      void loadOrders();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to confirm payment.";
+      toast.error(message);
+    } finally {
+      setConfirmingPaymentOrderId(null);
+    }
+  };
+
+  const sendReceiptEmail = async (id: string) => {
+    setSendingReceiptOrderId(id);
+    try {
+      await sendOrderReceipt({ orderId: id });
+      toast.success("Receipt email sent.");
+      void loadOrders();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to send receipt email.";
+      toast.error(message);
+    } finally {
+      setSendingReceiptOrderId(null);
+    }
   };
 
   if (loading || !business) {
@@ -288,6 +330,10 @@ function WholesalerDashboard() {
               updateStatus={updateOrderStatus}
               cancelOrder={cancelOrder}
               canManageOrders={canProcessOrders}
+              confirmPaymentReceived={confirmPaymentReceived}
+              confirmingPaymentOrderId={confirmingPaymentOrderId}
+              sendReceiptEmail={sendReceiptEmail}
+              sendingReceiptOrderId={sendingReceiptOrderId}
             />
           </TabsContent>
           <TabsContent value="products">
@@ -309,11 +355,19 @@ function OrdersInbox({
   updateStatus,
   cancelOrder,
   canManageOrders,
+  confirmPaymentReceived,
+  confirmingPaymentOrderId,
+  sendReceiptEmail,
+  sendingReceiptOrderId,
 }: {
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
   cancelOrder: (id: string, reason: string) => Promise<void>;
   canManageOrders: boolean;
+  confirmPaymentReceived: (id: string) => Promise<void>;
+  confirmingPaymentOrderId: string | null;
+  sendReceiptEmail: (id: string) => Promise<void>;
+  sendingReceiptOrderId: string | null;
 }) {
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
@@ -366,6 +420,8 @@ function OrdersInbox({
 
             <OrderTimeline o={o} />
 
+            <ReceiptStatusPanel order={o} />
+
             <div className="mt-4 divide-y divide-border rounded-xl border border-border">
               {o.order_items.map((it, i) => (
                 <div key={i} className="flex items-center justify-between p-3 text-sm">
@@ -394,10 +450,68 @@ function OrdersInbox({
                   {nextLabel[o.status]}
                 </Button>
               )}
+              {canManageOrders && o.status === "delivered" && o.payment_status !== "paid" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void confirmPaymentReceived(o.id)}
+                  disabled={confirmingPaymentOrderId === o.id}
+                >
+                  {confirmingPaymentOrderId === o.id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Confirming...
+                    </>
+                  ) : (
+                    "Confirm payment received"
+                  )}
+                </Button>
+              )}
+              {canManageOrders && o.status === "delivered" && o.payment_status === "paid" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void sendReceiptEmail(o.id)}
+                  disabled={sendingReceiptOrderId === o.id}
+                >
+                  {sendingReceiptOrderId === o.id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Sending...
+                    </>
+                  ) : o.receipt_sent_at ? (
+                    "Resend receipt"
+                  ) : (
+                    "Send receipt"
+                  )}
+                </Button>
+              )}
             </div>
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function ReceiptStatusPanel({ order }: { order: OrderRow }) {
+  let title = "Receipt locked";
+  let body = "Deliver the order first, then confirm payment when the money has been received.";
+
+  if (order.status === "delivered" && order.payment_status !== "paid") {
+    title = "Awaiting payment confirmation";
+    body =
+      "Once you receive the money, confirm payment to email the pharmacy receipt automatically.";
+  } else if (order.payment_status === "paid" && order.receipt_sent_at) {
+    title = "Receipt emailed";
+    body = `The receipt was emailed ${timeAgo(order.receipt_sent_at)}${order.receipt_sent_to ? ` to ${order.receipt_sent_to}` : ""}.`;
+  } else if (order.payment_status === "paid") {
+    title = "Payment confirmed";
+    body = "Payment is confirmed. Send the receipt email now if the pharmacy still needs it.";
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 text-sm">
+      <div className="font-medium">{title}</div>
+      <div className="mt-1 text-muted-foreground">{body}</div>
     </div>
   );
 }
