@@ -77,8 +77,125 @@ type WholesalerSnapshot = {
 
 type DashboardSnapshot = PharmacySnapshot | WholesalerSnapshot;
 
+type QueryLikeError = {
+  code?: string | null;
+  details?: string | null;
+  hint?: string | null;
+  message?: string | null;
+};
+
+type DashboardOrderQueryResult<T> = {
+  legacyReceiptTracking: boolean;
+  rows: T[];
+};
+
 function workspaceRoute(business: Business) {
   return business.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
+}
+
+function isMissingReceiptTrackingError(error: QueryLikeError | null | undefined) {
+  if (!error) {
+    return false;
+  }
+
+  const description =
+    `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+  return (
+    description.includes("receipt_sent_at") &&
+    (description.includes("column") ||
+      description.includes("schema cache") ||
+      description.includes("does not exist"))
+  );
+}
+
+async function loadPharmacyOrderSummaries(
+  businessId: string,
+): Promise<DashboardOrderQueryResult<PharmacyOrderSummary>> {
+  const primary = await supabase
+    .from("orders")
+    .select(
+      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
+    )
+    .eq("pharmacy_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (!primary.error) {
+    return {
+      legacyReceiptTracking: false,
+      rows: (primary.data ?? []) as PharmacyOrderSummary[],
+    };
+  }
+
+  if (!isMissingReceiptTrackingError(primary.error)) {
+    throw primary.error;
+  }
+
+  const fallback = await supabase
+    .from("orders")
+    .select(
+      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
+    )
+    .eq("pharmacy_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (fallback.error) {
+    throw fallback.error;
+  }
+
+  return {
+    legacyReceiptTracking: true,
+    rows: ((fallback.data ?? []) as Omit<PharmacyOrderSummary, "receipt_sent_at">[]).map(
+      (order) => ({
+        ...order,
+        receipt_sent_at: null,
+      }),
+    ),
+  };
+}
+
+async function loadWholesalerOrderSummaries(
+  businessId: string,
+): Promise<DashboardOrderQueryResult<WholesalerOrderSummary>> {
+  const primary = await supabase
+    .from("orders")
+    .select(
+      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
+    )
+    .eq("wholesaler_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (!primary.error) {
+    return {
+      legacyReceiptTracking: false,
+      rows: (primary.data ?? []) as WholesalerOrderSummary[],
+    };
+  }
+
+  if (!isMissingReceiptTrackingError(primary.error)) {
+    throw primary.error;
+  }
+
+  const fallback = await supabase
+    .from("orders")
+    .select(
+      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
+    )
+    .eq("wholesaler_id", businessId)
+    .order("created_at", { ascending: false });
+
+  if (fallback.error) {
+    throw fallback.error;
+  }
+
+  return {
+    legacyReceiptTracking: true,
+    rows: ((fallback.data ?? []) as Omit<WholesalerOrderSummary, "receipt_sent_at">[]).map(
+      (order) => ({
+        ...order,
+        receipt_sent_at: null,
+      }),
+    ),
+  };
 }
 
 function WorkspaceDashboard() {
@@ -86,6 +203,8 @@ function WorkspaceDashboard() {
   const navigate = useNavigate();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [snapshotNotice, setSnapshotNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -115,32 +234,32 @@ function WorkspaceDashboard() {
     }
 
     setLoadingSnapshot(true);
+    setSnapshotError(null);
+    setSnapshotNotice(null);
 
     try {
       if (business.type === "pharmacy") {
-        const [{ data: productRows, error: productErr }, { data: orderRows, error: orderErr }] =
-          await Promise.all([
-            supabase
-              .from("products")
-              .select(
-                "id, category, wholesaler_id, wholesaler:businesses!products_wholesaler_id_fkey(verification_status)",
-              )
-              .eq("active", true),
-            supabase
-              .from("orders")
-              .select(
-                "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
-              )
-              .eq("pharmacy_id", business.id)
-              .order("created_at", { ascending: false }),
-          ]);
+        const [{ data: productRows, error: productErr }, ordersResult] = await Promise.all([
+          supabase
+            .from("products")
+            .select(
+              "id, category, wholesaler_id, wholesaler:businesses!products_wholesaler_id_fkey(verification_status)",
+            )
+            .eq("active", true),
+          loadPharmacyOrderSummaries(business.id),
+        ]);
 
         if (productErr) {
           throw productErr;
         }
-        if (orderErr) {
-          throw orderErr;
+
+        if (ordersResult.legacyReceiptTracking) {
+          setSnapshotNotice(
+            "Receipt metrics are limited until the latest order receipt migration is applied in Supabase.",
+          );
         }
+
+        const orderRows = ordersResult.rows;
 
         const approvedProducts = (
           (productRows ?? []) as {
@@ -170,23 +289,19 @@ function WorkspaceDashboard() {
           recentOrders: pharmacyOrders,
         });
       } else {
-        const [{ data: productRows, error: productErr }, { data: orderRows, error: orderErr }] =
-          await Promise.all([
-            supabase.from("products").select("id, active, stock").eq("wholesaler_id", business.id),
-            supabase
-              .from("orders")
-              .select(
-                "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
-              )
-              .eq("wholesaler_id", business.id)
-              .order("created_at", { ascending: false }),
-          ]);
+        const [{ data: productRows, error: productErr }, ordersResult] = await Promise.all([
+          supabase.from("products").select("id, active, stock").eq("wholesaler_id", business.id),
+          loadWholesalerOrderSummaries(business.id),
+        ]);
 
         if (productErr) {
           throw productErr;
         }
-        if (orderErr) {
-          throw orderErr;
+
+        if (ordersResult.legacyReceiptTracking) {
+          setSnapshotNotice(
+            "Receipt metrics are limited until the latest order receipt migration is applied in Supabase.",
+          );
         }
 
         const wholesalerProducts = (productRows ?? []) as {
@@ -194,7 +309,7 @@ function WorkspaceDashboard() {
           active: boolean;
           stock: number;
         }[];
-        const wholesalerOrders = (orderRows ?? []) as WholesalerOrderSummary[];
+        const wholesalerOrders = ordersResult.rows;
 
         setSnapshot({
           type: "wholesaler",
@@ -213,6 +328,16 @@ function WorkspaceDashboard() {
           recentOrders: wholesalerOrders.slice(0, 5),
         });
       }
+    } catch (error) {
+      setSnapshot(null);
+      const message =
+        error &&
+        typeof error === "object" &&
+        "message" in error &&
+        typeof error.message === "string"
+          ? error.message
+          : "Dashboard data could not be loaded.";
+      setSnapshotError(message);
     } finally {
       setLoadingSnapshot(false);
     }
@@ -351,8 +476,28 @@ function WorkspaceDashboard() {
 
         <VerificationBanner business={business} />
 
-        {loadingSnapshot || !snapshot ? (
+        {snapshotNotice && (
+          <Card className="mb-6 border-warning/30 bg-warning/5 p-4 text-sm text-muted-foreground">
+            {snapshotNotice}
+          </Card>
+        )}
+
+        {loadingSnapshot ? (
           <Card className="p-8 text-center text-muted-foreground">Loading dashboard…</Card>
+        ) : snapshotError ? (
+          <Card className="p-8 text-center">
+            <div className="font-medium">Dashboard unavailable</div>
+            <p className="mt-2 text-sm text-muted-foreground">{snapshotError}</p>
+            <div className="mt-4 flex justify-center">
+              <Button asChild variant="outline">
+                <Link to={workspaceLink}>Open workspace instead</Link>
+              </Button>
+            </div>
+          </Card>
+        ) : !snapshot ? (
+          <Card className="p-8 text-center text-muted-foreground">
+            Dashboard data is not available right now.
+          </Card>
         ) : snapshot.type === "pharmacy" ? (
           <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
