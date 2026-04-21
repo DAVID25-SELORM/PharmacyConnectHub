@@ -31,6 +31,16 @@ type ResendBusinessStaffInviteInput = {
   staffId: string;
 };
 
+type UpdateBusinessStaffMemberInput = {
+  businessId: string;
+  staffId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: BusinessStaffRole;
+  status: StaffStatus;
+};
+
 async function getRequiredSession() {
   const {
     data: { session },
@@ -128,6 +138,37 @@ export async function resendBusinessStaffInvite(
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to resend access email");
+  }
+
+  return { ok: true };
+}
+
+export async function updateBusinessStaffMember(
+  input: UpdateBusinessStaffMemberInput,
+): Promise<{ ok: true }> {
+  const session = await getRequiredSession();
+
+  const res = await fetch("/api/staff/update", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      businessId: input.businessId,
+      staffId: input.staffId,
+      fullName: input.fullName,
+      email: input.email.trim().toLowerCase(),
+      phone: input.phone,
+      role: input.role,
+      status: input.status,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Failed to update staff member");
   }
 
   return { ok: true };

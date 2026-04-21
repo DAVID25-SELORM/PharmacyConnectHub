@@ -80,16 +80,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "businessId and staffId are required" });
   }
 
-  const { data: biz } = await admin
-    .from("businesses")
-    .select("id, owner_id")
-    .eq("id", businessId)
-    .single();
+  const [{ data: biz }, { data: adminRole }] = await Promise.all([
+    admin.from("businesses").select("id, owner_id").eq("id", businessId).single(),
+    admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", caller.id)
+      .eq("role", "admin")
+      .maybeSingle(),
+  ]);
 
-  if (!biz || biz.owner_id !== caller.id) {
+  if (!biz || (biz.owner_id !== caller.id && !adminRole)) {
     return res
       .status(403)
-      .json({ error: "Only the business owner can resend staff access emails" });
+      .json({ error: "Only the business owner or an admin can resend staff access emails" });
   }
 
   const { data: staffRow, error: staffErr } = await admin

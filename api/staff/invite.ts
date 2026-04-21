@@ -91,15 +91,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "You cannot invite yourself" });
   }
 
-  // 4. Verify caller owns the business
-  const { data: biz } = await admin
-    .from("businesses")
-    .select("id, owner_id")
-    .eq("id", businessId)
-    .single();
+  // 4. Verify caller manages the business
+  const [{ data: biz }, { data: adminRole }] = await Promise.all([
+    admin.from("businesses").select("id, owner_id").eq("id", businessId).single(),
+    admin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", caller.id)
+      .eq("role", "admin")
+      .maybeSingle(),
+  ]);
 
-  if (!biz || biz.owner_id !== caller.id) {
-    return res.status(403).json({ error: "Only the business owner can invite staff" });
+  if (!biz || (biz.owner_id !== caller.id && !adminRole)) {
+    return res.status(403).json({ error: "Only the business owner or an admin can invite staff" });
   }
 
   // 5. Look up existing user by email via RPC (avoids loading all users)
