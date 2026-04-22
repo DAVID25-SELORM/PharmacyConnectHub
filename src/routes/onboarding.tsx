@@ -172,6 +172,15 @@ function OnboardingPage() {
   const onUpload = async (docType: string, file: File) => {
     if (!user || !business) return;
 
+    const existingDocsForType = docs.filter((doc) => doc.doc_type === docType);
+    const currentDoc = existingDocsForType[0] ?? null;
+    const stalePaths = Array.from(
+      new Set(
+        existingDocsForType
+          .map((doc) => doc.storage_path)
+          .filter((storagePath) => Boolean(storagePath)),
+      ),
+    );
     setUploading(docType);
     updateUploadFeedback(docType, {
       fileName: file.name,
@@ -209,17 +218,34 @@ function OnboardingPage() {
         throw upErr;
       }
 
-      const { data: row, error: dbErr } = await supabase
-        .from("license_documents")
-        .insert({ business_id: business.id, doc_type: docType, storage_path: path })
-        .select()
-        .single();
+      const docMutation = currentDoc
+        ? supabase
+            .from("license_documents")
+            .update({
+              storage_path: path,
+              uploaded_at: new Date().toISOString(),
+            })
+            .eq("id", currentDoc.id)
+        : supabase
+            .from("license_documents")
+            .insert({ business_id: business.id, doc_type: docType, storage_path: path });
+
+      const { data: row, error: dbErr } = await docMutation.select().single();
 
       if (dbErr) {
+        await supabase.storage.from("licenses").remove([path]);
         throw dbErr;
       }
 
-      setDocs((current) => [row as DocRow, ...current]);
+      const replacedPaths = stalePaths.filter((storagePath) => storagePath !== path);
+      if (replacedPaths.length > 0) {
+        const { error: cleanupErr } = await supabase.storage.from("licenses").remove(replacedPaths);
+        if (cleanupErr) {
+          toast.warning("The new document is saved, but we could not remove the old file copy.");
+        }
+      }
+
+      setDocs((current) => [row as DocRow, ...current.filter((doc) => doc.doc_type !== docType)]);
       updateUploadFeedback(docType, {
         fileName: uploadFile.name,
         message: "Upload successful",
@@ -321,6 +347,7 @@ function OnboardingPage() {
   ).length;
   const progressValue =
     docTypes.length === 0 ? 0 : Math.round((uploadedCount / docTypes.length) * 100);
+  const allRequiredDocsUploaded = uploadedCount === docTypes.length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -480,13 +507,20 @@ function OnboardingPage() {
           <Button variant="ghost" onClick={() => void onRefreshStatus()} disabled={refreshing}>
             {refreshing ? "Checking..." : "Refresh status"}
           </Button>
-          <Button
-            variant="hero"
-            onClick={() => navigate({ to: workspaceRoute(business.type) })}
-            disabled={docs.length === 0}
-          >
-            Continue to dashboard
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            {!allRequiredDocsUploaded && (
+              <p className="text-xs text-muted-foreground">
+                Upload all required documents to continue.
+              </p>
+            )}
+            <Button
+              variant="hero"
+              onClick={() => navigate({ to: workspaceRoute(business.type) })}
+              disabled={!allRequiredDocsUploaded}
+            >
+              Continue to dashboard
+            </Button>
+          </div>
         </div>
       </main>
     </div>

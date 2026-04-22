@@ -1167,19 +1167,26 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
         return;
       }
 
-      const { error } = await supabase.from("products").insert(
-        result.products.map((product) => ({
-          wholesaler_id: businessId,
-          ...product,
-        })),
-      );
+      const { data, error } = await supabase.rpc("import_wholesaler_products", {
+        _business_id: businessId,
+        _products: result.products,
+      });
 
       if (error) {
         toast.error(error.message);
         return;
       }
 
-      toast.success(`Imported ${result.products.length} product(s) from ${result.sourceLabel}.`);
+      const summary = data?.[0] ?? { inserted_count: 0, updated_count: 0 };
+      const insertedCount = summary.inserted_count ?? 0;
+      const updatedCount = summary.updated_count ?? 0;
+      const importedTotal = insertedCount + updatedCount;
+
+      toast.success(
+        importedTotal === 0
+          ? `No product changes were needed from ${result.sourceLabel}.`
+          : `Imported ${importedTotal} product(s) from ${result.sourceLabel}: ${insertedCount} new, ${updatedCount} updated.`,
+      );
       if (result.warnings[0]) {
         toast.warning(result.warnings[0]);
       }

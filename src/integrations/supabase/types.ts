@@ -640,6 +640,16 @@ export type Database = {
         };
         Returns: Database["public"]["Enums"]["staff_role"];
       };
+      import_wholesaler_products: {
+        Args: {
+          _business_id: string;
+          _products: Json;
+        };
+        Returns: {
+          inserted_count: number;
+          updated_count: number;
+        }[];
+      };
       list_business_staff: {
         Args: {
           _business_id: string;
