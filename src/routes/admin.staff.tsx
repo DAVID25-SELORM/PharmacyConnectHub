@@ -120,25 +120,6 @@ function getEditableStatuses(member: PlatformStaffMember): PlatformStaffStatus[]
   return ["active", "inactive"];
 }
 
-function hidesPlatformOwnerDetails(
-  member: PlatformStaffMember,
-  viewerIsPlatformOwner: boolean,
-): boolean {
-  return member.role === "owner" && !viewerIsPlatformOwner;
-}
-
-function formatPlatformStaffCell(
-  value: string | null,
-  detailsHidden: boolean,
-  hiddenLabel = "Private to platform owner",
-): string {
-  if (detailsHidden) {
-    return hiddenLabel;
-  }
-
-  return value?.trim() ? value : "-";
-}
-
 function PlatformStaffManagement() {
   const navigate = useNavigate();
   const { loading, user, roles, businesses, setActiveBusiness } = useSession();
@@ -197,6 +178,10 @@ function PlatformStaffManagement() {
         member.user_id === user.id && member.role === "owner" && member.status === "active",
     );
   }, [staff, user]);
+  const visibleStaff = useMemo(
+    () => (viewerIsPlatformOwner ? staff : staff.filter((member) => member.role !== "owner")),
+    [staff, viewerIsPlatformOwner],
+  );
 
   const loadStaff = useEffectEvent(async () => {
     setLoadingStaff(true);
@@ -283,7 +268,7 @@ function PlatformStaffManagement() {
   };
 
   const openEditDialog = (member: PlatformStaffMember) => {
-    if (hidesPlatformOwnerDetails(member, viewerIsPlatformOwner)) {
+    if (member.role === "owner" && !viewerIsPlatformOwner) {
       toast.error("Only the platform owner can view or edit owner details.");
       return;
     }
@@ -305,7 +290,7 @@ function PlatformStaffManagement() {
   const handleSaveEdit = async () => {
     if (!editingMember) return;
 
-    if (hidesPlatformOwnerDetails(editingMember, viewerIsPlatformOwner)) {
+    if (editingMember.role === "owner" && !viewerIsPlatformOwner) {
       toast.error("Only the platform owner can edit owner details.");
       return;
     }
@@ -350,7 +335,7 @@ function PlatformStaffManagement() {
   };
 
   const handleResendInvite = async (member: PlatformStaffMember) => {
-    if (hidesPlatformOwnerDetails(member, viewerIsPlatformOwner)) {
+    if (member.role === "owner" && !viewerIsPlatformOwner) {
       toast.error("Only the platform owner can manage owner access.");
       return;
     }
@@ -388,8 +373,8 @@ function PlatformStaffManagement() {
     );
   }
 
-  const activeStaff = staff.filter((member) => member.status === "active");
-  const otherStaff = staff.filter((member) => member.status !== "active");
+  const activeStaff = visibleStaff.filter((member) => member.status === "active");
+  const otherStaff = visibleStaff.filter((member) => member.status !== "active");
   const editableStatuses: PlatformStaffStatus[] = editingMember
     ? getEditableStatuses(editingMember)
     : ["active"];
@@ -453,72 +438,51 @@ function PlatformStaffManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeStaff.map((member) => {
-                    const ownerDetailsHidden = hidesPlatformOwnerDetails(
-                      member,
-                      viewerIsPlatformOwner,
-                    );
-
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell className="font-medium">
-                          {formatPlatformStaffCell(member.full_name, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          {formatPlatformStaffCell(member.user_email, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          {formatPlatformStaffCell(member.phone, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={roleColors[member.role]}>
-                            {roleLabels[member.role]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {member.joined_at ? timeAgo(member.joined_at) : "Not recorded"}
-                        </TableCell>
-                        <TableCell>
-                          {ownerDetailsHidden ? (
-                            <span className="text-xs text-muted-foreground">
-                              Owner details stay private.
-                            </span>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {member.user_email && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleResendInvite(member)}
-                                  disabled={resendingStaffId === member.id}
-                                >
-                                  {resendingStaffId === member.id ? "Sending..." : "Resend email"}
-                                </Button>
-                              )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditDialog(member)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </Button>
-                              {member.role !== "owner" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeactivate(member)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Deactivate
-                                </Button>
-                              )}
-                            </div>
+                  {activeStaff.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium">{member.full_name || "-"}</TableCell>
+                      <TableCell>{member.user_email || "-"}</TableCell>
+                      <TableCell>{member.phone || "-"}</TableCell>
+                      <TableCell>
+                        <Badge className={roleColors[member.role]}>{roleLabels[member.role]}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {member.joined_at ? timeAgo(member.joined_at) : "Not recorded"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          {member.user_email && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleResendInvite(member)}
+                              disabled={resendingStaffId === member.id}
+                            >
+                              {resendingStaffId === member.id ? "Sending..." : "Resend email"}
+                            </Button>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(member)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          {member.role !== "owner" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeactivate(member)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Deactivate
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             )}
@@ -542,94 +506,73 @@ function PlatformStaffManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {otherStaff.map((member) => {
-                    const ownerDetailsHidden = hidesPlatformOwnerDetails(
-                      member,
-                      viewerIsPlatformOwner,
-                    );
-
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell className="font-medium">
-                          {formatPlatformStaffCell(member.full_name, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          {formatPlatformStaffCell(member.user_email, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          {formatPlatformStaffCell(member.phone, ownerDetailsHidden)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={roleColors[member.role]}>
-                            {roleLabels[member.role]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={statusColors[member.status]}>
-                            {statusLabels[member.status]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {timeAgo(member.invited_at)}
-                        </TableCell>
-                        <TableCell>
-                          {ownerDetailsHidden ? (
-                            <span className="text-xs text-muted-foreground">
-                              Owner details stay private.
-                            </span>
-                          ) : (
-                            <div className="flex flex-wrap gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditDialog(member)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </Button>
-                              {member.status !== "inactive" && member.user_email && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleResendInvite(member)}
-                                  disabled={resendingStaffId === member.id}
-                                >
-                                  {resendingStaffId === member.id ? "Sending..." : "Resend email"}
-                                </Button>
-                              )}
-                              {member.status === "pending" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleActivate(member)}
-                                >
-                                  Activate
-                                </Button>
-                              )}
-                              {member.status === "inactive" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleActivate(member)}
-                                >
-                                  Reactivate
-                                </Button>
-                              )}
-                              {member.status !== "inactive" && member.role !== "owner" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeactivate(member)}
-                                >
-                                  Cancel
-                                </Button>
-                              )}
-                            </div>
+                  {otherStaff.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium">{member.full_name || "-"}</TableCell>
+                      <TableCell>{member.user_email || "-"}</TableCell>
+                      <TableCell>{member.phone || "-"}</TableCell>
+                      <TableCell>
+                        <Badge className={roleColors[member.role]}>{roleLabels[member.role]}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[member.status]}>
+                          {statusLabels[member.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {timeAgo(member.invited_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(member)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </Button>
+                          {member.status !== "inactive" && member.user_email && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleResendInvite(member)}
+                              disabled={resendingStaffId === member.id}
+                            >
+                              {resendingStaffId === member.id ? "Sending..." : "Resend email"}
+                            </Button>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                          {member.status === "pending" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleActivate(member)}
+                            >
+                              Activate
+                            </Button>
+                          )}
+                          {member.status === "inactive" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleActivate(member)}
+                            >
+                              Reactivate
+                            </Button>
+                          )}
+                          {member.status !== "inactive" && member.role !== "owner" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeactivate(member)}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </Card>
