@@ -100,14 +100,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "You cannot invite yourself" });
   }
 
-  const { data: adminRole } = await admin
-    .from("user_roles")
-    .select("role")
+  const { data: callerStaff, error: callerStaffErr } = await admin
+    .from("platform_staff")
+    .select("id")
     .eq("user_id", caller.id)
-    .eq("role", "admin")
+    .eq("status", "active")
     .maybeSingle();
 
-  if (!adminRole) {
+  if (callerStaffErr) {
+    return res.status(500).json({ error: callerStaffErr.message });
+  }
+
+  if (!callerStaff) {
     return res.status(403).json({ error: "Only platform admins can invite platform staff" });
   }
 

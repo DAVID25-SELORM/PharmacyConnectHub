@@ -100,14 +100,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Invalid status" });
   }
 
-  const { data: adminRole } = await admin
-    .from("user_roles")
+  const { data: callerStaff, error: callerStaffErr } = await admin
+    .from("platform_staff")
     .select("role")
     .eq("user_id", caller.id)
-    .eq("role", "admin")
+    .eq("status", "active")
     .maybeSingle();
 
-  if (!adminRole) {
+  if (callerStaffErr) {
+    return res.status(500).json({ error: callerStaffErr.message });
+  }
+
+  if (!callerStaff) {
     return res.status(403).json({ error: "Only platform admins can edit platform staff" });
   }
 
@@ -128,6 +132,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nextRole = (typeof role === "string" ? role : staffRow.role) as PlatformStaffRole;
   const nextStatus = (typeof status === "string" ? status : staffRow.status) as PlatformStaffStatus;
   const isOwnerRecord = staffRow.role === "owner";
+
+  if (isOwnerRecord && callerStaff.role !== "owner") {
+    return res.status(403).json({ error: "Only the platform owner can edit owner details" });
+  }
 
   if (isOwnerRecord && nextRole !== "owner") {
     return res.status(400).json({ error: "The platform owner must keep the owner role" });
