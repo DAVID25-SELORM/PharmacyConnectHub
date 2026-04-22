@@ -11,7 +11,7 @@ import logo from "@/assets/logo.jpg";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — PharmaHub GH" },
+      { title: "Sign in - PharmaHub GH" },
       { name: "description", content: "Sign in to your PharmaHub GH account." },
     ],
   }),
@@ -95,22 +95,25 @@ function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="********"
                 required
                 autoComplete="current-password"
               />
             </div>
             <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            New to PharmaHub?{" "}
-            <Link to="/signup" className="font-medium text-primary hover:underline">
+          <div className="mt-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-center">
+            <p className="text-sm text-muted-foreground">New to PharmaHub?</p>
+            <Link
+              to="/signup"
+              className="mt-1 inline-block text-base font-semibold text-primary underline-offset-4 transition-colors hover:underline"
+            >
               Create an account
             </Link>
-          </p>
+          </div>
         </Card>
       </div>
     </div>

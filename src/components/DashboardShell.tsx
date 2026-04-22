@@ -3,6 +3,7 @@ import {
   Bell,
   CheckCheck,
   Clock,
+  Home,
   LayoutDashboard,
   LogOut,
   Package,
@@ -193,15 +194,25 @@ export function DashboardHeader({
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
-          <Link to="/" className="flex items-center gap-2">
-            <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
-            <div>
-              <div className="font-display text-base font-bold leading-none">
-                Pharma<span className="text-primary">Hub GH</span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate({ to: "/dashboard" })}
+              aria-label="Go to dashboard"
+            >
+              <Home className="h-4 w-4" />
+            </Button>
+            <Link to="/" className="flex items-center gap-2">
+              <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
+              <div>
+                <div className="font-display text-base font-bold leading-none">
+                  Pharma<span className="text-primary">Hub GH</span>
+                </div>
+                <div className="text-[11px] text-muted-foreground">{subtitle}</div>
               </div>
-              <div className="text-[11px] text-muted-foreground">{subtitle}</div>
-            </div>
-          </Link>
+            </Link>
+          </div>
 
           {canSwitchWorkspaces && (
             <Select value={business.id} onValueChange={onWorkspaceChange}>

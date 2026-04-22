@@ -15,10 +15,12 @@ export type Database = {
           created_at: string;
           id: string;
           license_number: string | null;
+          location_description: string | null;
           name: string;
           owner_id: string;
           owner_is_superintendent: boolean;
           phone: string | null;
+          public_email: string | null;
           region: string | null;
           rejection_reason: string | null;
           superintendent_name: string | null;
@@ -26,6 +28,7 @@ export type Database = {
           updated_at: string;
           verification_status: Database["public"]["Enums"]["verification_status"];
           verified_at: string | null;
+          working_hours: string | null;
         };
         Insert: {
           address?: string | null;
@@ -33,10 +36,12 @@ export type Database = {
           created_at?: string;
           id?: string;
           license_number?: string | null;
+          location_description?: string | null;
           name: string;
           owner_id: string;
           owner_is_superintendent?: boolean;
           phone?: string | null;
+          public_email?: string | null;
           region?: string | null;
           rejection_reason?: string | null;
           superintendent_name?: string | null;
@@ -44,6 +49,7 @@ export type Database = {
           updated_at?: string;
           verification_status?: Database["public"]["Enums"]["verification_status"];
           verified_at?: string | null;
+          working_hours?: string | null;
         };
         Update: {
           address?: string | null;
@@ -51,10 +57,12 @@ export type Database = {
           created_at?: string;
           id?: string;
           license_number?: string | null;
+          location_description?: string | null;
           name?: string;
           owner_id?: string;
           owner_is_superintendent?: boolean;
           phone?: string | null;
+          public_email?: string | null;
           region?: string | null;
           rejection_reason?: string | null;
           superintendent_name?: string | null;
@@ -62,8 +70,53 @@ export type Database = {
           updated_at?: string;
           verification_status?: Database["public"]["Enums"]["verification_status"];
           verified_at?: string | null;
+          working_hours?: string | null;
         };
         Relationships: [];
+      };
+      business_private_contacts: {
+        Row: {
+          business_id: string;
+          created_at: string;
+          owner_email: string | null;
+          owner_full_name: string | null;
+          owner_phone: string | null;
+          superintendent_email: string | null;
+          superintendent_full_name: string | null;
+          superintendent_phone: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          business_id: string;
+          created_at?: string;
+          owner_email?: string | null;
+          owner_full_name?: string | null;
+          owner_phone?: string | null;
+          superintendent_email?: string | null;
+          superintendent_full_name?: string | null;
+          superintendent_phone?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          business_id?: string;
+          created_at?: string;
+          owner_email?: string | null;
+          owner_full_name?: string | null;
+          owner_phone?: string | null;
+          superintendent_email?: string | null;
+          superintendent_full_name?: string | null;
+          superintendent_phone?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "business_private_contacts_business_id_fkey";
+            columns: ["business_id"];
+            isOneToOne: true;
+            referencedRelation: "businesses";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       business_staff: {
         Row: {
@@ -503,20 +556,55 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["business_staff"]["Row"];
       };
+      update_business_profile_with_contacts: {
+        Args: {
+          _address: string | null;
+          _business_id: string;
+          _city: string | null;
+          _license_number: string | null;
+          _location_description: string | null;
+          _name: string;
+          _owner_email: string;
+          _owner_full_name: string;
+          _owner_is_superintendent: boolean | null;
+          _owner_phone: string;
+          _phone: string | null;
+          _public_email: string | null;
+          _region: string | null;
+          _superintendent_email: string | null;
+          _superintendent_name: string | null;
+          _superintendent_phone: string | null;
+          _working_hours: string | null;
+        };
+        Returns: {
+          business_id: string;
+          owner_email: string | null;
+          owner_full_name: string | null;
+          owner_phone: string | null;
+          superintendent_email: string | null;
+          superintendent_full_name: string | null;
+          superintendent_phone: string | null;
+        }[];
+      };
       get_user_business_context: {
         Args: Record<PropertyKey, never>;
         Returns: {
+          address: string | null;
           city: string | null;
           id: string;
           license_number: string | null;
+          location_description: string | null;
           name: string;
           owner_is_superintendent: boolean;
+          phone: string | null;
+          public_email: string | null;
           region: string | null;
           rejection_reason: string | null;
           staff_role: Database["public"]["Enums"]["staff_role"];
           superintendent_name: string | null;
           type: Database["public"]["Enums"]["business_type"];
           verification_status: Database["public"]["Enums"]["verification_status"];
+          working_hours: string | null;
         }[];
       };
       has_role: {
