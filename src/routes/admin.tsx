@@ -80,9 +80,13 @@ type AdminOrderSummary = {
 
 type ActivityItem = {
   id: string;
-  title: string;
-  description: string;
   timestamp: string;
+  activity: string;
+  organization: string;
+  performedBy: string;
+  record: string;
+  ipAddress: string;
+  details: string;
   tone: "business" | "order" | "review";
 };
 
@@ -187,9 +191,15 @@ function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
     const items: ActivityItem[] = [
       {
         id: `business-created-${business.id}`,
-        title: `${business.type === "pharmacy" ? "Pharmacy" : "Wholesaler"} submitted`,
-        description: `${business.name} joined from ${business.city ?? "an unspecified city"}.`,
         timestamp: business.created_at,
+        activity: `${business.type === "pharmacy" ? "Pharmacy" : "Wholesaler"} submitted`,
+        organization: business.name,
+        performedBy: "Business owner",
+        record: business.license_number ?? business.id.slice(0, 8),
+        ipAddress: "Not captured",
+        details: `Joined from ${business.city ?? "an unspecified city"}${
+          business.region ? `, ${business.region}` : ""
+        }.`,
         tone: "business",
       },
     ];
@@ -197,13 +207,17 @@ function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
     if (business.verification_status !== "pending") {
       items.push({
         id: `business-reviewed-${business.id}`,
-        title:
-          business.verification_status === "approved" ? "Business approved" : "Business rejected",
-        description:
-          business.verification_status === "approved"
-            ? `${business.name} can now use the marketplace.`
-            : `${business.name} needs follow-up before marketplace access.`,
         timestamp: business.verified_at ?? business.updated_at ?? business.created_at,
+        activity:
+          business.verification_status === "approved" ? "Business approved" : "Business rejected",
+        organization: business.name,
+        performedBy: "Platform admin",
+        record: business.license_number ?? business.id.slice(0, 8),
+        ipAddress: "Not captured",
+        details:
+          business.verification_status === "approved"
+            ? "Marketplace access enabled."
+            : business.rejection_reason || "Follow-up required before marketplace access.",
         tone: "review",
       });
     }
@@ -213,11 +227,15 @@ function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
 
   const orderActivity: ActivityItem[] = orders.map((order) => ({
     id: `order-${order.id}`,
-    title: `Order ${order.order_number} is ${order.status}`,
-    description: `${order.pharmacy?.name ?? "A pharmacy"} ordered from ${
-      order.wholesaler?.name ?? "a wholesaler"
-    } for ${formatGHS(order.total_ghs)}.`,
     timestamp: order.updated_at ?? order.created_at,
+    activity: `Order ${order.status}`,
+    organization: order.pharmacy?.name ?? "Pharmacy",
+    performedBy: "Marketplace",
+    record: order.order_number,
+    ipAddress: "Not captured",
+    details: `Wholesaler: ${order.wholesaler?.name ?? "Unknown"}; value ${formatGHS(
+      order.total_ghs,
+    )}.`,
     tone: "order",
   }));
 
@@ -253,23 +271,40 @@ function ActivityLog({ items }: { items: ActivityItem[] }) {
           No platform activity yet.
         </div>
       ) : (
-        <div className="mt-5 divide-y divide-border rounded-xl border border-border">
-          {items.map((item) => (
-            <div key={item.id} className="flex gap-3 p-4">
-              <div
-                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${toneClass[item.tone]}`}
-              >
-                <Activity className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-medium">{item.title}</div>
-                  <div className="text-xs text-muted-foreground">{timeAgo(item.timestamp)}</div>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-              </div>
-            </div>
-          ))}
+        <div className="mt-5 overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">Timestamp</th>
+                <th className="px-4 py-3 font-medium">Activity</th>
+                <th className="px-4 py-3 font-medium">Organization</th>
+                <th className="px-4 py-3 font-medium">Performed By</th>
+                <th className="px-4 py-3 font-medium">Record</th>
+                <th className="px-4 py-3 font-medium">IP Address</th>
+                <th className="px-4 py-3 font-medium">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {items.map((item) => (
+                <tr key={item.id} className="align-top">
+                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                    <div>{new Date(item.timestamp).toLocaleString()}</div>
+                    <div className="mt-1 text-xs">{timeAgo(item.timestamp)}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant="secondary" className={`border ${toneClass[item.tone]}`}>
+                      {item.activity}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 font-medium">{item.organization}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{item.performedBy}</td>
+                  <td className="px-4 py-3 font-mono text-xs">{item.record}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{item.ipAddress}</td>
+                  <td className="max-w-sm px-4 py-3 text-muted-foreground">{item.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </Card>
