@@ -1,6 +1,7 @@
 import { Outlet, createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
+  Activity,
   ArrowRight,
   Building2,
   Edit,
@@ -61,7 +62,28 @@ type Biz = {
   verification_status: "pending" | "approved" | "rejected";
   rejection_reason: string | null;
   created_at: string;
+  updated_at?: string | null;
+  verified_at?: string | null;
   owner_id: string;
+};
+
+type AdminOrderSummary = {
+  id: string;
+  order_number: string;
+  status: string;
+  total_ghs: number;
+  created_at: string;
+  updated_at: string | null;
+  pharmacy: { name: string } | null;
+  wholesaler: { name: string } | null;
+};
+
+type ActivityItem = {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  tone: "business" | "order" | "review";
 };
 
 type DocRow = {
@@ -160,6 +182,100 @@ function DetailField({ label, value }: { label: string; value: string }) {
   );
 }
 
+function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
+  const businessActivity: ActivityItem[] = businesses.flatMap((business) => {
+    const items: ActivityItem[] = [
+      {
+        id: `business-created-${business.id}`,
+        title: `${business.type === "pharmacy" ? "Pharmacy" : "Wholesaler"} submitted`,
+        description: `${business.name} joined from ${business.city ?? "an unspecified city"}.`,
+        timestamp: business.created_at,
+        tone: "business",
+      },
+    ];
+
+    if (business.verification_status !== "pending") {
+      items.push({
+        id: `business-reviewed-${business.id}`,
+        title:
+          business.verification_status === "approved" ? "Business approved" : "Business rejected",
+        description:
+          business.verification_status === "approved"
+            ? `${business.name} can now use the marketplace.`
+            : `${business.name} needs follow-up before marketplace access.`,
+        timestamp: business.verified_at ?? business.updated_at ?? business.created_at,
+        tone: "review",
+      });
+    }
+
+    return items;
+  });
+
+  const orderActivity: ActivityItem[] = orders.map((order) => ({
+    id: `order-${order.id}`,
+    title: `Order ${order.order_number} is ${order.status}`,
+    description: `${order.pharmacy?.name ?? "A pharmacy"} ordered from ${
+      order.wholesaler?.name ?? "a wholesaler"
+    } for ${formatGHS(order.total_ghs)}.`,
+    timestamp: order.updated_at ?? order.created_at,
+    tone: "order",
+  }));
+
+  return [...businessActivity, ...orderActivity]
+    .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())
+    .slice(0, 12);
+}
+
+function ActivityLog({ items }: { items: ActivityItem[] }) {
+  const toneClass: Record<ActivityItem["tone"], string> = {
+    business: "bg-primary/10 text-primary border-primary/20",
+    order: "bg-accent/10 text-accent border-accent/20",
+    review: "bg-success/10 text-success border-success/20",
+  };
+
+  return (
+    <Card className="mb-8 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Activity className="h-4 w-4 text-primary" />
+            Activity log
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Recent business reviews, signups, and marketplace order movement.
+          </p>
+        </div>
+        <Badge variant="secondary">{items.length} recent</Badge>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="mt-5 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+          No platform activity yet.
+        </div>
+      ) : (
+        <div className="mt-5 divide-y divide-border rounded-xl border border-border">
+          {items.map((item) => (
+            <div key={item.id} className="flex gap-3 p-4">
+              <div
+                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${toneClass[item.tone]}`}
+              >
+                <Activity className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-medium">{item.title}</div>
+                  <div className="text-xs text-muted-foreground">{timeAgo(item.timestamp)}</div>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function AdminPanel() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -177,6 +293,7 @@ function AdminPanel() {
     orders: 0,
     gmv: 0,
   });
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     if (loading) return;
@@ -192,7 +309,13 @@ function AdminPanel() {
   const load = async () => {
     const [bizResult, orderResult, privateContactsResult] = await Promise.all([
       supabase.from("businesses").select("*").order("created_at", { ascending: false }),
-      supabase.from("orders").select("total_ghs,status"),
+      supabase
+        .from("orders")
+        .select(
+          "id,order_number,status,total_ghs,created_at,updated_at,pharmacy:businesses!orders_pharmacy_id_fkey(name),wholesaler:businesses!orders_wholesaler_id_fkey(name)",
+        )
+        .order("updated_at", { ascending: false })
+        .limit(25),
       supabase.from("business_private_contacts").select("*"),
     ]);
 
@@ -201,7 +324,9 @@ function AdminPanel() {
 
     const pharmacies = all.filter((row) => row.type === "pharmacy");
     const wholesalers = all.filter((row) => row.type === "wholesaler");
-    const orders = (orderResult.data as { total_ghs: number; status: string }[]) ?? [];
+    const orders = (orderResult.data as unknown as AdminOrderSummary[]) ?? [];
+
+    setActivityItems(buildActivityLog(all, orders));
 
     if (!privateContactsResult.error) {
       const privateContacts = (privateContactsResult.data as PrivateContact[]) ?? [];
@@ -352,6 +477,8 @@ function AdminPanel() {
             </Card>
           </div>
         </div>
+
+        <ActivityLog items={activityItems} />
 
         {incompleteVerificationRecords.length > 0 && (
           <Card className="mb-8 border-warning/30 bg-warning/5 p-6">
