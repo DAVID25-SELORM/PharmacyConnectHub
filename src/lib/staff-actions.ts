@@ -108,7 +108,10 @@ export async function inviteBusinessStaff(
     }),
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await res.json()
+    : { error: await res.text(), mode: undefined };
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to add staff member");
@@ -134,7 +137,10 @@ export async function resendBusinessStaffInvite(
     }),
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await res.json()
+    : { error: await res.text() };
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to resend access email");
@@ -165,7 +171,10 @@ export async function updateBusinessStaffMember(
     }),
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await res.json()
+    : { error: await res.text() };
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to update staff member");

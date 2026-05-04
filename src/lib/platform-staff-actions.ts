@@ -48,6 +48,16 @@ async function getRequiredSession() {
   return session;
 }
 
+async function readActionResponse<T>(res: Response): Promise<T & { error?: string }> {
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    return (await res.json()) as T & { error?: string };
+  }
+
+  return { error: await res.text() } as T & { error?: string };
+}
+
 function sortPlatformStaffMembers(left: PlatformStaffMember, right: PlatformStaffMember) {
   const roleOrder: Record<PlatformStaffRole, number> = {
     owner: 0,
@@ -91,7 +101,7 @@ export async function invitePlatformStaff(
     }),
   });
 
-  const data = await res.json();
+  const data = await readActionResponse<Partial<InvitePlatformStaffResult>>(res);
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to add platform staff");
@@ -116,7 +126,7 @@ export async function resendPlatformStaffInvite(
     }),
   });
 
-  const data = await res.json();
+  const data = await readActionResponse<Record<string, never>>(res);
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to resend access email");
@@ -146,7 +156,7 @@ export async function updatePlatformStaffMember(
     }),
   });
 
-  const data = await res.json();
+  const data = await readActionResponse<Record<string, never>>(res);
 
   if (!res.ok) {
     throw new Error(data.error || "Failed to update platform staff");

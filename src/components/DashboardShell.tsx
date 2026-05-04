@@ -130,7 +130,7 @@ function NotificationBell() {
             </button>
           )}
         </div>
-        <div className="max-h-95 overflow-y-auto">
+        <div className="max-h-96 overflow-y-auto">
           {notes.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               No notifications yet.
@@ -192,9 +192,9 @@ export function DashboardHeader({
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3 lg:gap-6">
+          <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="ghost"
               size="icon"
@@ -203,13 +203,13 @@ export function DashboardHeader({
             >
               <Home className="h-4 w-4" />
             </Button>
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/" className="flex min-w-0 items-center gap-2">
               <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
-              <div>
-                <div className="font-display text-base font-bold leading-none">
+              <div className="hidden min-w-0 sm:block">
+                <div className="truncate font-display text-base font-bold leading-none">
                   Pharma<span className="text-primary">Hub GH</span>
                 </div>
-                <div className="text-[11px] text-muted-foreground">{subtitle}</div>
+                <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
               </div>
             </Link>
           </div>
@@ -265,11 +265,12 @@ export function DashboardHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {rightSlot}
           <NotificationBell />
-          <Button variant="ghost" size="sm" onClick={onSignOut}>
-            <LogOut className="h-4 w-4" /> Sign out
+          <Button variant="ghost" size="sm" onClick={onSignOut} aria-label="Sign out">
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sign out</span>
           </Button>
         </div>
       </div>

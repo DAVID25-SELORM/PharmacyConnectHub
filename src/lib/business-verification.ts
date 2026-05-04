@@ -29,7 +29,7 @@ export function hasUsablePhone(value: string | null | undefined) {
   }
 
   try {
-    normalizeGhanaPhone(value);
+    normalizeGhanaPhone(value as string);
     return true;
   } catch {
     return false;
@@ -37,7 +37,7 @@ export function hasUsablePhone(value: string | null | undefined) {
 }
 
 export function hasUsableEmail(value: string | null | undefined) {
-  return hasText(value) && looksLikeEmail(value);
+  return hasText(value) && looksLikeEmail(value as string);
 }
 
 export function getIncompleteVerificationFields(

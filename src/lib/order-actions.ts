@@ -49,7 +49,10 @@ async function postWithSession<T>(path: string, input: unknown): Promise<T> {
     body: JSON.stringify(input),
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await res.json()
+    : { error: await res.text() };
 
   if (!res.ok) {
     throw new Error(data.error || "Request failed");

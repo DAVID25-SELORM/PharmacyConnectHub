@@ -1,6 +1,14 @@
+function readProcessEnv(name: string) {
+  if (typeof process === "undefined") {
+    return undefined;
+  }
+
+  return process.env?.[name];
+}
+
 function getConfiguredSiteUrl() {
   const rawSiteUrl =
-    import.meta.env.VITE_SITE_URL || process.env.VITE_SITE_URL || process.env.SITE_URL;
+    import.meta.env.VITE_SITE_URL || readProcessEnv("VITE_SITE_URL") || readProcessEnv("SITE_URL");
 
   if (typeof rawSiteUrl === "string" && rawSiteUrl.trim()) {
     return rawSiteUrl.trim();
