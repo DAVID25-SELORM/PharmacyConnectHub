@@ -90,6 +90,18 @@ type ActivityItem = {
   tone: "business" | "order" | "review";
 };
 
+type AuditLogRow = {
+  id: string;
+  activity: string;
+  organization: string | null;
+  performed_by_email: string | null;
+  record_type: string;
+  record_label: string | null;
+  ip_address: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
 type DocRow = {
   id: string;
   doc_type: string;
@@ -244,6 +256,58 @@ function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
     .slice(0, 12);
 }
 
+function formatAuditDetail(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  return String(value);
+}
+
+function formatAuditDetails(details: Record<string, unknown> | null) {
+  if (!details) {
+    return "";
+  }
+
+  const entries = Object.entries(details)
+    .map(([key, value]) => {
+      const formattedValue = formatAuditDetail(value);
+      if (!formattedValue) {
+        return null;
+      }
+
+      return `${key.replace(/_/g, " ")}: ${formattedValue}`;
+    })
+    .filter((entry): entry is string => Boolean(entry));
+
+  return entries.join("; ");
+}
+
+function mapAuditLogs(rows: AuditLogRow[]): ActivityItem[] {
+  return rows.map((row) => {
+    const recordType = row.record_type.toLowerCase();
+    const tone: ActivityItem["tone"] =
+      recordType === "order"
+        ? "order"
+        : row.activity.toLowerCase().includes("approved") ||
+            row.activity.toLowerCase().includes("rejected")
+          ? "review"
+          : "business";
+
+    return {
+      id: row.id,
+      timestamp: row.created_at,
+      activity: row.activity,
+      organization: row.organization ?? "PharmaHub GH",
+      performedBy: row.performed_by_email ?? "System",
+      record: row.record_label ?? row.record_type,
+      ipAddress: row.ip_address ?? "Not captured",
+      details: formatAuditDetails(row.details) || "No extra details.",
+      tone,
+    };
+  });
+}
+
 function ActivityLog({ items }: { items: ActivityItem[] }) {
   const toneClass: Record<ActivityItem["tone"], string> = {
     business: "bg-primary/10 text-primary border-primary/20",
@@ -342,7 +406,7 @@ function AdminPanel() {
   }, [loading, navigate, roles, user]);
 
   const load = async () => {
-    const [bizResult, orderResult, privateContactsResult] = await Promise.all([
+    const [bizResult, orderResult, privateContactsResult, auditResult] = await Promise.all([
       supabase.from("businesses").select("*").order("created_at", { ascending: false }),
       supabase
         .from("orders")
@@ -352,6 +416,13 @@ function AdminPanel() {
         .order("updated_at", { ascending: false })
         .limit(25),
       supabase.from("business_private_contacts").select("*"),
+      supabase
+        .from("audit_logs")
+        .select(
+          "id,activity,organization,performed_by_email,record_type,record_label,ip_address,details,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
 
     const all = (bizResult.data as Biz[]) ?? [];
@@ -361,7 +432,11 @@ function AdminPanel() {
     const wholesalers = all.filter((row) => row.type === "wholesaler");
     const orders = (orderResult.data as unknown as AdminOrderSummary[]) ?? [];
 
-    setActivityItems(buildActivityLog(all, orders));
+    setActivityItems(
+      auditResult.error || !auditResult.data?.length
+        ? buildActivityLog(all, orders)
+        : mapAuditLogs((auditResult.data as unknown as AuditLogRow[]) ?? []),
+    );
 
     if (!privateContactsResult.error) {
       const privateContacts = (privateContactsResult.data as PrivateContact[]) ?? [];
