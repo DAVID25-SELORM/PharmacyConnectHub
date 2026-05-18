@@ -210,9 +210,13 @@ function WholesalerDashboard() {
   const sendReceiptEmail = async (id: string) => {
     setSendingReceiptOrderId(id);
     try {
-      await sendOrderReceipt({ orderId: id });
-      toast.success("Receipt email sent.");
-      void loadOrders();
+      const result = await sendOrderReceipt({ orderId: id });
+      if (result.sent) {
+        toast.success("Receipt email sent.");
+        void loadOrders();
+      } else {
+        toast.error(result.warning || "Receipt email could not be sent.");
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to send receipt email.";
       toast.error(message);

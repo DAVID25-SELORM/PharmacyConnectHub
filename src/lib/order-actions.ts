@@ -23,6 +23,7 @@ type ConfirmOrderPaymentResult = {
 
 type SendOrderReceiptResult = {
   sent: boolean;
+  warning?: string;
 };
 
 async function getRequiredSession() {
@@ -86,7 +87,13 @@ export async function confirmOrderPayment(
 export async function sendOrderReceipt(
   input: OrderReceiptActionInput,
 ): Promise<SendOrderReceiptResult> {
-  const data = await postWithSession<{ sent?: boolean }>("/api/orders/send-receipt", input);
+  const data = await postWithSession<{ sent?: boolean; warning?: string }>(
+    "/api/orders/send-receipt",
+    input,
+  );
 
-  return { sent: Boolean(data.sent) };
+  return {
+    sent: Boolean(data.sent),
+    warning: typeof data.warning === "string" ? data.warning : undefined,
+  };
 }
