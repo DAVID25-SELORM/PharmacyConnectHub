@@ -21,6 +21,7 @@ type ManagedOrder = {
   pharmacy: {
     owner_id: string;
     name: string;
+    public_email: string | null;
     city: string | null;
     region: string | null;
   } | null;
@@ -44,9 +45,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const publishableKey =
+    process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-  if (!supabaseUrl || !serviceKey) {
-    return res.status(500).json({ error: "Server misconfigured" });
+  if (!supabaseUrl || (!serviceKey && !publishableKey)) {
+    return res.status(500).json({
+      error:
+        "Server misconfigured. Add SUPABASE_URL and either SUPABASE_SERVICE_ROLE_KEY or SUPABASE_PUBLISHABLE_KEY.",
+    });
   }
 
   const authHeader = req.headers.authorization;
@@ -54,11 +60,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Missing authorization" });
   }
 
-  const admin = createClient(supabaseUrl, serviceKey);
+  const callerToken = authHeader.slice(7);
+  const admin = serviceKey
+    ? createClient(supabaseUrl, serviceKey, {
+        auth: {
+          storage: undefined,
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      })
+    : null;
+  const authClient =
+    admin ??
+    createClient(supabaseUrl, publishableKey as string, {
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+  const callerDb = createClient(supabaseUrl, (publishableKey ?? serviceKey) as string, {
+    accessToken: async () => callerToken,
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+
   const {
     data: { user: caller },
     error: authErr,
-  } = await admin.auth.getUser(authHeader.slice(7));
+  } = await authClient.auth.getUser(callerToken);
 
   if (authErr || !caller) {
     return res.status(401).json({ error: "Invalid token" });
@@ -69,10 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "orderId is required" });
   }
 
-  const { data: orderData, error: orderErr } = await admin
+  const { data: orderData, error: orderErr } = await callerDb
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(product_name,quantity,unit_price_ghs)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,public_email,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(product_name,quantity,unit_price_ghs)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -88,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let canManage = order.wholesaler.owner_id === caller.id;
   if (!canManage) {
-    const { data: staffAccess, error: staffAccessErr } = await admin
+    const { data: staffAccess, error: staffAccessErr } = await callerDb
       .from("business_staff")
       .select("role")
       .eq("business_id", order.wholesaler_id)
@@ -124,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const paymentConfirmedAt = new Date().toISOString();
-  const { error: updateOrderErr } = await admin
+  const { data: updatedOrder, error: updateOrderErr } = await callerDb
     .from("orders")
     .update({
       paid_at: order.paid_at ?? paymentConfirmedAt,
@@ -133,38 +166,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payment_status: "paid",
     })
     .eq("id", order.id)
-    .eq("wholesaler_id", order.wholesaler_id);
+    .eq("wholesaler_id", order.wholesaler_id)
+    .select("id")
+    .maybeSingle();
 
   if (updateOrderErr) {
     return res.status(500).json({ error: updateOrderErr.message });
   }
 
-  const {
-    data: { user: pharmacyOwner },
-    error: pharmacyOwnerErr,
-  } = await admin.auth.admin.getUserById(order.pharmacy.owner_id);
-
-  if (pharmacyOwnerErr) {
-    return res.status(200).json({
-      ok: true,
-      receiptSent: false,
-      warning:
-        pharmacyOwnerErr.message ||
-        "Payment was confirmed, but the receipt email could not be prepared.",
-    });
+  if (!updatedOrder) {
+    return res.status(403).json({ error: "Unable to confirm payment for this order" });
   }
 
-  if (!pharmacyOwner?.email) {
+  let receiptEmail = order.pharmacy.public_email?.trim() || "";
+  let receiptEmailWarning: string | undefined;
+
+  if (admin) {
+    const {
+      data: { user: pharmacyOwner },
+      error: pharmacyOwnerErr,
+    } = await admin.auth.admin.getUserById(order.pharmacy.owner_id);
+
+    if (pharmacyOwnerErr) {
+      receiptEmailWarning =
+        pharmacyOwnerErr.message ||
+        "Payment was confirmed, but the receipt email could not be prepared.";
+    } else if (pharmacyOwner?.email) {
+      receiptEmail = pharmacyOwner.email;
+    }
+  } else if (!receiptEmail) {
+    receiptEmailWarning =
+      "Payment was confirmed, but the service role key is not configured to look up the pharmacy account email.";
+  }
+
+  if (!receiptEmail) {
     return res.status(200).json({
       ok: true,
       receiptSent: false,
       warning:
+        receiptEmailWarning ||
         "Payment was confirmed, but the pharmacy account does not have an email address for the receipt.",
     });
   }
 
   const emailResult = await sendOrderReceiptEmail({
-    toEmail: pharmacyOwner.email,
+    toEmail: receiptEmail,
     toName: order.pharmacy.name,
     order: {
       orderId: order.id,
@@ -205,18 +251,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let warning: string | undefined;
 
   const receiptSentAt = new Date().toISOString();
-  const { error: receiptUpdateErr } = await admin
-    .from("orders")
-    .update({
-      receipt_sent_at: receiptSentAt,
-      receipt_sent_to: pharmacyOwner.email,
-    })
-    .eq("id", order.id);
+  const receiptUpdateResult = admin
+    ? await admin
+        .from("orders")
+        .update({
+          receipt_sent_at: receiptSentAt,
+          receipt_sent_to: receiptEmail,
+        })
+        .eq("id", order.id)
+    : await callerDb
+        .from("orders")
+        .update({
+          receipt_sent_at: receiptSentAt,
+          receipt_sent_to: receiptEmail,
+        })
+        .eq("id", order.id);
+  const receiptUpdateErr = receiptUpdateResult.error;
 
   if (receiptUpdateErr) {
     warning =
       "Payment was confirmed and the receipt email was sent, but receipt tracking could not be saved.";
-  } else {
+  } else if (admin) {
     const { error: notificationErr } = await admin.from("notifications").insert({
       user_id: order.pharmacy.owner_id,
       type: "receipt_sent",
@@ -227,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       metadata: {
         order_id: order.id,
         order_number: order.order_number,
-        receipt_sent_to: pharmacyOwner.email,
+        receipt_sent_to: receiptEmail,
       },
     });
 
@@ -235,6 +290,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       warning =
         "Payment was confirmed and the receipt email was sent, but the in-app receipt notification could not be saved.";
     }
+  } else {
+    warning =
+      receiptEmailWarning ||
+      "Payment was confirmed and the receipt email was sent, but the in-app receipt notification could not be saved because the service role key is not configured.";
   }
 
   return res.status(200).json({
