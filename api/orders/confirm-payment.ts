@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
-import { sendOrderReceiptEmail } from "../../src/lib/server/order-receipts";
+import { sendOrderReceiptEmail } from "../_order-receipts.js";
 
 type OrderStatus = "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
 type PaymentStatus = "unpaid" | "paid" | "refunded" | "failed";

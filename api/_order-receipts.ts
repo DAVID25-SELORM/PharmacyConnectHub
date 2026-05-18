@@ -288,21 +288,33 @@ export async function sendOrderReceiptEmail(
   const siteUrl = getSiteUrl(input.request);
   const loginUrl = siteUrl ? new URL("/login", `${siteUrl}/`).toString() : "";
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: `${fromName} <${fromEmail}>`,
-      to: [input.toEmail],
-      ...(replyTo ? { reply_to: replyTo } : {}),
-      subject: `Receipt for order ${input.order.orderNumber}`,
-      html: buildReceiptHtml(input, loginUrl),
-      text: buildReceiptText(input, loginUrl),
-    }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${fromName} <${fromEmail}>`,
+        to: [input.toEmail],
+        ...(replyTo ? { reply_to: replyTo } : {}),
+        subject: `Receipt for order ${input.order.orderNumber}`,
+        html: buildReceiptHtml(input, loginUrl),
+        text: buildReceiptText(input, loginUrl),
+      }),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? `Failed to contact the receipt email provider: ${error.message}`
+          : "Failed to contact the receipt email provider.",
+    };
+  }
 
   if (!response.ok) {
     let message = "Failed to send receipt email.";
