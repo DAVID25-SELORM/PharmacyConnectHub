@@ -8,6 +8,156 @@ export type Database = {
   };
   public: {
     Tables: {
+      product_categories: {
+        Row: { id: string; name: string };
+        Insert: { id?: string; name: string };
+        Update: { id?: string; name?: string };
+        Relationships: [];
+      };
+      master_products: {
+        Row: {
+          id: string;
+          identity_key: string;
+          name: string;
+          generic_name: string | null;
+          brand_name: string | null;
+          strength: string | null;
+          dosage_form: string | null;
+          pack_size: string | null;
+          category_id: string | null;
+          manufacturer: string | null;
+          product_code: string | null;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          identity_key: string;
+          name: string;
+          generic_name?: string | null;
+          brand_name?: string | null;
+          strength?: string | null;
+          dosage_form?: string | null;
+          pack_size?: string | null;
+          category_id?: string | null;
+          manufacturer?: string | null;
+          product_code?: string | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          identity_key?: string;
+          name?: string;
+          generic_name?: string | null;
+          brand_name?: string | null;
+          strength?: string | null;
+          dosage_form?: string | null;
+          pack_size?: string | null;
+          category_id?: string | null;
+          manufacturer?: string | null;
+          product_code?: string | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      wholesaler_products: {
+        Row: {
+          id: string;
+          wholesaler_id: string;
+          product_id: string;
+          selling_price: number;
+          minimum_order_quantity: number;
+          active: boolean;
+          lead_time_days: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          wholesaler_id: string;
+          product_id: string;
+          selling_price: number;
+          minimum_order_quantity?: number;
+          active?: boolean;
+          lead_time_days?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          wholesaler_id?: string;
+          product_id?: string;
+          selling_price?: number;
+          minimum_order_quantity?: number;
+          active?: boolean;
+          lead_time_days?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      product_import_runs: {
+        Row: {
+          id: string;
+          wholesaler_id: string;
+          created_by: string;
+          payload_hash: string;
+          result: Json;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          wholesaler_id: string;
+          created_by: string;
+          payload_hash: string;
+          result: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          wholesaler_id?: string;
+          created_by?: string;
+          payload_hash?: string;
+          result?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          activity: string;
+          organization: string | null;
+          performed_by: string | null;
+          performed_by_email: string | null;
+          record_type: string;
+          record_id: string | null;
+          record_label: string | null;
+          ip_address: string | null;
+          details: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          activity: string;
+          organization?: string | null;
+          performed_by?: string | null;
+          performed_by_email?: string | null;
+          record_type: string;
+          record_id?: string | null;
+          record_label?: string | null;
+          ip_address?: string | null;
+          details?: Json;
+          created_at?: string;
+        };
+        Update: { activity?: string; details?: Json };
+        Relationships: [];
+      };
       businesses: {
         Row: {
           address: string | null;
@@ -640,15 +790,16 @@ export type Database = {
         };
         Returns: Database["public"]["Enums"]["staff_role"];
       };
-      import_wholesaler_products: {
+      list_marketplace_catalogue: { Args: Record<PropertyKey, never>; Returns: Json };
+      preview_wholesaler_import: {
         Args: {
           _business_id: string;
           _products: Json;
+          _mode: string;
+          _confirm_token?: string;
+          _request_id?: string;
         };
-        Returns: {
-          inserted_count: number;
-          updated_count: number;
-        }[];
+        Returns: Json;
       };
       list_business_staff: {
         Args: {

@@ -48,3 +48,16 @@ The current checkout flow is cash on delivery only. No Express server or custom 
 ## 5. Smoke test
 
 After the migrations are applied, run the live verification checklist in [SMOKE_TEST.md](./SMOKE_TEST.md).
+
+## Inventory rollout (September 2026)
+
+Apply all prior migrations through `20260505090000_add_audit_logs.sql`, then:
+
+1. `20260913090000_safe_wholesaler_import.sql`
+2. `20260913100000_master_product_catalogue.sql`
+
+Deploy the matching frontend together with these migrations. The old import RPC is deliberately removed so stale clients cannot bypass confirmation; users with an old tab must refresh. The new pharmacy catalogue requires the second migration.
+
+Existing `products` records and order IDs remain intact. `master_products` supplies shared identities; `wholesaler_products` mirrors existing offers through a trigger. Legacy products remain authoritative for stock and prices during this bridge. Do not write offer prices directly. MOQ stays at 1 until commercial rules are enforced in checkout. No batch, reservation-ledger, document-renewal or tier-pricing cutover is included yet.
+
+Before production cutover, run the checks in [INVENTORY_ROLLOUT.md](./INVENTORY_ROLLOUT.md) against staging. These files have not been applied to the hosted database by this change.

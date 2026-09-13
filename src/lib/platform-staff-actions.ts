@@ -107,6 +107,9 @@ export async function invitePlatformStaff(
     throw new Error(data.error || "Failed to add platform staff");
   }
 
+  if (data.mode !== "invited" && data.mode !== "existing-account") {
+    throw new Error("The server returned an invalid staff invitation result");
+  }
   return { mode: data.mode };
 }
 

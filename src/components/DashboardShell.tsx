@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import logo from "@/assets/logo.jpg";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -49,7 +49,6 @@ function timeAgoShort(iso: string) {
 function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState<NotificationRow[]>([]);
-  const channelRef = useRef<RealtimeChannel | null>(null);
 
   const load = async () => {
     const {
@@ -66,12 +65,14 @@ function NotificationBell() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let channel: RealtimeChannel | null = null;
     void load();
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
-      const channel = supabase
-        .channel("notifications:" + session.user.id)
+      if (!session || cancelled) return;
+      channel = supabase
+        .channel(`notifications:${session.user.id}:${crypto.randomUUID()}`)
         .on(
           "postgres_changes",
           {
@@ -83,11 +84,11 @@ function NotificationBell() {
           () => void load(),
         )
         .subscribe();
-      channelRef.current = channel;
     });
 
     return () => {
-      if (channelRef.current) void supabase.removeChannel(channelRef.current);
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
     };
   }, []);
 

@@ -32,3 +32,6 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Local test databases and browser artifacts
+.tmp/

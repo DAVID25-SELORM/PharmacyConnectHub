@@ -28,7 +28,8 @@ export type ImportedProductDraft = {
   form: string;
   pack_size: string | null;
   price_ghs: number;
-  stock: number;
+  stock: number | null;
+  source_row: number;
   image_hue: number;
 };
 
@@ -116,6 +117,7 @@ function parseCsvLine(line: string, delimiter: string) {
     current += char;
   }
 
+  if (inQuotes) throw new Error("Unclosed quoted value. Use one complete product per row.");
   cells.push(current.trim());
   return cells;
 }
@@ -141,14 +143,19 @@ function alignCells(cells: string[], expectedLength: number) {
     return [...cells, ...Array.from({ length: expectedLength - cells.length }, () => "")];
   }
 
-  const overflow = cells.length - expectedLength + 1;
-  return [cells.slice(0, overflow).join(" "), ...cells.slice(overflow)];
+  throw new Error(
+    "A row has more columns than the headers. Quote values containing commas or use Excel.",
+  );
 }
 
 function buildRowsFromMatrix(matrix: string[][]) {
   const [headerRow, ...bodyRows] = matrix.filter((row) => row.some((cell) => cell.trim()));
   if (!headerRow || headerRow.length < 2) {
     return [];
+  }
+  const fields = headerRow.map(findImportField).filter(Boolean);
+  if (fields.length !== new Set(fields).size) {
+    throw new Error("Duplicate column headers detected. Use one column for each product field.");
   }
 
   return bodyRows.map((row) => {
@@ -163,8 +170,7 @@ function parseDelimitedText(text: string) {
   const lines = text
     .replace(/\r\n/g, "\n")
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line.trim());
 
   if (lines.length < 2) {
     return [];
@@ -187,18 +193,13 @@ async function rowsFromWorksheet(buffer: ArrayBuffer) {
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
     defval: "",
     raw: false,
   });
 
-  return rawRows.map((row) =>
-    Object.fromEntries(
-      Object.entries(row)
-        .filter(([header]) => !header.startsWith("__EMPTY"))
-        .map(([header, value]) => [header, String(value ?? "").trim()]),
-    ),
-  );
+  return buildRowsFromMatrix(matrix.map((row) => row.map((value) => String(value ?? "").trim())));
 }
 
 function splitPdfLine(line: string) {
@@ -295,12 +296,14 @@ function parseNumericValue(value: string, fallback: number) {
     return fallback;
   }
 
-  const normalized = value.replace(/[^\d.,-]/g, "").replace(/,/g, "");
-  const parsed = Number(normalized);
+  const normalized = value.trim().replace(/^(?:GH₵|GHS|GH¢)\s*/i, "");
+  if (!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(normalized)) return fallback;
+  const parsed = Number(normalized.replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): ProductImportResult {
+  if (rawRows.length > 5000) throw new Error("Import at most 5,000 products at a time.");
   const invalidRows: number[] = [];
   const products: ImportedProductDraft[] = [];
   const warnings: string[] = [];
@@ -316,13 +319,20 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
 
     const name = mappedRow.name?.trim() ?? "";
     const price = parseNumericValue(mappedRow.price_ghs ?? "", 0);
+    const stockText = mappedRow.stock?.trim() ?? "";
+    const stock = stockText ? parseNumericValue(stockText, NaN) : null;
     const isEmptyRow = Object.values(mappedRow).every((value) => !(value ?? "").trim());
 
     if (isEmptyRow) {
       return;
     }
 
-    if (!name || price <= 0) {
+    if (
+      !name ||
+      price <= 0 ||
+      price > 99999999.99 ||
+      (stock !== null && (!Number.isSafeInteger(stock) || stock < 0 || stock > 2147483647))
+    ) {
       invalidRows.push(index + 2);
       return;
     }
@@ -345,7 +355,8 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
       image_hue: Math.round(parseNumericValue(mappedRow.image_hue ?? "", hashHue(name))),
       pack_size: mappedRow.pack_size?.trim() || null,
       price_ghs: price,
-      stock: Math.max(0, Math.round(parseNumericValue(mappedRow.stock ?? "", 0))),
+      stock,
+      source_row: index + 2,
     });
   });
 

@@ -41,7 +41,11 @@ import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
-import { parseProductImportFile, parseProductImportText } from "@/lib/product-import";
+import {
+  parseProductImportFile,
+  parseProductImportText,
+  type ProductImportResult,
+} from "@/lib/product-import";
 import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
@@ -1098,6 +1102,22 @@ function DeleteProductDialog({
   );
 }
 
+type ImportPreview = {
+  token: string;
+  rows: {
+    row: number;
+    name: string;
+    kind: "new" | "existing";
+    price_before: number | null;
+    price_after: number;
+    stock_before: number | null;
+    stock_after: number;
+  }[];
+  issues: { row: number; message: string }[];
+  inserted_count?: number;
+  updated_count?: number;
+};
+
 function BulkUploadDialog({
   businessId,
   reload,
@@ -1110,6 +1130,16 @@ function BulkUploadDialog({
   const [file, setFile] = useState<File | null>(null);
   const [pasteText, setPasteText] = useState("");
   const [sourceMode, setSourceMode] = useState<"file" | "paste">("file");
+
+  const [mode, setMode] = useState<"replace" | "add" | "details">("replace");
+  const [parsed, setParsed] = useState<ProductImportResult | null>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const invalidatePreview = () => {
+    setPreview(null);
+    setParsed(null);
+    setRequestId(null);
+  };
 
   const downloadTemplate = () => {
     const csvContent = `name,brand,category,form,pack_size,price_ghs,stock,image_hue
@@ -1127,12 +1157,15 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
   };
 
   const resetForm = () => {
+    invalidatePreview();
+    setMode("replace");
     setFile(null);
     setPasteText("");
     setSourceMode("file");
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (uploading) return;
     setOpen(nextOpen);
     if (!nextOpen && !uploading) {
       resetForm();
@@ -1157,48 +1190,52 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
           ? await parseProductImportFile(file)
           : parseProductImportText(pasteText);
 
+      setParsed(result);
+      setRequestId(crypto.randomUUID());
       if (result.products.length === 0) {
-        toast.error("No valid products were detected. Use the template headers and try again.");
+        setPreview({ token: "", rows: [], issues: [] });
         return;
       }
-
-      if (result.invalidRows.length > 0) {
-        const preview = result.invalidRows.slice(0, 8).join(", ");
-        const suffix = result.invalidRows.length > 8 ? "..." : "";
-        toast.error(
-          `Rows ${preview}${suffix} are missing a valid name or price. Fix them and retry.`,
-        );
-        return;
-      }
-
-      const { data, error } = await supabase.rpc("import_wholesaler_products", {
+      const { data, error } = await supabase.rpc("preview_wholesaler_import", {
         _business_id: businessId,
         _products: result.products,
+        _mode: mode,
       });
-
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-
-      const summary = data?.[0] ?? { inserted_count: 0, updated_count: 0 };
-      const insertedCount = summary.inserted_count ?? 0;
-      const updatedCount = summary.updated_count ?? 0;
-      const importedTotal = insertedCount + updatedCount;
-
-      toast.success(
-        importedTotal === 0
-          ? `No product changes were needed from ${result.sourceLabel}.`
-          : `Imported ${importedTotal} product(s) from ${result.sourceLabel}: ${insertedCount} new, ${updatedCount} updated.`,
-      );
-      if (result.warnings[0]) {
-        toast.warning(result.warnings[0]);
-      }
-
-      handleOpenChange(false);
-      void reload();
+      if (error) throw error;
+      setPreview(data as unknown as ImportPreview);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to import products.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!preview || !parsed || !requestId || uploading) return;
+    setUploading(true);
+    try {
+      const { data, error } = await supabase.rpc("preview_wholesaler_import", {
+        _business_id: businessId,
+        _products: parsed.products,
+        _mode: mode,
+        _confirm_token: preview.token,
+        _request_id: requestId,
+      });
+      if (error) throw error;
+      const result = data as unknown as ImportPreview;
+      toast.success(
+        `Imported: ${result.inserted_count ?? 0} new, ${result.updated_count ?? 0} updated.`,
+      );
+      setOpen(false);
+      resetForm();
+      void reload();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : ((error as { message?: string }).message ??
+              "Import failed. You can retry confirmation safely."),
+      );
     } finally {
       setUploading(false);
     }
@@ -1211,7 +1248,7 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
           <Upload className="h-4 w-4" /> Bulk upload
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Bulk upload products</DialogTitle>
           <DialogDescription>
@@ -1219,7 +1256,35 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
             available from the inventory screen.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <fieldset disabled={uploading} className="space-y-4 disabled:opacity-70">
+          <div className="space-y-2">
+            <Label>Stock import mode</Label>
+            <Select
+              value={mode}
+              disabled={uploading}
+              onValueChange={(value) => {
+                setMode(value as typeof mode);
+                invalidatePreview();
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="replace">Replace stock</SelectItem>
+                <SelectItem value="add">Add to stock</SelectItem>
+                <SelectItem value="details">Update product details only</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {mode === "replace"
+                ? "Entered quantities replace available stock. Blank quantities preserve existing stock; new products start at zero."
+                : mode === "add"
+                  ? "Entered quantities are added to available stock. Blank quantities leave stock unchanged."
+                  : "Prices and product details are updated. Existing stock is preserved; new products start at zero regardless of the supplied quantity."}{" "}
+              Existing inactive products remain inactive. Maximum 5,000 products per import.
+            </p>
+          </div>
           <div className="rounded-xl border border-border bg-muted/30 p-4">
             <h4 className="mb-2 text-sm font-medium">Step 1: Download template</h4>
             <p className="mb-3 text-xs text-muted-foreground">
@@ -1248,7 +1313,10 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
             <h4 className="mb-3 text-sm font-medium">Step 3: Import products</h4>
             <Tabs
               value={sourceMode}
-              onValueChange={(value) => setSourceMode(value as "file" | "paste")}
+              onValueChange={(value) => {
+                setSourceMode(value as "file" | "paste");
+                invalidatePreview();
+              }}
             >
               <TabsList className="mb-4 grid w-full grid-cols-2">
                 <TabsTrigger value="file">Upload file</TabsTrigger>
@@ -1258,7 +1326,10 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
                 <Input
                   type="file"
                   accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    setFile(e.target.files?.[0] || null);
+                    invalidatePreview();
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">
                   Accepted: CSV, TSV, TXT, XLSX, XLS, PDF
@@ -1273,7 +1344,10 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
                 <Textarea
                   rows={8}
                   value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
+                  onChange={(e) => {
+                    setPasteText(e.target.value);
+                    invalidatePreview();
+                  }}
                   placeholder={`name,brand,category,form,pack_size,price_ghs,stock
 Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500`}
                 />
@@ -1283,19 +1357,112 @@ Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500`}
               </TabsContent>
             </Tabs>
           </div>
-        </div>
+        </fieldset>
+        {preview && parsed && (
+          <section className="space-y-3" aria-label="Import preview">
+            <h3 className="font-semibold">Import preview</h3>
+            <p className="text-sm">
+              {preview.rows.filter((row) => row.kind === "new").length} new products;{" "}
+              {preview.rows.filter((row) => row.kind === "existing").length} existing products;{" "}
+              {
+                preview.rows.filter(
+                  (row) => row.kind === "existing" && row.price_before !== row.price_after,
+                ).length
+              }{" "}
+              price changes;{" "}
+              {preview.rows.filter((row) => (row.stock_before ?? 0) !== row.stock_after).length}{" "}
+              stock changes.
+            </p>
+            {parsed.invalidRows.length > 0 && (
+              <p role="alert" className="text-sm text-destructive">
+                Invalid rows: {parsed.invalidRows.join(", ")}. Each row needs a name, positive price
+                and a blank or non-negative whole stock quantity.
+              </p>
+            )}
+            {preview.issues.map((issue, index) => (
+              <p role="alert" className="text-sm text-destructive" key={index}>
+                Row {issue.row}: {issue.message}
+              </p>
+            ))}
+            {parsed.warnings.map((warning) => (
+              <p className="text-sm text-amber-700" key={warning}>
+                {warning}
+              </p>
+            ))}
+            {preview.rows.length === 0 && (
+              <p>No valid products detected. Check the template headers and values.</p>
+            )}
+            <div className="max-h-64 overflow-auto rounded border">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr>
+                    <th className="p-2">Row / product</th>
+                    <th className="p-2">Match</th>
+                    <th className="p-2">Price (GHS)</th>
+                    <th className="p-2">Available stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((row) => (
+                    <tr key={row.row} className="border-t">
+                      <td className="p-2">
+                        {row.row}. {row.name}
+                      </td>
+                      <td className="p-2">{row.kind}</td>
+                      <td className="p-2">
+                        {row.price_before === null ? "New" : formatGHS(row.price_before)} to{" "}
+                        {formatGHS(row.price_after)}
+                      </td>
+                      <td className="p-2">
+                        {row.stock_before ?? "New"} to {row.stock_after}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Nothing has been saved. Fix invalid or duplicate rows before confirming. If inventory
+              changes, refresh the preview.
+            </p>
+          </section>
+        )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={uploading}
+            onClick={() => handleOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button
             type="button"
             variant="hero"
-            onClick={onUpload}
+            onClick={() => {
+              invalidatePreview();
+              void onUpload();
+            }}
             disabled={uploading || (sourceMode === "file" ? !file : !pasteText.trim())}
           >
-            {uploading && <Loader2 className="h-4 w-4 animate-spin" />} Import products
+            {uploading && <Loader2 className="h-4 w-4 animate-spin" />}{" "}
+            {preview ? "Refresh preview" : "Preview import"}
           </Button>
+          {preview && (
+            <Button
+              type="button"
+              onClick={confirmImport}
+              disabled={
+                uploading ||
+                !preview.token ||
+                preview.rows.length === 0 ||
+                preview.issues.length > 0 ||
+                !!parsed?.invalidRows.length
+              }
+            >
+              Confirm Import
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
