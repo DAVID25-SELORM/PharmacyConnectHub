@@ -1,3 +1,4 @@
+import { OrderPrintButton } from "@/components/OrderPrintButton";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useState } from "react";
 import {
@@ -58,7 +59,7 @@ import {
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
     meta: [
-      { title: "Wholesaler Dashboard — PharmaHub GH" },
+      { title: "Wholesaler Dashboard — DrugXone" },
       { name: "description", content: "Manage inventory, receive orders, update fulfilment." },
     ],
   }),
@@ -168,7 +169,7 @@ function WholesalerDashboard() {
   }, [businessId]);
 
   const updateOrderStatus = async (id: string, status: OrderStatus) => {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+    const { error } = await supabase.rpc("transition_order", { _order_id: id, _status: status });
     if (error) {
       toast.error(error.message);
       return;
@@ -178,10 +179,11 @@ function WholesalerDashboard() {
   };
 
   const cancelOrder = async (id: string, reason: string) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "cancelled", cancellation_reason: reason })
-      .eq("id", id);
+    const { error } = await supabase.rpc("transition_order", {
+      _order_id: id,
+      _status: "cancelled",
+      _reason: reason,
+    });
     if (error) {
       toast.error(error.message);
       return;
@@ -447,6 +449,7 @@ function OrdersInbox({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              <OrderPrintButton orderId={o.id} />
               {canManageOrders && (o.status === "pending" || o.status === "accepted") && (
                 <CancelOrderDialog
                   orderNumber={o.order_number}

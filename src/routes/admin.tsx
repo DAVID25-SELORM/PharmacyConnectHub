@@ -40,7 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "Admin - PharmaHub GH" }],
+    meta: [{ title: "Admin - DrugXone" }],
   }),
   component: AdminPanel,
 });
@@ -298,7 +298,10 @@ function mapAuditLogs(rows: AuditLogRow[]): ActivityItem[] {
       id: row.id,
       timestamp: row.created_at,
       activity: row.activity,
-      organization: row.organization ?? "PharmaHub GH",
+      organization:
+        !row.organization || /^pharma\s?hub(?: gh)?$/i.test(row.organization)
+          ? "DrugXone"
+          : row.organization,
       performedBy: row.performed_by_email ?? "System",
       record: row.record_label ?? row.record_type,
       ipAddress: row.ip_address ?? "Not captured",
@@ -1366,7 +1369,7 @@ function BusinessCard({
                         license_number: event.target.value,
                       }))
                     }
-                    placeholder="PHA-2024-001"
+                    placeholder="Registration or licence number"
                   />
                 </div>
 
@@ -1378,7 +1381,7 @@ function BusinessCard({
                     onChange={(event) =>
                       setEditForm((current) => ({ ...current, phone: event.target.value }))
                     }
-                    placeholder="+233 24 000 0000"
+                    placeholder="Ghana phone number"
                   />
                 </div>
 
@@ -1394,7 +1397,7 @@ function BusinessCard({
                         public_email: event.target.value,
                       }))
                     }
-                    placeholder="hello@business.com"
+                    placeholder="Public business email"
                   />
                 </div>
 
@@ -1445,7 +1448,7 @@ function BusinessCard({
                     onChange={(event) =>
                       setEditForm((current) => ({ ...current, address: event.target.value }))
                     }
-                    placeholder="GA-123-4567"
+                    placeholder="Registered GPS address"
                   />
                 </div>
 
@@ -1504,7 +1507,7 @@ function BusinessCard({
                         owner_phone: event.target.value,
                       }))
                     }
-                    placeholder="+233 24 000 0000"
+                    placeholder="Ghana phone number"
                   />
                 </div>
 
@@ -1520,7 +1523,7 @@ function BusinessCard({
                         owner_email: event.target.value,
                       }))
                     }
-                    placeholder="owner@business.com"
+                    placeholder="Owner email address"
                   />
                 </div>
               </div>
@@ -1593,7 +1596,7 @@ function BusinessCard({
                           superintendent_phone: event.target.value,
                         }))
                       }
-                      placeholder="+233 24 000 0000"
+                      placeholder="Ghana phone number"
                       disabled={editForm.owner_is_superintendent}
                     />
                   </div>
@@ -1612,7 +1615,7 @@ function BusinessCard({
                           superintendent_email: event.target.value,
                         }))
                       }
-                      placeholder="superintendent@business.com"
+                      placeholder="Superintendent email address"
                       disabled={editForm.owner_is_superintendent}
                     />
                   </div>

@@ -20,13 +20,13 @@ import heroImage from "@/assets/hero-pharma.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "PharmaHub GH — B2B Pharmaceutical Marketplace for Ghana" },
+      { title: "DrugXone — B2B Pharmaceutical Marketplace for Ghana" },
       {
         name: "description",
         content:
           "Connect retail pharmacies with verified pharmaceutical wholesalers across Ghana. Browse, compare, and order medicines in one place.",
       },
-      { property: "og:title", content: "PharmaHub GH — B2B Pharmaceutical Marketplace" },
+      { property: "og:title", content: "DrugXone — B2B Pharmaceutical Marketplace" },
       {
         property: "og:description",
         content: "Ghana's trusted multi-wholesaler pharma marketplace.",
@@ -42,7 +42,6 @@ function LandingPage() {
       <SiteHeader />
       <main>
         <Hero />
-        <TrustBar />
         <Features />
         <HowItWorks />
         <DualCTA />
@@ -75,8 +74,8 @@ function Hero() {
               <span className="text-gradient-hero">pharmacies meet wholesalers</span>.
             </h1>
             <p className="mt-6 max-w-xl text-lg text-muted-foreground">
-              Browse thousands of medicines from verified wholesalers across Ghana, compare prices
-              instantly, and place orders in minutes — not phone calls.
+              Browse medicines from verified wholesalers across Ghana, compare prices instantly, and
+              place orders in minutes — not phone calls.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild variant="hero" size="xl">
@@ -90,10 +89,10 @@ function Hero() {
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success" /> FDA-verified suppliers
+                <CheckCircle2 className="h-4 w-4 text-success" /> Verified business accounts
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success" /> Same-day dispatch in Accra
+                <CheckCircle2 className="h-4 w-4 text-success" /> Order status tracking
               </div>
             </div>
           </motion.div>
@@ -117,14 +116,14 @@ function Hero() {
               className="absolute -left-4 top-8 sm:-left-8"
               icon={<ShieldCheck className="h-5 w-5 text-success" />}
               title="Verified"
-              subtitle="240+ wholesalers"
+              subtitle="Business verification"
               delay={0.4}
             />
             <FloatingCard
               className="absolute -right-4 bottom-8 sm:-right-6"
               icon={<Truck className="h-5 w-5 text-accent" />}
-              title="Fast delivery"
-              subtitle="Avg. 6 hours"
+              title="Order tracking"
+              subtitle="Follow fulfilment status"
               delay={0.6}
             />
           </motion.div>
@@ -163,52 +162,27 @@ function FloatingCard({
   );
 }
 
-function TrustBar() {
-  const items = [
-    { value: "240+", label: "Verified wholesalers" },
-    { value: "12k+", label: "SKUs available" },
-    { value: "98%", label: "On-time delivery" },
-    { value: "16 regions", label: "Nationwide coverage" },
-  ];
-  return (
-    <section className="border-y border-border bg-surface">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
-          {items.map((it) => (
-            <div key={it.label} className="text-center">
-              <div className="font-display text-3xl font-bold text-primary">{it.value}</div>
-              <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">
-                {it.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function Features() {
   const features = [
     {
       icon: Search,
       title: "Compare across wholesalers",
-      desc: "See prices, stock and ratings from multiple verified suppliers in one search.",
+      desc: "See prices and stock from multiple verified suppliers in one search.",
     },
     {
       icon: ShieldCheck,
       title: "Verified & authentic",
-      desc: "Every wholesaler is FDA-registered. Avoid counterfeits, protect your patients.",
+      desc: "Review supplier information and purchase from approved business accounts.",
     },
     {
       icon: Wallet,
       title: "Smart procurement",
-      desc: "Pick the best price, save your reorder lists, and track every spend.",
+      desc: "Compare available offers and keep a record of your orders.",
     },
     {
       icon: Truck,
       title: "Fast, tracked delivery",
-      desc: "Same-day dispatch in major cities, with full status tracking end-to-end.",
+      desc: "Follow order progress from acceptance through delivery.",
     },
   ];
   return (
@@ -219,7 +193,7 @@ function Features() {
             Built for the way pharmacies actually buy
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Stop juggling WhatsApp orders and scattered price lists. PharmaHub brings the wholesale
+            Stop juggling WhatsApp orders and scattered price lists. DrugXone brings the wholesale
             catalog into one clean workspace.
           </p>
         </div>

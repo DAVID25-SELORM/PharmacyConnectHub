@@ -386,6 +386,7 @@ export type Database = {
           order_id: string;
           product_id: string;
           product_name: string;
+          product_details: Json | null;
           quantity: number;
           unit_price_ghs: number;
         };
@@ -394,6 +395,7 @@ export type Database = {
           order_id: string;
           product_id: string;
           product_name: string;
+          product_details?: Json | null;
           quantity: number;
           unit_price_ghs: number;
         };
@@ -698,6 +700,18 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_order_print: { Args: { _business_id: string; _order_id: string }; Returns: Json };
+      transition_order: {
+        Args: {
+          _order_id: string;
+          _status: Database["public"]["Enums"]["order_status"];
+          _reason?: string;
+        };
+        Returns: undefined;
+      };
+      confirm_order_payment: { Args: { _order_id: string }; Returns: string };
+      accept_business_invitations: { Args: Record<PropertyKey, never>; Returns: number };
+
       add_business_staff_by_email: {
         Args: {
           _business_id: string;

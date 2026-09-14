@@ -1,3 +1,4 @@
+import { PLATFORM } from "@/lib/platform";
 import { Link } from "@tanstack/react-router";
 import { Pill } from "lucide-react";
 
@@ -11,7 +12,7 @@ export function SiteFooter() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-hero">
                 <Pill className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-display font-bold">PharmaHub GH</span>
+              <span className="font-display font-bold">{PLATFORM.name}</span>
             </Link>
             <p className="mt-3 max-w-md text-sm text-muted-foreground">
               Ghana's trusted B2B pharmaceutical marketplace. Connecting retail pharmacies with
@@ -41,14 +42,20 @@ export function SiteFooter() {
           <div>
             <h4 className="font-semibold text-sm">Company</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>Accra, Ghana</li>
-              <li>hello@pharmahub.gh</li>
-              <li>+233 20 000 0000</li>
+              <li>{PLATFORM.company}</li>
+              <li>{PLATFORM.contactPerson}</li>
+              <li>
+                <a href={`mailto:${PLATFORM.email}`}>{PLATFORM.email}</a>
+              </li>
+              <li>
+                <a href={`tel:${PLATFORM.phone}`}>{PLATFORM.phone}</a>
+              </li>
             </ul>
           </div>
         </div>
         <div className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
-          © {new Date().getFullYear()} PharmaHub GH. All rights reserved.
+          © {new Date().getFullYear()} {PLATFORM.name}. All rights reserved. Powered by{" "}
+          {PLATFORM.company}.
         </div>
       </div>
     </footer>

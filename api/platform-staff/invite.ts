@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 function firstHeaderValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -48,7 +48,7 @@ function getInviteRedirectUrl(req: VercelRequest, path: string) {
   return undefined;
 }
 
-async function hasBusinessAccess(admin: ReturnType<typeof createClient>, userId: string) {
+async function hasBusinessAccess(admin: SupabaseClient, userId: string) {
   const [{ data: ownedBusiness }, { data: activeBusinessStaff }] = await Promise.all([
     admin.from("businesses").select("id").eq("owner_id", userId).limit(1).maybeSingle(),
     admin

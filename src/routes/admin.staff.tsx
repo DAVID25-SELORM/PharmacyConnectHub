@@ -47,7 +47,7 @@ import { shouldShowPrivateTeamGuidance } from "@/lib/private-team-guidance";
 
 export const Route = createFileRoute("/admin/staff")({
   head: () => ({
-    meta: [{ title: "Platform Team - PharmaHub GH" }],
+    meta: [{ title: "Platform Team - DrugXone" }],
   }),
   component: PlatformStaffManagement,
 });
@@ -154,7 +154,7 @@ function PlatformStaffManagement() {
       businessId: workspace.id,
     }));
 
-    return [{ kind: "platform", label: "PharmaHub Admin", value: "platform" }, ...businessTargets];
+    return [{ kind: "platform", label: "DrugXone Admin", value: "platform" }, ...businessTargets];
   }, [businesses]);
 
   useEffect(() => {
@@ -390,7 +390,7 @@ function PlatformStaffManagement() {
               Platform Team
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Manage who can access the PharmaHub Admin interface.
+              Manage who can access the DrugXone Admin interface.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -597,7 +597,7 @@ function PlatformStaffManagement() {
                       <Label htmlFor="edit-full-name">Full Name</Label>
                       <Input
                         id="edit-full-name"
-                        placeholder="Jane Doe"
+                        placeholder="Full name"
                         value={editForm.fullName}
                         onChange={(event) =>
                           setEditForm((current) => ({ ...current, fullName: event.target.value }))
@@ -609,7 +609,7 @@ function PlatformStaffManagement() {
                       <Input
                         id="edit-phone"
                         type="tel"
-                        placeholder="+233..."
+                        placeholder="Phone number"
                         value={editForm.phone}
                         onChange={(event) =>
                           setEditForm((current) => ({ ...current, phone: event.target.value }))
@@ -623,7 +623,7 @@ function PlatformStaffManagement() {
                     <Input
                       id="edit-email"
                       type="email"
-                      placeholder="admin@example.com"
+                      placeholder="Administrator email address"
                       value={editForm.email}
                       onChange={(event) =>
                         setEditForm((current) => ({ ...current, email: event.target.value }))
@@ -717,7 +717,7 @@ function PlatformStaffManagement() {
               <DialogTitle>Add Staff</DialogTitle>
               <DialogDescription>
                 {showPrivateTeamGuidance
-                  ? "Choose the interface first. Platform staff stay inside PharmaHub Admin, while business staff stay inside the selected workspace."
+                  ? "Choose the interface first. Platform staff stay inside DrugXone Admin, while business staff stay inside the selected workspace."
                   : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>
@@ -746,7 +746,7 @@ function PlatformStaffManagement() {
                 <Input
                   id="invite-email"
                   type="email"
-                  placeholder="staff@example.com"
+                  placeholder="Staff email address"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />

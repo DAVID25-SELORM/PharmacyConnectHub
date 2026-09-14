@@ -157,18 +157,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const paymentConfirmedAt = new Date().toISOString();
-  const { data: updatedOrder, error: updateOrderErr } = await callerDb
-    .from("orders")
-    .update({
-      paid_at: order.paid_at ?? paymentConfirmedAt,
-      payment_confirmed_at: paymentConfirmedAt,
-      payment_confirmed_by: caller.id,
-      payment_status: "paid",
-    })
-    .eq("id", order.id)
-    .eq("wholesaler_id", order.wholesaler_id)
-    .select("id")
-    .maybeSingle();
+  const { data: updatedOrder, error: updateOrderErr } = await callerDb.rpc(
+    "confirm_order_payment",
+    { _order_id: order.id },
+  );
 
   if (updateOrderErr) {
     return res.status(500).json({ error: updateOrderErr.message });

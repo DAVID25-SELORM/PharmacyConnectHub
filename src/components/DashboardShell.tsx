@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import logo from "@/assets/logo.jpg";
+const logo = "/drugxone-mark.svg";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -205,10 +205,10 @@ export function DashboardHeader({
               <Home className="h-4 w-4" />
             </Button>
             <Link to="/" className="flex min-w-0 items-center gap-2">
-              <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
+              <img src={logo} alt="DrugXone" className="h-9 w-9 rounded-xl object-contain" />
               <div className="hidden min-w-0 sm:block">
                 <div className="truncate font-display text-base font-bold leading-none">
-                  Pharma<span className="text-primary">Hub GH</span>
+                  Drug<span className="text-primary">Xone</span>
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
               </div>

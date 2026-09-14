@@ -10,7 +10,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:db": "node --test tests/database/phase0.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:print-ui": "node tests/browser/order-print.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -72,17 +75,21 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.16.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vercel/node": "^5.7.12",
     "@vitejs/plugin-react": "^5.0.4",
+    "embedded-postgres": "^17.9.0-beta.16",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "pg": "^8.23.0",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",

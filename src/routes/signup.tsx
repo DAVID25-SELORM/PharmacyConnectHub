@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { z } from "zod";
-import logo from "@/assets/logo.jpg";
+const logo = "/drugxone-mark.svg";
 import { supabase } from "@/integrations/supabase/client";
 import { GH_REGIONS } from "@/lib/format";
 import { formatGhanaPhone, isValidGhanaPhone, normalizeGhanaPhone } from "@/lib/ghana-phone";
@@ -26,7 +26,7 @@ import { getAppUrl } from "@/lib/site-url";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Create account - PharmaHub GH" },
+      { title: "Create account - DrugXone" },
       { name: "description", content: "Join Ghana's B2B pharmaceutical marketplace." },
     ],
   }),
@@ -186,9 +186,9 @@ function SignupPage() {
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4 py-10">
       <div className="w-full max-w-3xl">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
+          <img src={logo} alt="DrugXone" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            Pharma<span className="text-primary">Hub GH</span>
+            Drug<span className="text-primary">Xone</span>
           </span>
         </Link>
 
@@ -258,7 +258,9 @@ function SignupPage() {
                       value={form.businessName}
                       onChange={(e) => update("businessName", e.target.value)}
                       placeholder={
-                        role === "pharmacy" ? "e.g. Goodlife Pharmacy" : "e.g. PharmaHub Wholesale"
+                        role === "pharmacy"
+                          ? "Registered pharmacy name"
+                          : "Registered wholesaler name"
                       }
                       required
                     />
@@ -273,7 +275,7 @@ function SignupPage() {
                       value={form.businessPhone}
                       onChange={(e) => update("businessPhone", e.target.value)}
                       onBlur={() => formatPhoneField("businessPhone")}
-                      placeholder="+233 24 000 0000 or 024 000 0000"
+                      placeholder="Ghana phone number"
                       required
                       autoComplete="tel"
                     />
@@ -290,7 +292,7 @@ function SignupPage() {
                       type="email"
                       value={form.businessEmail}
                       onChange={(e) => update("businessEmail", e.target.value)}
-                      placeholder="hello@business.gh"
+                      placeholder="Public business email"
                       required
                       autoComplete="email"
                     />
@@ -305,7 +307,11 @@ function SignupPage() {
                       id="license"
                       value={form.licenseNumber}
                       onChange={(e) => update("licenseNumber", e.target.value)}
-                      placeholder={role === "pharmacy" ? "PCG-12345" : "REG-12345"}
+                      placeholder={
+                        role === "pharmacy"
+                          ? "Pharmacy licence number"
+                          : "Wholesaler registration number"
+                      }
                       required
                     />
                   </div>
@@ -346,7 +352,7 @@ function SignupPage() {
                       id="gpsAddress"
                       value={form.gpsAddress}
                       onChange={(e) => update("gpsAddress", e.target.value)}
-                      placeholder="GA-123-4567"
+                      placeholder="Registered GPS address"
                     />
                   </div>
                   <div className="space-y-2">
@@ -430,7 +436,7 @@ function SignupPage() {
                         onBlur={() =>
                           !form.ownerIsSuperintendent && formatPhoneField("superintendentPhone")
                         }
-                        placeholder="+233 24 000 0000 or 024 000 0000"
+                        placeholder="Ghana phone number"
                         disabled={form.ownerIsSuperintendent}
                         required={!form.ownerIsSuperintendent}
                         autoComplete="tel"
@@ -445,7 +451,7 @@ function SignupPage() {
                       type="email"
                       value={superintendentDetails.email}
                       onChange={(e) => update("superintendentEmail", e.target.value)}
-                      placeholder="superintendent@business.gh"
+                      placeholder="Superintendent email address"
                       disabled={form.ownerIsSuperintendent}
                       required={!form.ownerIsSuperintendent}
                       autoComplete="email"
@@ -482,7 +488,7 @@ function SignupPage() {
                       value={form.ownerPhone}
                       onChange={(e) => update("ownerPhone", e.target.value)}
                       onBlur={() => formatPhoneField("ownerPhone")}
-                      placeholder="+233 24 000 0000 or 024 000 0000"
+                      placeholder="Ghana phone number"
                       required
                       autoComplete="tel"
                     />
@@ -497,7 +503,7 @@ function SignupPage() {
                       type="email"
                       value={form.ownerEmail}
                       onChange={(e) => update("ownerEmail", e.target.value)}
-                      placeholder="owner@business.gh"
+                      placeholder="Owner email address"
                       required
                       autoComplete="email"
                     />

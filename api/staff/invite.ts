@@ -1,14 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-function firstHeaderValue(value: string | string[] | undefined) {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return value;
-}
-
 function normalizeSiteUrl(value: string | undefined) {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -23,17 +15,11 @@ function normalizeSiteUrl(value: string | undefined) {
 }
 
 function getInviteRedirectUrl(req: VercelRequest, path: string) {
-  const forwardedHost = firstHeaderValue(req.headers["x-forwarded-host"]);
-  const forwardedProto = firstHeaderValue(req.headers["x-forwarded-proto"]) ?? "https";
-  const fallbackHost = forwardedHost ?? firstHeaderValue(req.headers.host);
-
   const siteUrlCandidates = [
     process.env.SITE_URL,
     process.env.VITE_SITE_URL,
     process.env.VERCEL_PROJECT_PRODUCTION_URL,
     process.env.VERCEL_URL,
-    firstHeaderValue(req.headers.origin),
-    fallbackHost ? `${forwardedProto}://${fallbackHost}` : undefined,
   ];
 
   for (const candidate of siteUrlCandidates) {
@@ -107,46 +93,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 5. Look up existing user by email via RPC (avoids loading all users)
-  const { data: existingUserId } = await admin.rpc("lookup_user_id_by_email", {
+  const { data: existingUserId, error: lookupError } = await admin.rpc("lookup_user_id_by_email", {
     _email: normalizedEmail,
   });
 
+  if (lookupError) return res.status(500).json({ error: "Unable to verify invitation recipient" });
+
   if (existingUserId) {
-    const { data: platformConflict, error: platformConflictErr } = await admin
-      .from("platform_staff")
-      .select("id")
-      .eq("user_id", existingUserId)
-      .in("status", ["active", "pending"])
-      .limit(1)
-      .maybeSingle();
-
-    if (platformConflictErr) {
-      return res.status(500).json({ error: platformConflictErr.message });
-    }
-
-    if (platformConflict) {
-      return res.status(400).json({
-        error:
-          "This person already has platform admin access. Keep platform staff and business staff separate.",
-      });
-    }
-
-    const { error: staffErr } = await admin.from("business_staff").upsert(
-      {
-        business_id: businessId,
-        user_id: existingUserId,
-        role,
-        status: "active",
-        invited_by: caller.id,
-        joined_at: new Date().toISOString(),
-      },
-      { onConflict: "business_id,user_id" },
-    );
-
-    if (staffErr) {
-      return res.status(400).json({ error: staffErr.message });
-    }
-    return res.status(200).json({ mode: "existing-account" });
+    return res.status(409).json({
+      error:
+        "Existing accounts cannot be attached automatically. Use a new staff invitation; existing-account invitations require an account acceptance workflow.",
+    });
   }
 
   // 6. User does not exist yet — invite them into the password setup flow

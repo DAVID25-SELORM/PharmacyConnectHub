@@ -46,7 +46,7 @@ import {
 
 export const Route = createFileRoute("/staff")({
   head: () => ({
-    meta: [{ title: "Team - PharmaHub GH" }],
+    meta: [{ title: "Team - DrugXone" }],
   }),
   component: StaffManagement,
 });
@@ -114,7 +114,7 @@ function getEditableStatuses(member: StaffMember): StaffStatus[] {
   }
 
   if (member.status === "pending") {
-    return ["pending", "active", "inactive"];
+    return ["pending", "inactive"];
   }
 
   if (member.status === "inactive") {
@@ -154,7 +154,7 @@ function StaffManagement() {
     if (roles.includes("admin")) {
       return [
         ...businessTargets,
-        { kind: "platform" as const, label: "PharmaHub Admin", value: "platform" },
+        { kind: "platform" as const, label: "DrugXone Admin", value: "platform" },
       ];
     }
 
@@ -241,7 +241,7 @@ function StaffManagement() {
         });
         toast.success(
           result.mode === "invited"
-            ? "Platform invite sent. They will finish setup inside PharmaHub Admin."
+            ? "Platform invite sent. They will finish setup inside DrugXone Admin."
             : "Platform staff added successfully.",
         );
         navigate({ to: "/admin/staff" });
@@ -583,13 +583,9 @@ function StaffManagement() {
                               </Button>
                             )}
                             {member.status === "pending" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleActivate(member)}
-                              >
-                                Activate
-                              </Button>
+                              <span className="text-xs text-muted-foreground">
+                                Awaiting account acceptance
+                              </span>
                             )}
                             {member.status === "inactive" && (
                               <Button
@@ -629,7 +625,7 @@ function StaffManagement() {
               <DialogDescription>
                 {editingMember?.status === "pending"
                   ? "Update this pending invite before resending the access email."
-                  : "Update the member's contact details and workspace access."}
+                  : "View account contact details and update workspace access. Only the account holder can edit their contact details."}
               </DialogDescription>
             </DialogHeader>
             {editingMember && (
@@ -640,7 +636,8 @@ function StaffManagement() {
                       <Label htmlFor="edit-full-name">Full Name</Label>
                       <Input
                         id="edit-full-name"
-                        placeholder="Jane Doe"
+                        placeholder="Full name"
+                        readOnly
                         value={editForm.fullName}
                         onChange={(event) =>
                           setEditForm((current) => ({ ...current, fullName: event.target.value }))
@@ -652,7 +649,8 @@ function StaffManagement() {
                       <Input
                         id="edit-phone"
                         type="tel"
-                        placeholder="+233..."
+                        placeholder="Phone number"
+                        readOnly
                         value={editForm.phone}
                         onChange={(event) =>
                           setEditForm((current) => ({ ...current, phone: event.target.value }))
@@ -666,7 +664,8 @@ function StaffManagement() {
                     <Input
                       id="edit-email"
                       type="email"
-                      placeholder="staff@example.com"
+                      placeholder="Staff email address"
+                      readOnly
                       value={editForm.email}
                       onChange={(event) =>
                         setEditForm((current) => ({ ...current, email: event.target.value }))
@@ -777,7 +776,7 @@ function StaffManagement() {
               <DialogTitle>Add Team Member</DialogTitle>
               <DialogDescription>
                 {showPrivateTeamGuidance
-                  ? "Choose the interface first. Business staff stay in the selected workspace, while platform staff stay inside PharmaHub Admin."
+                  ? "Choose the interface first. Business staff stay in the selected workspace, while platform staff stay inside DrugXone Admin."
                   : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>
@@ -805,7 +804,7 @@ function StaffManagement() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="staff@example.com"
+                  placeholder="Staff email address"
                   value={inviteEmail}
                   onChange={(event) => setInviteEmail(event.target.value)}
                 />

@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import logo from "@/assets/logo.jpg";
+const logo = "/drugxone-mark.svg";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in - PharmaHub GH" },
-      { name: "description", content: "Sign in to your PharmaHub GH account." },
+      { title: "Sign in - DrugXone" },
+      { name: "description", content: "Sign in to your DrugXone account." },
     ],
   }),
   component: LoginPage,
@@ -35,7 +35,7 @@ function LoginPage() {
     if (error) {
       if (error.message.toLowerCase().includes("invalid login credentials")) {
         toast.error(
-          "Invalid email or password. If you were added as staff, sign in with the email already registered on PharmaHub or use Forgot password to reset access.",
+          "Invalid email or password. If you were added as staff, sign in with the email already registered on DrugXone or use Forgot password to reset access.",
         );
       } else {
         toast.error(error.message);
@@ -55,9 +55,9 @@ function LoginPage() {
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
+          <img src={logo} alt="DrugXone" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            Pharma<span className="text-primary">Hub GH</span>
+            Drug<span className="text-primary">Xone</span>
           </span>
         </Link>
 
@@ -75,7 +75,7 @@ function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@pharmacy.gh"
+                placeholder="Your email address"
                 required
                 autoComplete="email"
               />
@@ -106,7 +106,7 @@ function LoginPage() {
           </form>
 
           <div className="mt-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-center">
-            <p className="text-sm text-muted-foreground">New to PharmaHub?</p>
+            <p className="text-sm text-muted-foreground">New to DrugXone?</p>
             <Link
               to="/signup"
               className="mt-1 inline-block text-base font-semibold text-primary underline-offset-4 transition-colors hover:underline"

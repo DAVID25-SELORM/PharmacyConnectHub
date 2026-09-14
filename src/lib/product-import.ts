@@ -362,7 +362,7 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
 
   if (categoryFallbackCount > 0) {
     warnings.push(
-      `${categoryFallbackCount} row(s) used "Other" because the category name didn't match the PharmaHub list.`,
+      `${categoryFallbackCount} row(s) used "Other" because the category name didn't match the DrugXone list.`,
     );
   }
 

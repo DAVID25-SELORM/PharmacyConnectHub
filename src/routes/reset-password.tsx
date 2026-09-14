@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import logo from "@/assets/logo.jpg";
+const logo = "/drugxone-mark.svg";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
@@ -181,6 +181,13 @@ function ResetPasswordPage() {
       toast.error(error.message);
       return;
     }
+    const { error: acceptanceError } = await supabase.rpc("accept_business_invitations");
+    if (acceptanceError) {
+      toast.error(
+        "Password updated. Business invitation acceptance requires review: " +
+          acceptanceError.message,
+      );
+    }
     toast.success("Password updated. Opening your workspace.");
     try {
       window.localStorage.removeItem("pharmahub.active_business_id");
@@ -212,9 +219,9 @@ function ResetPasswordPage() {
       <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-            <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
+            <img src={logo} alt="DrugXone" className="h-10 w-10 rounded-xl object-contain" />
             <span className="font-display text-xl font-bold">
-              Pharma<span className="text-primary">Hub GH</span>
+              Drug<span className="text-primary">Xone</span>
             </span>
           </Link>
 
@@ -242,16 +249,17 @@ function ResetPasswordPage() {
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <img src={logo} alt="PharmaHub GH" className="h-10 w-10 rounded-xl object-contain" />
+          <img src={logo} alt="DrugXone" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            Pharma<span className="text-primary">Hub GH</span>
+            Drug<span className="text-primary">Xone</span>
           </span>
         </Link>
 
         <Card className="p-8 shadow-elegant">
           <h1 className="font-display text-2xl font-bold">Set new password</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Choose a strong password to finish account access.
+            Choose a strong password to finish account access. Updating your password also accepts
+            any pending business invitation for this account.
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>

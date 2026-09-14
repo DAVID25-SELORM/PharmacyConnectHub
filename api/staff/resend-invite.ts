@@ -1,14 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-function firstHeaderValue(value: string | string[] | undefined) {
-  if (Array.isArray(value)) {
-    return value[0];
-  }
-
-  return value;
-}
-
 function normalizeSiteUrl(value: string | undefined) {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -23,17 +15,11 @@ function normalizeSiteUrl(value: string | undefined) {
 }
 
 function getInviteRedirectUrl(req: VercelRequest, path: string) {
-  const forwardedHost = firstHeaderValue(req.headers["x-forwarded-host"]);
-  const forwardedProto = firstHeaderValue(req.headers["x-forwarded-proto"]) ?? "https";
-  const fallbackHost = forwardedHost ?? firstHeaderValue(req.headers.host);
-
   const siteUrlCandidates = [
     process.env.SITE_URL,
     process.env.VITE_SITE_URL,
     process.env.VERCEL_PROJECT_PRODUCTION_URL,
     process.env.VERCEL_URL,
-    firstHeaderValue(req.headers.origin),
-    fallbackHost ? `${forwardedProto}://${fallbackHost}` : undefined,
   ];
 
   for (const candidate of siteUrlCandidates) {

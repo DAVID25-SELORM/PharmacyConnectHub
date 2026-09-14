@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Menu, LayoutDashboard } from "lucide-react";
-import logo from "@/assets/logo.jpg";
+const logo = "/drugxone-mark.svg";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -24,11 +24,11 @@ export function SiteHeader() {
         <Link to="/" className="flex items-center gap-2 group">
           <img
             src={logo}
-            alt="PharmaHub GH"
+            alt="DrugXone"
             className="h-9 w-9 rounded-xl object-contain transition-transform group-hover:scale-105"
           />
           <span className="font-display text-lg font-bold tracking-tight">
-            Pharma<span className="text-primary">Hub GH</span>
+            Drug<span className="text-primary">Xone</span>
           </span>
         </Link>
 

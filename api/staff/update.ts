@@ -7,22 +7,13 @@ type StaffStatus = "active" | "inactive" | "pending";
 const validRoles = new Set<StaffRole>(["owner", "manager", "cashier", "assistant"]);
 const validStatuses = new Set<StaffStatus>(["active", "inactive", "pending"]);
 
-function normalizeOptionalText(value: unknown) {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
 function isAllowedStatusTransition(currentStatus: StaffStatus, nextStatus: StaffStatus) {
   if (currentStatus === nextStatus) {
     return true;
   }
 
   if (currentStatus === "pending") {
-    return nextStatus === "active" || nextStatus === "inactive";
+    return nextStatus === "inactive";
   }
 
   if (currentStatus === "active") {
@@ -59,10 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Invalid token" });
   }
 
-  const { businessId, staffId, fullName, email, phone, role, status } = req.body ?? {};
+  const { businessId, staffId, email, role, status } = req.body ?? {};
   const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-  const normalizedFullName = normalizeOptionalText(fullName);
-  const normalizedPhone = normalizeOptionalText(phone);
 
   if (!businessId || !staffId || !normalizedEmail) {
     return res.status(400).json({ error: "businessId, staffId, and email are required" });
@@ -177,27 +166,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const currentEmail = targetUser.email?.trim().toLowerCase() ?? "";
   if (normalizedEmail !== currentEmail) {
-    const { error: updateUserErr } = await admin.auth.admin.updateUserById(staffRow.user_id, {
-      email: normalizedEmail,
-      email_confirm: true,
+    return res.status(403).json({
+      error:
+        "Only the account holder can change their login email. Business staff editing changes membership only.",
     });
-
-    if (updateUserErr) {
-      return res.status(400).json({ error: updateUserErr.message || "Failed to update email" });
-    }
-  }
-
-  const { error: profileErr } = await admin.from("profiles").upsert(
-    {
-      id: staffRow.user_id,
-      full_name: normalizedFullName,
-      phone: normalizedPhone,
-    },
-    { onConflict: "id" },
-  );
-
-  if (profileErr) {
-    return res.status(500).json({ error: profileErr.message });
   }
 
   const staffUpdate: {

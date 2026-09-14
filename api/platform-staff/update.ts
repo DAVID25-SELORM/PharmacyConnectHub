@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type PlatformStaffRole = "owner" | "admin";
 type PlatformStaffStatus = "active" | "inactive" | "pending";
@@ -35,7 +35,7 @@ function isAllowedStatusTransition(
   return nextStatus === "active";
 }
 
-async function hasBusinessAccess(admin: ReturnType<typeof createClient>, userId: string) {
+async function hasBusinessAccess(admin: SupabaseClient, userId: string) {
   const [{ data: ownedBusiness }, { data: activeBusinessStaff }] = await Promise.all([
     admin.from("businesses").select("id").eq("owner_id", userId).limit(1).maybeSingle(),
     admin

@@ -15,7 +15,7 @@ import { compressImageForUpload, formatFileSize, MAX_UPLOAD_BYTES } from "@/lib/
 export const Route = createFileRoute("/onboarding")({
   head: () => ({
     meta: [
-      { title: "Verify your business - PharmaHub GH" },
+      { title: "Verify your business - DrugXone" },
       { name: "description", content: "Upload your Pharmacy Council and FDA documents." },
     ],
   }),
@@ -303,8 +303,8 @@ function OnboardingPage() {
           <h2 className="text-xl font-semibold">Invitation pending</h2>
           <p className="max-w-sm text-muted-foreground">
             {accessState === "pending-platform"
-              ? "You've been invited to join the PharmaHub Admin interface. The owner needs to activate your access before you can continue."
-              : "You've been invited to join a business on PharmaHub. The business owner needs to activate your access before you can continue."}
+              ? "You've been invited to join the DrugXone Admin interface. The owner needs to activate your access before you can continue."
+              : "You've been invited to join a business on DrugXone. Open your invitation email and finish password setup to accept access."}
           </p>
           <Button variant="outline" onClick={() => void onRefreshStatus()} disabled={refreshing}>
             {refreshing ? "Checking..." : "Check again"}

@@ -1,3 +1,4 @@
+import { OrderPrintButton } from "@/components/OrderPrintButton";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
@@ -44,7 +45,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
     meta: [
-      { title: "Pharmacy Dashboard — PharmaHub GH" },
+      { title: "Pharmacy Dashboard — DrugXone" },
       { name: "description", content: "Browse medicines, compare prices, place orders." },
     ],
   }),
@@ -897,6 +898,9 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
             </div>
           </div>
 
+          <div className="mt-3 flex justify-end">
+            <OrderPrintButton orderId={o.id} />
+          </div>
           <OrderTimeline o={o} />
 
           <ReceiptStatusPanel order={o} />
