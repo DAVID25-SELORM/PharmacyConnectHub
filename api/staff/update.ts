@@ -190,11 +190,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (Object.keys(staffUpdate).length > 0) {
-    const { error: updateStaffErr } = await admin
-      .from("business_staff")
-      .update(staffUpdate)
-      .eq("id", staffId)
-      .eq("business_id", businessId);
+    const { error: updateStaffErr } = await admin.rpc("change_business_staff", {
+      _caller_id: caller.id,
+      _business_id: businessId,
+      _user_id: staffRow.user_id,
+      _role: nextRole,
+      _status: nextStatus,
+      _invite: false,
+    });
 
     if (updateStaffErr) {
       return res.status(500).json({ error: updateStaffErr.message });

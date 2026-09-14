@@ -121,12 +121,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // 7. Insert staff record as pending
-  const { error: staffErr } = await admin.from("business_staff").insert({
-    business_id: businessId,
-    user_id: invited.user.id,
-    role,
-    status: "pending",
-    invited_by: caller.id,
+  const { error: staffErr } = await admin.rpc("change_business_staff", {
+    _caller_id: caller.id,
+    _business_id: businessId,
+    _user_id: invited.user.id,
+    _role: role,
+    _status: "pending",
+    _invite: true,
   });
 
   if (staffErr) {

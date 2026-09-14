@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import EmbeddedPostgres from "embedded-postgres";
+import { phase1Tests } from "./phase1.mjs";
+import { phase2Tests } from "./phase2.mjs";
+import { buildFreshBaseline } from "../../scripts/build-fresh-baseline.mjs";
 
 // Always creates a disposable LOCAL cluster. Never reads DATABASE_URL or Supabase secrets.
 test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 180000 }, async (t) => {
@@ -26,22 +29,24 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
     await cluster.start();
     root = cluster.getPgClient("postgres", "127.0.0.1");
     await root.connect();
-    await root.query(`
+    const schemaScaffold = `
       CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN BYPASSRLS;
       CREATE SCHEMA auth; CREATE SCHEMA storage;
       CREATE TABLE auth.users(id uuid PRIMARY KEY, email text UNIQUE, raw_user_meta_data jsonb DEFAULT '{}',
         raw_app_meta_data jsonb DEFAULT '{}', email_confirmed_at timestamptz, created_at timestamptz DEFAULT now());
       CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('request.jwt.claim.role',true),'') $$;
-      CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean);
-      CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text);
+      CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+      CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,name text,metadata jsonb,created_at timestamptz DEFAULT now());
+      GRANT ALL ON storage.objects TO authenticated,service_role;
       ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
       CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql AS $$ SELECT string_to_array($1,'/') $$;
       GRANT USAGE ON SCHEMA public,auth,storage TO anon,authenticated,service_role;
       GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon,authenticated,service_role;
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon,authenticated,service_role;
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon,authenticated,service_role;
-    `);
+    `;
+    await root.query(schemaScaffold);
     const seedUser = randomUUID();
     let legacyConflict;
     const files = (await readdir("supabase/migrations")).filter((f) => f.endsWith(".sql")).sort();
@@ -95,6 +100,13 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
       `Applied ${files.length} exact migration files to isolated PostgreSQL (synthetic historical seed prerequisite).`,
     );
     async function asRole(role, user, sql, params = []) {
+      if (sql.includes("create_marketplace_orders($1,$2,$3)")) {
+        sql = sql.replace(
+          "create_marketplace_orders($1,$2,$3)",
+          "create_marketplace_orders($1,$2,$3,$4)",
+        );
+        params = [...params, randomUUID()];
+      }
       const c = cluster.getPgClient("postgres", "127.0.0.1");
       await c.connect();
       try {
@@ -130,8 +142,23 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
     }
     const business = async (user) =>
       (await root.query("SELECT id FROM businesses WHERE owner_id=$1", [user])).rows[0].id;
-    const approve = async (id) =>
-      service("UPDATE businesses SET verification_status='approved' WHERE id=$1", [id]);
+    const reviewer = randomUUID();
+    await root.query(
+      "INSERT INTO auth.users(id,email,email_confirmed_at,raw_user_meta_data) VALUES($1,'reviewer@example.test',now(),'{\"is_staff_invite\":true}')",
+      [reviewer],
+    );
+    await root.query(
+      "INSERT INTO platform_staff(user_id,role,status) VALUES($1,'owner','active')",
+      [reviewer],
+    );
+    const approve = async (id) => {
+      const versions = (
+        await root.query("SELECT version_id FROM license_documents WHERE business_id=$1", [id])
+      ).rows.map((x) => x.version_id);
+      return versions.length
+        ? auth(reviewer, "SELECT review_business_evidence($1,'approved',$2)", [id, versions])
+        : service("UPDATE businesses SET verification_status='approved' WHERE id=$1", [id]);
+    };
     const scalar = async (sql, params) => (await root.query(sql, params)).rows[0];
     const buyer = await signup("pharmacy"),
       buyer2 = await signup("pharmacy"),
@@ -461,10 +488,7 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
       await assert.rejects(transition(o, "cancelled"), /Invalid order transition/);
       assert.equal(await stock(q), 7);
       await auth(seller, "SELECT confirm_order_payment($1)", [o]);
-      await assert.rejects(
-        auth(seller, "SELECT confirm_order_payment($1)", [o]),
-        /Only delivered unpaid/,
-      );
+      await auth(seller, "SELECT confirm_order_payment($1)", [o]); // Phase 2 explicitly makes confirmed payment retries idempotent.
     });
     await t.test("25 cancellation cannot change another supplier inventory", async () => {
       const q = await product(20, seller2Biz);
@@ -665,10 +689,13 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
         "pending",
       );
       await approve(sellerBiz);
+      await root.query("INSERT INTO storage.objects(bucket_id,name) VALUES('licenses',$1)", [
+        seller + "/" + sellerBiz + "/test.pdf",
+      ]);
       await auth(
         seller,
-        "INSERT INTO license_documents(business_id,doc_type,storage_path) VALUES($1,'business_license','test/new-document')",
-        [sellerBiz],
+        "INSERT INTO license_documents(business_id,doc_type,storage_path) VALUES($1,'business_license',$2)",
+        [sellerBiz, seller + "/" + sellerBiz + "/test.pdf"],
       );
       assert.equal(
         (await scalar("SELECT verification_status FROM businesses WHERE id=$1", [sellerBiz]))
@@ -779,6 +806,80 @@ test("Phase 0 migrated PostgreSQL authorization and integrity", { timeout: 18000
         /permission denied/,
       );
     });
+    await phase1Tests(t, {
+      root,
+      auth,
+      service,
+      product,
+      buyer,
+      buyer2,
+      seller,
+      seller2,
+      buyerBiz,
+      buyer2Biz,
+      sellerBiz,
+      seller2Biz,
+      cluster,
+    });
+    await phase2Tests(t, {
+      root,
+      auth,
+      service,
+      product,
+      buyer,
+      buyerBiz,
+      seller,
+      sellerBiz,
+      seller2,
+      seller2Biz,
+    });
+    await t.test("P2 investigation queries are read only and execute", async () => {
+      await root.query("BEGIN READ ONLY");
+      try {
+        await root.query(await readFile("supabase/phase2_read_only_review.sql", "utf8"));
+      } finally {
+        await root.query("ROLLBACK");
+      }
+    });
+    await t.test(
+      "P2 fresh baseline reaches current schema with no seeds or pre-existing wholesaler",
+      async () => {
+        const baseline = await buildFreshBaseline();
+        await cluster.createDatabase("fresh_phase2");
+        const fresh = cluster.getPgClient("fresh_phase2", "127.0.0.1");
+        await fresh.connect();
+        try {
+          await fresh.query(schemaScaffold.replace(/CREATE ROLE [^;]+;/g, ""));
+          await fresh.query(baseline);
+          assert.equal((await fresh.query("SELECT count(*)::int n FROM businesses")).rows[0].n, 0);
+          assert.equal((await fresh.query("SELECT count(*)::int n FROM products")).rows[0].n, 0);
+          assert.equal(
+            (await fresh.query("SELECT count(*)::int n FROM platform_staff")).rows[0].n,
+            0,
+          );
+          const u = randomUUID();
+          await fresh.query(
+            "INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES($1,'fresh@example.test','{\"role\":\"admin\"}')",
+            [u],
+          );
+          assert.equal(
+            (await fresh.query("SELECT count(*)::int n FROM user_roles WHERE role='admin'")).rows[0]
+              .n,
+            0,
+          );
+          assert.equal(
+            (
+              await fresh.query(
+                "SELECT to_regprocedure('public.create_marketplace_orders(uuid,uuid,jsonb,uuid)') IS NOT NULL ok",
+              )
+            ).rows[0].ok,
+            true,
+          );
+        } finally {
+          await fresh.end();
+        }
+      },
+    );
   } finally {
     for (const c of clients) await c.end();
     if (root) await root.end();

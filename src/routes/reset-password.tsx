@@ -1,3 +1,4 @@
+import { cleanRecoveryUrl } from "@/lib/recovery-url";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -37,17 +38,7 @@ function getRecoveryParams() {
 }
 
 function clearRecoveryParams() {
-  const nextUrl = new URL(window.location.href);
-
-  nextUrl.searchParams.delete("code");
-  nextUrl.searchParams.delete("token_hash");
-  nextUrl.searchParams.delete("type");
-  nextUrl.searchParams.delete("error");
-  nextUrl.searchParams.delete("error_code");
-  nextUrl.searchParams.delete("error_description");
-  nextUrl.hash = "";
-
-  window.history.replaceState(window.history.state, "", nextUrl.toString());
+  window.history.replaceState(window.history.state, "", cleanRecoveryUrl(window.location.href));
 }
 
 function ResetPasswordPage() {
@@ -76,6 +67,7 @@ function ResetPasswordPage() {
     void (async () => {
       const { code, tokenHash, type, accessToken, refreshToken, errorDescription } =
         getRecoveryParams();
+      clearRecoveryParams();
       const passwordLinkType = isPasswordLinkType(type) ? type : null;
 
       if (errorDescription) {
@@ -182,6 +174,11 @@ function ResetPasswordPage() {
       return;
     }
     const { error: acceptanceError } = await supabase.rpc("accept_business_invitations");
+    const { error: platformAcceptanceError } = await supabase.rpc("accept_platform_invitation");
+    if (platformAcceptanceError)
+      toast.error(
+        "Password updated; platform invitation requires review: " + platformAcceptanceError.message,
+      );
     if (acceptanceError) {
       toast.error(
         "Password updated. Business invitation acceptance requires review: " +

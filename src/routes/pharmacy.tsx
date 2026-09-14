@@ -38,6 +38,7 @@ import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
+import { checkoutRequest } from "@/lib/checkout-request";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -305,7 +306,7 @@ function PharmacyDashboard() {
   };
 
   const placeOrder = async () => {
-    if (!business) return false;
+    if (!business || !user) return false;
     if (business.staff_role === "assistant") {
       toast.error("Your role is view-only and cannot place orders.");
       return false;
@@ -320,7 +321,9 @@ function PharmacyDashboard() {
     }
     setPlacing(true);
     try {
+      const request = checkoutRequest(user.id, business.id, cart);
       const result = await createMarketplaceOrders({
+        requestId: request.id,
         pharmacyId: business.id,
         items: cart.map((item) => ({
           productId: item.productId,
@@ -332,6 +335,7 @@ function PharmacyDashboard() {
         `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`,
       );
       setCart([]);
+      localStorage.removeItem(request.key);
       void loadOrders();
       return true;
     } catch (error) {

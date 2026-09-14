@@ -106,6 +106,7 @@ type DocRow = {
   id: string;
   doc_type: string;
   storage_path: string;
+  version_id: string;
   uploaded_at: string;
 };
 
@@ -848,14 +849,11 @@ function BusinessCard({
   const approve = async () => {
     setBusy(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({
-        verification_status: "approved",
-        verified_at: new Date().toISOString(),
-        rejection_reason: null,
-      })
-      .eq("id", biz.id);
+    const { error } = await supabase.rpc("review_business_evidence", {
+      _business_id: biz.id,
+      _status: "approved",
+      _versions: docs.map((d) => d.version_id),
+    });
 
     setBusy(false);
 
@@ -878,10 +876,12 @@ function BusinessCard({
 
     setBusy(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({ verification_status: "rejected", rejection_reason: reason })
-      .eq("id", biz.id);
+    const { error } = await supabase.rpc("review_business_evidence", {
+      _business_id: biz.id,
+      _status: "rejected",
+      _versions: docs.map((d) => d.version_id),
+      _reason: reason,
+    });
 
     setBusy(false);
 

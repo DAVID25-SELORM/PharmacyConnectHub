@@ -11,12 +11,7 @@ import {
 import { timeAgo } from "@/lib/format";
 
 export type OrderStatus =
-  | "pending"
-  | "accepted"
-  | "packed"
-  | "dispatched"
-  | "delivered"
-  | "cancelled";
+  "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
 export type PaymentMethod = "cod" | "paystack";
 export type PaymentStatus = "unpaid" | "paid" | "refunded" | "failed";
 

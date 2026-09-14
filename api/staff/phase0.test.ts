@@ -31,7 +31,13 @@ vi.mock("@supabase/supabase-js", () => ({
         inviteUserByEmail: state.invite,
       },
     },
-    rpc: async () => ({ data: state.existingUser, error: null }),
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "change_business_staff") {
+        state.updates.push({ rpc: name, args });
+        return { data: null, error: null };
+      }
+      return { data: state.existingUser, error: null };
+    },
     from: (table: string) => {
       const filters: Record<string, unknown> = {};
       const result = () => {
@@ -121,7 +127,19 @@ describe("Phase 0 tenant staff API boundaries", () => {
     expect(r.status).toHaveBeenCalledWith(200);
     expect(state.globalUpdate).not.toHaveBeenCalled();
     expect(state.profileWrite).not.toHaveBeenCalled();
-    expect(state.updates).toEqual([{ table: "business_staff", value: { role: "manager" } }]);
+    expect(state.updates).toEqual([
+      {
+        rpc: "change_business_staff",
+        args: {
+          _caller_id: "owner-a",
+          _business_id: "business-a",
+          _user_id: "target-user",
+          _role: "manager",
+          _status: "active",
+          _invite: false,
+        },
+      },
+    ]);
   });
   it("rejects silently attaching an existing account", async () => {
     const r = response();
@@ -158,13 +176,14 @@ describe("Phase 0 tenant staff API boundaries", () => {
     expect(r.status).toHaveBeenCalledWith(200);
     expect(state.updates).toEqual([
       {
-        table: "business_staff",
-        value: {
-          business_id: "business-a",
-          user_id: "new-invitee",
-          role: "assistant",
-          status: "pending",
-          invited_by: "owner-a",
+        rpc: "change_business_staff",
+        args: {
+          _caller_id: "owner-a",
+          _business_id: "business-a",
+          _user_id: "new-invitee",
+          _role: "assistant",
+          _status: "pending",
+          _invite: true,
         },
       },
     ]);

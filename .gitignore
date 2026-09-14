@@ -15,6 +15,9 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+.env
+.env.*
+!.env.example
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -35,3 +38,6 @@ dist-ssr
 
 # Local test databases and browser artifacts
 .tmp/
+
+# Supabase CLI local cache
+supabase/.temp/

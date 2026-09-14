@@ -155,3 +155,6 @@ create policy "prototype full access" on public.quote_items
   to anon, authenticated
   using (true)
   with check (true);
+-- DEPRECATED PROTOTYPE ONLY. DO NOT EXECUTE FOR DRUGXONE DEPLOYMENTS.
+-- Use docs/phase2-deployment-checklist.md and the reviewed fresh baseline or forward migrations.
+-- This file contains permissive historical policies and is not the production schema.

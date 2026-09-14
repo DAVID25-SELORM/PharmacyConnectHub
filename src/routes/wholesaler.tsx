@@ -1,3 +1,4 @@
+import { StockDialog } from "@/components/StockDialog";
 import { OrderPrintButton } from "@/components/OrderPrintButton";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useState } from "react";
@@ -683,6 +684,7 @@ function ProductsManager({
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <EditProductDialog product={p} reload={reload} />
+                          <StockDialog product={p} reload={reload} />
                           <DeleteProductDialog product={p} reload={reload} />
                         </div>
                       </td>
@@ -848,7 +850,7 @@ function AddProductDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="p-stock">Stock</Label>
+              <Label htmlFor="p-stock">Initial stock (blank starts at zero)</Label>
               <Input
                 id="p-stock"
                 type="number"
@@ -893,7 +895,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
     form: product.form ?? "Tablet",
     pack_size: product.pack_size ?? "",
     price_ghs: product.price_ghs.toString(),
-    stock: product.stock.toString(),
     image_hue: (product.image_hue ?? 200).toString(),
   });
 
@@ -915,7 +916,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
         form: form.form,
         pack_size: form.pack_size.trim() || null,
         price_ghs: Number(form.price_ghs),
-        stock: Number(form.stock || 0),
         image_hue: Number(form.image_hue || 200),
       })
       .eq("id", product.id);
@@ -934,6 +934,7 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm">
           <Edit className="h-4 w-4" />
+          <span className="sr-only">Edit product</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
@@ -1018,16 +1019,9 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="e-stock">Stock</Label>
-              <Input
-                id="e-stock"
-                type="number"
-                min="0"
-                value={form.stock}
-                onChange={(e) => update("stock", e.target.value)}
-              />
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Stock changes use the separate Stock action.
+            </p>
             <div className="space-y-2">
               <Label htmlFor="e-hue">Color hue</Label>
               <Input
@@ -1066,13 +1060,16 @@ function DeleteProductDialog({
 
   const onDelete = async () => {
     setDeleting(true);
-    const { error } = await supabase.from("products").delete().eq("id", product.id);
+    const { error } = await supabase
+      .from("products")
+      .update({ active: false })
+      .eq("id", product.id);
     setDeleting(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Product deleted");
+    toast.success("Product deactivated");
     setOpen(false);
     void reload();
   };
@@ -1086,10 +1083,9 @@ function DeleteProductDialog({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Delete product</DialogTitle>
+          <DialogTitle>Deactivate product</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong>{product.name}</strong>? This action cannot be
-            undone.
+            Deactivate <strong>{product.name}</strong>? Stock and order history will be retained.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -1097,7 +1093,7 @@ function DeleteProductDialog({
             Cancel
           </Button>
           <Button type="button" variant="destructive" onClick={onDelete} disabled={deleting}>
-            {deleting && <Loader2 className="h-4 w-4 animate-spin" />} Delete
+            {deleting && <Loader2 className="h-4 w-4 animate-spin" />} Deactivate
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1283,7 +1279,7 @@ Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
               {mode === "replace"
                 ? "Entered quantities replace available stock. Blank quantities preserve existing stock; new products start at zero."
                 : mode === "add"
-                  ? "Entered quantities are added to available stock. Blank quantities leave stock unchanged."
+                  ? "Entered quantities are added to available stock. Blank quantities leave stock unchanged. Retry a failed confirmation in this dialog to reuse its request ID. Starting a new Add import records another delivery and adds stock again, even with identical contents."
                   : "Prices and product details are updated. Existing stock is preserved; new products start at zero regardless of the supplied quantity."}{" "}
               Existing inactive products remain inactive. Maximum 5,000 products per import.
             </p>

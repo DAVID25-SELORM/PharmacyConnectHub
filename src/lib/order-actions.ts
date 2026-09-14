@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 type CreateMarketplaceOrdersInput = {
+  requestId: string;
   pharmacyId: string;
   items: Array<{
     productId: string;

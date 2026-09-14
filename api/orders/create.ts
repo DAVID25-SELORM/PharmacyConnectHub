@@ -34,6 +34,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const pharmacyId = typeof req.body?.pharmacyId === "string" ? req.body.pharmacyId : "";
+  const requestId = typeof req.body?.requestId === "string" ? req.body.requestId : "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) {
+    return res.status(400).json({ error: "A valid checkout requestId is required" });
+  }
   const items = Array.isArray(req.body?.items) ? (req.body.items as RequestItem[]) : [];
 
   if (!pharmacyId || items.length === 0) {
@@ -56,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     _caller_id: caller.id,
     _items: items,
     _pharmacy_id: pharmacyId,
+    _request_id: requestId,
   });
 
   if (error) {

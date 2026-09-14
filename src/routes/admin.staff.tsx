@@ -110,7 +110,7 @@ function getEditableStatuses(member: PlatformStaffMember): PlatformStaffStatus[]
   }
 
   if (member.status === "pending") {
-    return ["pending", "active", "inactive"];
+    return ["pending", "inactive"];
   }
 
   if (member.status === "inactive") {
@@ -166,7 +166,10 @@ function PlatformStaffManagement() {
   const selectedInviteTarget =
     inviteTargets.find((target) => target.value === inviteTarget) ?? inviteTargets[0];
   const invitingToBusiness = selectedInviteTarget?.kind === "business";
-  const canManageTeam = roles.includes("admin");
+  const canManageTeam = staff.some(
+    (member) =>
+      member.user_id === user?.id && member.role === "owner" && member.status === "active",
+  );
   const showPrivateTeamGuidance = shouldShowPrivateTeamGuidance(user?.email);
   const viewerIsPlatformOwner = useMemo(() => {
     if (!user) {
@@ -205,7 +208,7 @@ function PlatformStaffManagement() {
   const handleInvite = async () => {
     if (!selectedInviteTarget || !inviteEmail.trim()) return;
     if (!canManageTeam) {
-      toast.error("Only platform admins can add platform staff.");
+      toast.error("Only the platform owner can add platform staff.");
       return;
     }
 
@@ -393,7 +396,7 @@ function PlatformStaffManagement() {
               Manage who can access the DrugXone Admin interface.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={canManageTeam ? "flex flex-wrap gap-2" : "hidden"}>
             <Button variant="outline" onClick={() => navigate({ to: "/admin" })}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to admin
@@ -450,8 +453,8 @@ function PlatformStaffManagement() {
                         {member.joined_at ? timeAgo(member.joined_at) : "Not recorded"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {member.user_email && (
+                        <div className={canManageTeam ? "flex flex-wrap gap-2" : "hidden"}>
+                          {member.user_email && member.status === "pending" && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -464,6 +467,7 @@ function PlatformStaffManagement() {
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={member.role === "owner"}
                             onClick={() => openEditDialog(member)}
                           >
                             <Pencil className="h-4 w-4" />
@@ -523,35 +527,34 @@ function PlatformStaffManagement() {
                         {timeAgo(member.invited_at)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-2">
+                        <div className={canManageTeam ? "flex flex-wrap gap-2" : "hidden"}>
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={member.role === "owner"}
                             onClick={() => openEditDialog(member)}
                           >
                             <Pencil className="h-4 w-4" />
                             Edit
                           </Button>
-                          {member.status !== "inactive" && member.user_email && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleResendInvite(member)}
-                              disabled={resendingStaffId === member.id}
-                            >
-                              {resendingStaffId === member.id ? "Sending..." : "Resend email"}
-                            </Button>
-                          )}
+                          {member.status !== "inactive" &&
+                            member.user_email &&
+                            member.status === "pending" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResendInvite(member)}
+                                disabled={resendingStaffId === member.id}
+                              >
+                                {resendingStaffId === member.id ? "Sending..." : "Resend email"}
+                              </Button>
+                            )}
                           {member.status === "pending" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleActivate(member)}
-                            >
-                              Activate
-                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              Awaiting account acceptance
+                            </span>
                           )}
-                          {member.status === "inactive" && (
+                          {member.status === "inactive" && member.joined_at && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -586,7 +589,7 @@ function PlatformStaffManagement() {
               <DialogDescription>
                 {editingMember?.status === "pending"
                   ? "Update this pending invite before resending the access email."
-                  : "Update the member's contact details and admin access."}
+                  : "Manage administrator access. Only the account holder can edit their personal profile."}
               </DialogDescription>
             </DialogHeader>
             {editingMember && (
@@ -597,6 +600,7 @@ function PlatformStaffManagement() {
                       <Label htmlFor="edit-full-name">Full Name</Label>
                       <Input
                         id="edit-full-name"
+                        readOnly
                         placeholder="Full name"
                         value={editForm.fullName}
                         onChange={(event) =>
@@ -608,6 +612,7 @@ function PlatformStaffManagement() {
                       <Label htmlFor="edit-phone">Phone</Label>
                       <Input
                         id="edit-phone"
+                        readOnly
                         type="tel"
                         placeholder="Phone number"
                         value={editForm.phone}
@@ -622,6 +627,7 @@ function PlatformStaffManagement() {
                     <Label htmlFor="edit-email">Email Address</Label>
                     <Input
                       id="edit-email"
+                      readOnly
                       type="email"
                       placeholder="Administrator email address"
                       value={editForm.email}

@@ -1,0 +1,59 @@
+ M .gitignore
+ M api/_order-receipts.ts
+ M api/orders/confirm-payment.ts
+ M api/orders/create.ts
+ M api/orders/send-receipt.ts
+ M api/platform-staff/invite.ts
+ M api/platform-staff/resend-invite.ts
+ M api/platform-staff/update.ts
+ M api/staff/invite.ts
+ M api/staff/phase0.test.ts
+ M api/staff/update.ts
+ M package-lock.json
+ M package.json
+ M src/components/order-status.tsx
+ M src/integrations/supabase/types.ts
+ M src/lib/order-actions.ts
+ M src/lib/product-import.ts
+ M src/routeTree.gen.ts
+ M src/router.tsx
+ M src/routes/admin.staff.tsx
+ M src/routes/admin.tsx
+ M src/routes/onboarding.tsx
+ M src/routes/pharmacy.tsx
+ M src/routes/reset-password.tsx
+ M src/routes/wholesaler.tsx
+ M supabase/schema.sql
+ M tests/database/phase0.mjs
+ M vercel.json
+ M vite.config.ts
+?? api/_receipt-delivery.ts
+?? api/_server-context.ts
+?? api/orders/create.test.ts
+?? api/phase2.test.ts
+?? docs/phase1-remediation.md
+?? docs/phase2-deployment-checklist.md
+?? docs/phase2-remediation.md
+?? docs/phase2-secret-scan.json
+?? scripts/build-fresh-baseline.mjs
+?? scripts/scan-secrets.mjs
+?? src/components/StockDialog.tsx
+?? src/lib/checkout-request.test.ts
+?? src/lib/checkout-request.ts
+?? src/lib/import-security.test.ts
+?? src/lib/product-import.worker.ts
+?? src/lib/recovery-url.test.ts
+?? src/lib/recovery-url.ts
+?? src/lib/verification-file.ts
+?? supabase/baseline/fresh-install.sql
+?? supabase/baseline/manifest.json
+?? supabase/migrations/20260914110000_phase1_inventory_integrity.sql
+?? supabase/migrations/20260914120000_phase2_production_readiness.sql
+?? supabase/phase1_read_only_review.sql
+?? supabase/phase2_read_only_review.sql
+?? tests/browser/phase2-production.mjs
+?? tests/browser/phase2.mjs
+?? tests/browser/stock.mjs
+?? tests/database/phase1.mjs
+?? tests/database/phase2.mjs
+?? docs/phase2-git-status.txt

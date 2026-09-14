@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
-import { compressImageForUpload, formatFileSize, MAX_UPLOAD_BYTES } from "@/lib/file-upload";
+import { formatFileSize, MAX_UPLOAD_BYTES } from "@/lib/file-upload";
+import { validateVerificationFile } from "@/lib/verification-file";
 
 export const Route = createFileRoute("/onboarding")({
   head: () => ({
@@ -30,11 +31,7 @@ type UploadFeedback = {
   tone?: UploadTone;
 };
 type AccessState =
-  | "checking"
-  | "none"
-  | "pending-business"
-  | "pending-platform"
-  | "active-platform";
+  "checking" | "none" | "pending-business" | "pending-platform" | "active-platform";
 
 function workspaceRoute(type: "pharmacy" | "wholesaler") {
   return type === "wholesaler" ? "/wholesaler" : "/pharmacy";
@@ -42,7 +39,7 @@ function workspaceRoute(type: "pharmacy" | "wholesaler") {
 
 function buildUploadPath(userId: string, businessId: string, docType: string, fileName: string) {
   const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
-  return `${userId}/${businessId}/${docType}-${Date.now()}-${safeFileName}`;
+  return `${userId}/${businessId}/${docType}-${crypto.randomUUID()}-${safeFileName}`;
 }
 
 function OnboardingPage() {
@@ -174,13 +171,6 @@ function OnboardingPage() {
 
     const existingDocsForType = docs.filter((doc) => doc.doc_type === docType);
     const currentDoc = existingDocsForType[0] ?? null;
-    const stalePaths = Array.from(
-      new Set(
-        existingDocsForType
-          .map((doc) => doc.storage_path)
-          .filter((storagePath) => Boolean(storagePath)),
-      ),
-    );
     setUploading(docType);
     updateUploadFeedback(docType, {
       fileName: file.name,
@@ -189,41 +179,39 @@ function OnboardingPage() {
     });
 
     try {
-      let uploadFile = file;
-
-      if (file.type.startsWith("image/") && file.size > MAX_UPLOAD_BYTES) {
-        updateUploadFeedback(docType, {
-          fileName: file.name,
-          message: "Large image detected. Compressing before upload...",
-          tone: "uploading",
-        });
-        uploadFile = await compressImageForUpload(file);
-      } else if (file.size > MAX_UPLOAD_BYTES) {
-        throw new Error("This file is larger than 10MB. Please choose a smaller PDF or image.");
-      }
-
+      const uploadFile = file;
+      const contentType = await validateVerificationFile(file);
+      const digest = Array.from(
+        new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())),
+      )
+        .map((x) => x.toString(16).padStart(2, "0"))
+        .join("");
+      const pendingKey = `drugxone.document.${user.id}.${business.id}.${docType}.${digest}`;
       updateUploadFeedback(docType, {
         fileName: uploadFile.name,
         message: "Uploading...",
         tone: "uploading",
       });
 
-      const path = buildUploadPath(user.id, business.id, docType, uploadFile.name);
-      const { error: upErr } = await supabase.storage.from("licenses").upload(path, uploadFile, {
-        upsert: false,
-        contentType: uploadFile.type || file.type,
-      });
+      const priorPath = localStorage.getItem(pendingKey);
+      const path = priorPath ?? buildUploadPath(user.id, business.id, docType, uploadFile.name);
+      const { error: upErr } = priorPath
+        ? { error: null }
+        : await supabase.storage.from("licenses").upload(path, uploadFile, {
+            upsert: false,
+            contentType,
+          });
 
       if (upErr) {
         throw upErr;
       }
 
+      localStorage.setItem(pendingKey, path);
       const docMutation = currentDoc
         ? supabase
             .from("license_documents")
             .update({
               storage_path: path,
-              uploaded_at: new Date().toISOString(),
             })
             .eq("id", currentDoc.id)
         : supabase
@@ -233,18 +221,10 @@ function OnboardingPage() {
       const { data: row, error: dbErr } = await docMutation.select().single();
 
       if (dbErr) {
-        await supabase.storage.from("licenses").remove([path]);
         throw dbErr;
       }
 
-      const replacedPaths = stalePaths.filter((storagePath) => storagePath !== path);
-      if (replacedPaths.length > 0) {
-        const { error: cleanupErr } = await supabase.storage.from("licenses").remove(replacedPaths);
-        if (cleanupErr) {
-          toast.warning("The new document is saved, but we could not remove the old file copy.");
-        }
-      }
-
+      localStorage.removeItem(pendingKey);
       setDocs((current) => [row as DocRow, ...current.filter((doc) => doc.doc_type !== docType)]);
       updateUploadFeedback(docType, {
         fileName: uploadFile.name,
@@ -418,8 +398,8 @@ function OnboardingPage() {
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="text-sm font-semibold">1. Upload your documents</div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Add the required files below. Images are compressed automatically if they are too
-                large.
+                Add the required files below. Upload PDF, PNG or JPEG files up to 10MB. Prior
+                document versions are retained.
               </p>
             </div>
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">

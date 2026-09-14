@@ -1,0 +1,167 @@
+[
+  {
+    "file": "20260418020126_9c479796-cb89-4d6c-9caf-0bb04a77bf15.sql",
+    "sha256": "2bca1f216d36318052071110c63afab8b8e0045896ea02ca96bff0df25c24035",
+    "excluded": false
+  },
+  {
+    "file": "20260418020137_9bde4aff-ea64-4c26-a749-dbfe0e9d0e53.sql",
+    "sha256": "e3aee01dfeed9fea946ec48b85a09bf664e569cdbf6fe5e562a550f1a772f70e",
+    "excluded": false
+  },
+  {
+    "file": "20260418021718_2cdc1fd4-5ee9-4953-8ad4-6e1a83e54eb9.sql",
+    "sha256": "0db32930a3b6650790ee2a31bcd2708deac512785f8693a8931c57d48ed8f06c",
+    "excluded": false
+  },
+  {
+    "file": "20260418030000_add_business_staff.sql",
+    "sha256": "69597a04a77f2ef529ad6d205075c80bb52df791aefdd65ba10a835b29cfe9fe",
+    "excluded": false
+  },
+  {
+    "file": "20260418043000_harden_verification_controls.sql",
+    "sha256": "bbf0999fb405bc3a76c3c459d036cb5b8c00bd919d9d7554aa35cd614d76ff7a",
+    "excluded": false
+  },
+  {
+    "file": "20260419000000_add_notifications.sql",
+    "sha256": "0a7f88aa29640124590842442fdce95b501aa7b1f9bd32e8b64011fa652569bc",
+    "excluded": false
+  },
+  {
+    "file": "20260419000100_fix_notification_triggers.sql",
+    "sha256": "89da70f6ec308e4bc6186210807da356a53a1547b3f217d0c53ea1e972580e4b",
+    "excluded": false
+  },
+  {
+    "file": "20260419000200_bootstrap_business_on_signup.sql",
+    "sha256": "d8eab56efa6f2a1726f619138b20793d757abf08a63787e5b00417d4d46354cb",
+    "excluded": false
+  },
+  {
+    "file": "20260419010000_seed_wholesaler_catalog_cash.sql",
+    "sha256": "1ed6b7d702d61ed31b345a9c8b7ed51f6dfe12d34a6dd20aed642796ec016e7d",
+    "excluded": true
+  },
+  {
+    "file": "20260419011000_seed_wholesaler_catalog_retail_40th_quarter.sql",
+    "sha256": "671aa1ffdc4a0be49aaa7425305f894a84729a471eb08478cb6affcda07baeba",
+    "excluded": true
+  },
+  {
+    "file": "20260420000000_staff_invite_guard.sql",
+    "sha256": "f8c3ed5dea0d9a622945591d5df445a3002d8342eab0cb0f6a8e11d7a8735429",
+    "excluded": false
+  },
+  {
+    "file": "20260421020000_add_platform_staff.sql",
+    "sha256": "82c493ed2b08ec8726bea1a8996da6a6650cb95d6fc627f1eef68e4711fadc37",
+    "excluded": false
+  },
+  {
+    "file": "20260421030000_reserve_stock_for_marketplace_orders.sql",
+    "sha256": "889377615e70c783f996f08a9c38220f5171b6482b864e47fe136b9856eb7211",
+    "excluded": false
+  },
+  {
+    "file": "20260421040000_add_pharmacy_superintendent_fields.sql",
+    "sha256": "ed1aa67667e2ca1e6a9c385f07d5ab55ddb7a8ac72d2e22a63c4f53a64262868",
+    "excluded": false
+  },
+  {
+    "file": "20260421041000_update_business_context_superintendent_fields.sql",
+    "sha256": "b49f17c338477705331283660c357c805eb20ebc178928758ac0d761edcd9530",
+    "excluded": false
+  },
+  {
+    "file": "20260421050000_add_order_receipt_tracking.sql",
+    "sha256": "daa9a74c48514895ede1e01143226fc50bbb2b2fd0eaf181752811da6326d18e",
+    "excluded": false
+  },
+  {
+    "file": "20260421110000_remove_xtalcfc_from_ideal_pharmacy_team.sql",
+    "sha256": "c9be7136cf9e8adf7629a2d1ea5afe0a89e166ba1f8efd8199596b61ce4b1c1a",
+    "excluded": true
+  },
+  {
+    "file": "20260422070000_expand_signup_business_profile.sql",
+    "sha256": "a1bd151e75bdffda87a52c8e45bb37ec278735f69d89b9ff818c36a35e0b795c",
+    "excluded": false
+  },
+  {
+    "file": "20260422073000_enforce_business_private_contacts.sql",
+    "sha256": "be308cceb2fce92519a2c2ab8dd95989bacb65c6b4b2510a9d5d662fc120d98e",
+    "excluded": false
+  },
+  {
+    "file": "20260422080000_add_atomic_business_profile_update_rpc.sql",
+    "sha256": "367a7dcbe9fe112839a7d00cf6f941d936c587cc28362f92e1586ab1b960c34c",
+    "excluded": false
+  },
+  {
+    "file": "20260422083000_expand_get_user_business_context.sql",
+    "sha256": "db1a7f7a62504864326f49ecd74d3766d70c7625f5acf75fddcf09061c504967",
+    "excluded": false
+  },
+  {
+    "file": "20260422143000_protect_platform_owner_details.sql",
+    "sha256": "02347fc64a66125c370ee093b64a5748250f581c97d4bea658d32e5407f4cf0a",
+    "excluded": false
+  },
+  {
+    "file": "20260422150000_hide_platform_owner_from_other_admins.sql",
+    "sha256": "e1dd621346d95d22c588049f08dc435e30fbbc76be77d9b1f6c35724fee532b7",
+    "excluded": false
+  },
+  {
+    "file": "20260422170000_enforce_license_document_replacement.sql",
+    "sha256": "e109a5b944d5a73a1db36216e7984c2d5f63c686b3f23b416c7ccddfc6e81c57",
+    "excluded": false
+  },
+  {
+    "file": "20260422171000_add_import_wholesaler_products_rpc.sql",
+    "sha256": "90ab85996ffbc0ea8468ce6371848599708d3caef2b2f9b8b65d2e0bfd0cf787",
+    "excluded": false
+  },
+  {
+    "file": "20260505090000_add_audit_logs.sql",
+    "sha256": "774137e39ddc995c4e77a7114bf8610ab787c5ad31135873376d2ccd2b46a742",
+    "excluded": false
+  },
+  {
+    "file": "20260913090000_safe_wholesaler_import.sql",
+    "sha256": "56b30af08b1f25ef047144dc727ae3040d91a7f98b3569db079594358b791326",
+    "excluded": false
+  },
+  {
+    "file": "20260913100000_master_product_catalogue.sql",
+    "sha256": "7a63244ff428a6a61b4cd54d1a6e2057cd338c4f7ad687f17fac37939cee68b8",
+    "excluded": false
+  },
+  {
+    "file": "20260914090000_phase0_production_blockers.sql",
+    "sha256": "3831ae774ae2c72d5a1c3595ab904eba6bb2a843f4e1d8efda8b1fe0a5d5dc63",
+    "excluded": false
+  },
+  {
+    "file": "20260914100000_private_order_print.sql",
+    "sha256": "c7950c63caf68b63d5a473e1dab24f58bb1f19ba79a5f81dcec91b1bb4084bcd",
+    "excluded": false
+  },
+  {
+    "file": "20260914110000_phase1_inventory_integrity.sql",
+    "sha256": "bb99b1bb332e5be654ae2be85f621ad3a4af6b2165bae207aaac92b8dbd1ae57",
+    "excluded": false
+  },
+  {
+    "file": "20260914120000_phase2_production_readiness.sql",
+    "sha256": "5070ee8f95edd63f91d673944b46534a8de7da51965861f9b8bb376e25db939c",
+    "excluded": false
+  },
+  {
+    "file": "20260914130000_checkout_audit_actor.sql",
+    "sha256": "397327a0b2eefb286e130eca088b8784f39d37c6d5973704f25a275020d38798",
+    "excluded": false
+  }
+]

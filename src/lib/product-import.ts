@@ -1,14 +1,10 @@
-import { PRODUCT_CATEGORIES } from "@/lib/format";
+import { PRODUCT_CATEGORIES } from "./format";
+
+export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+export const MAX_IMPORT_ROWS = 5000;
 
 type ImportField =
-  | "name"
-  | "brand"
-  | "category"
-  | "form"
-  | "pack_size"
-  | "price_ghs"
-  | "stock"
-  | "image_hue";
+  "name" | "brand" | "category" | "form" | "pack_size" | "price_ghs" | "stock" | "image_hue";
 
 type RawImportRow = Record<string, string>;
 
@@ -149,6 +145,9 @@ function alignCells(cells: string[], expectedLength: number) {
 }
 
 function buildRowsFromMatrix(matrix: string[][]) {
+  if (matrix.length > MAX_IMPORT_ROWS + 1)
+    throw new Error("Import at most 5,000 products at a time.");
+  if (matrix.some((row) => row.length > 32)) throw new Error("Import at most 32 columns.");
   const [headerRow, ...bodyRows] = matrix.filter((row) => row.some((cell) => cell.trim()));
   if (!headerRow || headerRow.length < 2) {
     return [];
@@ -167,6 +166,8 @@ function buildRowsFromMatrix(matrix: string[][]) {
 }
 
 function parseDelimitedText(text: string) {
+  if (new TextEncoder().encode(text).length > MAX_IMPORT_BYTES)
+    throw new Error("Import exceeds 5MB.");
   const lines = text
     .replace(/\r\n/g, "\n")
     .split("\n")
@@ -181,18 +182,34 @@ function parseDelimitedText(text: string) {
     return buildRowsFromMatrix(lines.map((line) => parseCsvLine(line, delimiter)));
   }
 
-  return buildRowsFromMatrix(lines.map((line) => line.split(/\s{2,}/).map((cell) => cell.trim())));
+  throw new Error(
+    "Ambiguous table: use explicit CSV, tab or pipe delimiters, including empty cells.",
+  );
 }
 
 async function rowsFromWorksheet(buffer: ArrayBuffer) {
   const XLSX = await loadXlsx();
-  const workbook = XLSX.read(buffer, { type: "array" });
+  const workbook = XLSX.read(buffer, {
+    type: "array",
+    sheetRows: MAX_IMPORT_ROWS + 2,
+    cellFormula: true,
+    cellHTML: false,
+    bookVBA: false,
+  });
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
     return [];
   }
 
   const worksheet = workbook.Sheets[firstSheetName];
+  const range = XLSX.utils.decode_range(worksheet["!fullref"] ?? worksheet["!ref"] ?? "A1");
+  if (range.e.r > MAX_IMPORT_ROWS || range.e.c >= 32)
+    throw new Error("Workbook exceeds 5,000 rows or 32 columns.");
+  for (const [address, cell] of Object.entries(worksheet)) {
+    if (!address.startsWith("!") && cell && typeof cell === "object" && "f" in cell) {
+      throw new Error("Formula cells are not accepted. Export values only before importing.");
+    }
+  }
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
     defval: "",
@@ -202,11 +219,11 @@ async function rowsFromWorksheet(buffer: ArrayBuffer) {
   return buildRowsFromMatrix(matrix.map((row) => row.map((value) => String(value ?? "").trim())));
 }
 
-function splitPdfLine(line: string) {
-  return line
-    .split(/\s*\|\s*|\t+|\s{2,}/)
-    .map((cell) => cell.trim())
-    .filter(Boolean);
+export function splitPdfLine(line: string) {
+  const delimiter = line.includes("|") ? "|" : line.includes("\t") ? "\t" : null;
+  if (!delimiter)
+    throw new Error("Ambiguous PDF table: export CSV or correct an explicitly delimited table.");
+  return parseCsvLine(line, delimiter);
 }
 
 function groupPdfLines(items: PdfTextItem[]) {
@@ -245,10 +262,8 @@ function groupPdfLines(items: PdfTextItem[]) {
             return part.text;
           }
 
-          const previous = orderedParts[index - 1];
-          const gap = part.x - (previous.x + previous.width);
-          const separator = gap > 24 ? " | " : gap > 8 ? "  " : " ";
-          return `${separator}${part.text}`;
+          // Never infer columns from geometric gaps: a missing price could shift stock.
+          return ` ${part.text}`;
         })
         .join("")
         .trim();
@@ -258,37 +273,46 @@ function groupPdfLines(items: PdfTextItem[]) {
 
 async function rowsFromPdf(buffer: ArrayBuffer) {
   const { getDocument } = await loadPdfJs();
-  const pdf = await getDocument({ data: buffer }).promise;
+  const loadingTask = getDocument({ data: buffer });
+  const pdf = await loadingTask.promise;
   const lines: string[] = [];
+  try {
+    if (pdf.numPages > 20) throw new Error("PDF imports are limited to 20 pages.");
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const textContent = await page.getTextContent();
+      lines.push(...groupPdfLines(textContent.items as PdfTextItem[]));
+    }
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
-    lines.push(...groupPdfLines(textContent.items as PdfTextItem[]));
+    const headerIndex = lines.findIndex((line) => {
+      if (!line.includes("|") && !line.includes("\t")) return false;
+      const cells = splitPdfLine(line);
+      const mappedFields = cells.map(findImportField).filter(Boolean);
+      return (
+        mappedFields.length >= 2 &&
+        mappedFields.includes("name") &&
+        mappedFields.includes("price_ghs")
+      );
+    });
+
+    if (headerIndex < 0) {
+      throw new Error(
+        "We couldn't detect a structured product table in this PDF. Use CSV, Excel, or paste the table text instead.",
+      );
+    }
+
+    const matrix = lines
+      .slice(headerIndex)
+      .map(splitPdfLine)
+      .filter((row) => row.length > 0);
+    if (matrix.some((row) => row.length !== matrix[0].length))
+      throw new Error(
+        "Ambiguous PDF row: column count differs. Correct the source before importing.",
+      );
+    return buildRowsFromMatrix(matrix);
+  } finally {
+    await loadingTask.destroy();
   }
-
-  const headerIndex = lines.findIndex((line) => {
-    const cells = splitPdfLine(line);
-    const mappedFields = cells.map(findImportField).filter(Boolean);
-    return (
-      mappedFields.length >= 2 &&
-      mappedFields.includes("name") &&
-      mappedFields.includes("price_ghs")
-    );
-  });
-
-  if (headerIndex < 0) {
-    throw new Error(
-      "We couldn't detect a structured product table in this PDF. Use CSV, Excel, or paste the table text instead.",
-    );
-  }
-
-  const matrix = lines
-    .slice(headerIndex)
-    .map(splitPdfLine)
-    .filter((row) => row.length > 0);
-
-  return buildRowsFromMatrix(matrix);
 }
 
 function parseNumericValue(value: string, fallback: number) {
@@ -351,7 +375,7 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
       name,
       brand: mappedRow.brand?.trim() || null,
       category,
-      form: mappedRow.form?.trim() || "Tablet",
+      form: mappedRow.form?.trim() || "",
       image_hue: Math.round(parseNumericValue(mappedRow.image_hue ?? "", hashHue(name))),
       pack_size: mappedRow.pack_size?.trim() || null,
       price_ghs: price,
@@ -383,8 +407,36 @@ function hashHue(value: string) {
   return hash || 200;
 }
 
-export async function parseProductImportFile(file: File): Promise<ProductImportResult> {
+export async function parseProductImportFileDirect(file: File): Promise<ProductImportResult> {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (file.size > MAX_IMPORT_BYTES) throw new Error("Import exceeds 5MB.");
+  if (!file.size) throw new Error("Import file is empty.");
+  if (!["pdf", "xls", "xlsx", "csv", "tsv", "txt"].includes(extension))
+    throw new Error("Unsupported file type.");
+  const mimeTypes: Record<string, string[]> = {
+    pdf: ["application/pdf"],
+    xls: ["application/vnd.ms-excel"],
+    xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+    csv: ["text/csv", "application/vnd.ms-excel", "text/plain"],
+    tsv: ["text/tab-separated-values", "text/plain"],
+    txt: ["text/plain"],
+  };
+  if (
+    file.type &&
+    file.type !== "application/octet-stream" &&
+    !mimeTypes[extension].includes(file.type.toLowerCase())
+  ) {
+    throw new Error("File MIME type does not match its extension.");
+  }
+  const magic = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  if (extension === "xlsx" && !(magic[0] === 0x50 && magic[1] === 0x4b))
+    throw new Error("Malformed XLSX signature.");
+  if (extension === "xls" && ![0xd0, 0x09].includes(magic[0]))
+    throw new Error("Malformed XLS signature.");
+  if (extension === "pdf" && new TextDecoder().decode(magic).slice(0, 5) !== "%PDF-")
+    throw new Error("Malformed PDF signature.");
+  if (["csv", "tsv", "txt"].includes(extension) && magic.includes(0))
+    throw new Error("Invalid text file.");
 
   if (extension === "pdf") {
     const rows = await rowsFromPdf(await file.arrayBuffer());
@@ -402,6 +454,35 @@ export async function parseProductImportFile(file: File): Promise<ProductImportR
   }
 
   throw new Error("Unsupported file type. Use CSV, TSV, TXT, XLSX, XLS, or PDF.");
+}
+
+export async function parseProductImportFile(file: File): Promise<ProductImportResult> {
+  if (file.size > MAX_IMPORT_BYTES) throw new Error("Import exceeds 5MB.");
+  if (typeof Worker === "undefined") return parseProductImportFileDirect(file);
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./product-import.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    const timer = setTimeout(() => {
+      worker.terminate();
+      reject(new Error("Import parsing timed out. Use a smaller file."));
+    }, 10000);
+    worker.onmessage = (
+      event: MessageEvent<{ type?: string; result?: ProductImportResult; error?: string }>,
+    ) => {
+      if (event.data.type !== "product-import-result") return;
+      clearTimeout(timer);
+      worker.terminate();
+      if (event.data.result) resolve(event.data.result);
+      else reject(new Error(event.data.error ?? "Malformed import."));
+    };
+    worker.onerror = () => {
+      clearTimeout(timer);
+      worker.terminate();
+      reject(new Error("Malformed import file."));
+    };
+    worker.postMessage(file);
+  });
 }
 
 export function parseProductImportText(text: string): ProductImportResult {

@@ -5,6 +5,7 @@ import tsConfigPaths from "vite-tsconfig-paths";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 
 export default defineConfig({
+  worker: { format: "es" },
   build: {
     rollupOptions: {
       output: {
