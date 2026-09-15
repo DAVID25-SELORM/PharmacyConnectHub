@@ -25,7 +25,6 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
-import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type NotificationRow = {
   id: string;
@@ -65,30 +64,15 @@ function NotificationBell() {
   };
 
   useEffect(() => {
-    let cancelled = false;
-    let channel: RealtimeChannel | null = null;
     void load();
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session || cancelled) return;
-      channel = supabase
-        .channel(`notifications:${session.user.id}:${crypto.randomUUID()}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${session.user.id}`,
-          },
-          () => void load(),
-        )
-        .subscribe();
-    });
+    // Realtime WebSocket handshakes are blocked by some browsers and networks,
+    // which left the notification bell reconnecting indefinitely. Polling keeps
+    // notifications available without depending on that connection.
+    const pollInterval = window.setInterval(() => void load(), 60_000);
 
     return () => {
-      cancelled = true;
-      if (channel) void supabase.removeChannel(channel);
+      window.clearInterval(pollInterval);
     };
   }, []);
 
