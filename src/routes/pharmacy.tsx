@@ -11,6 +11,7 @@ import {
   Building2,
   MapPin,
   Pill,
+  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -159,15 +160,17 @@ function PharmacyDashboard() {
   }, [loading, user, business, businesses, roles, navigate]);
 
   useEffect(() => {
+    if (loading || !user) return;
+
     void supabase.rpc("list_marketplace_catalogue").then(({ data, error }) => {
       if (error) {
         toast.error("Could not load the medicine catalogue. Please refresh and try again.");
         return;
       }
-      const catalogue = data as unknown as MasterCatalogueEntry[];
+      const catalogue = (Array.isArray(data) ? data : []) as unknown as MasterCatalogueEntry[];
       setProducts(
         (catalogue ?? []).flatMap((master) =>
-          master.offers.map((offer) => ({
+          (Array.isArray(master.offers) ? master.offers : []).map((offer) => ({
             ...offer,
             master_product_id: master.id,
             name: master.name,
@@ -181,7 +184,7 @@ function PharmacyDashboard() {
         ),
       );
     });
-  }, []);
+  }, [loading, user]);
 
   const loadOrders = useEffectEvent(async () => {
     if (!business) return;
@@ -876,6 +879,12 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
   }
   return (
     <div className="space-y-4">
+      <div className="flex justify-end print:hidden">
+        <Button type="button" variant="outline" onClick={() => window.print()}>
+          <Printer className="mr-2 h-4 w-4" />
+          Print order report
+        </Button>
+      </div>
       {orders.map((o) => (
         <Card key={o.id} className="p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
