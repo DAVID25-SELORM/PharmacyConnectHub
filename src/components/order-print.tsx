@@ -78,7 +78,7 @@ export function OrderPrintActions({
   );
 }
 
-function PrintableOrderDocument({ order, mode }: { order: PrintableOrder; mode: OrderPrintMode }) {
+export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder; mode: OrderPrintMode }) {
   const operational = mode !== "pharmacy";
   const items = mode === "pick-pack" ? sortPrintableItems(order.order_items) : order.order_items;
   return (

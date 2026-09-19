@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
   Package,
   ShoppingBag,
@@ -54,7 +54,7 @@ import {
   OrderTimeline,
   type OrderStatus,
 } from "@/components/order-status";
-import { OrderPrintActions } from "@/components/order-print";
+import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -386,6 +386,14 @@ function OrdersInbox({
   sendingReceiptOrderId: string | null;
   wholesalerName: string;
 }) {
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
+  const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("oldest");
+  const [page, setPage] = useState(1);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [bulkPrint, setBulkPrint] = useState(false);
+  const pageSize = 20;
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
     accepted: "packed",
@@ -403,19 +411,105 @@ function OrdersInbox({
     cancelled: "Cancelled",
   };
 
+  const counts = useMemo(() => ({
+    all: orders.length,
+    pending: orders.filter((o) => o.status === "pending").length,
+    accepted: orders.filter((o) => o.status === "accepted").length,
+    packed: orders.filter((o) => o.status === "packed").length,
+    dispatched: orders.filter((o) => o.status === "dispatched").length,
+    delivered: orders.filter((o) => o.status === "delivered").length,
+    cancelled: orders.filter((o) => o.status === "cancelled").length,
+  }), [orders]);
+  const visibleOrders = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return orders
+      .filter((o) => statusFilter === "all" || o.status === statusFilter)
+      .filter((o) => !normalized || `${o.order_number} ${o.pharmacy?.name ?? ""} ${o.pharmacy?.city ?? ""} ${o.order_items.map((i) => i.product_name).join(" ")}`.toLowerCase().includes(normalized))
+      .sort((a, b) => {
+        if (sort === "highest") return Number(b.total_ghs) - Number(a.total_ghs);
+        if (sort === "lowest") return Number(a.total_ghs) - Number(b.total_ghs);
+        if (sort === "pharmacy") return (a.pharmacy?.name ?? "").localeCompare(b.pharmacy?.name ?? "");
+        const result = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return sort === "newest" ? -result : result;
+      });
+  }, [orders, query, sort, statusFilter]);
+  const pageCount = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
+  const pagedOrders = visibleOrders.slice((page - 1) * pageSize, page * pageSize);
+  const selectedOrders = orders.filter((order) => selectedOrderIds.includes(order.id));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  useEffect(() => {
+    if (!bulkPrint) return;
+    const cleanup = () => setBulkPrint(false);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(() => window.print(), 0);
+    return () => window.removeEventListener("afterprint", cleanup);
+  }, [bulkPrint]);
+
   if (orders.length === 0) {
     return <Card className="p-12 text-center text-muted-foreground">No orders yet.</Card>;
   }
 
   return (
     <div className="space-y-4">
-      {orders.map((o) => {
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input aria-label="Search incoming orders" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search order, pharmacy or product" className="pl-9" />
+        </div>
+        <Select value={sort} onValueChange={(value) => { setSort(value as typeof sort); setPage(1); }}>
+          <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="highest">Highest value</SelectItem>
+            <SelectItem value="lowest">Lowest value</SelectItem>
+            <SelectItem value="pharmacy">Pharmacy A–Z</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Order status">
+        {(["all", "pending", "accepted", "packed", "dispatched", "delivered", "cancelled"] as const).map((status) => (
+          <Button key={status} type="button" size="sm" variant={statusFilter === status ? "secondary" : "ghost"} onClick={() => { setStatusFilter(status); setPage(1); }}>
+            {status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)} ({counts[status]})
+          </Button>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={selectedOrders.length === 0}
+          onClick={() => setBulkPrint(true)}
+        >
+          Print selected pick sheets ({selectedOrders.length})
+        </Button>
+      </div>
+      {pagedOrders.length === 0 ? <Card className="p-10 text-center text-muted-foreground">No orders match your filters.</Card> : null}
+      {pagedOrders.map((o) => {
         const next = nextStatus[o.status];
+        const open = openOrderId === o.id;
+        const totalUnits = o.order_items.reduce((sum, item) => sum + item.quantity, 0);
         return (
-          <Card key={o.id} className="p-5">
+          <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${o.order_number}`}
+                    checked={selectedOrderIds.includes(o.id)}
+                    onChange={(event) => {
+                      setSelectedOrderIds((current) =>
+                        event.target.checked
+                          ? [...current, o.id]
+                          : current.filter((id) => id !== o.id),
+                      );
+                    }}
+                    className="h-4 w-4"
+                  />
                   <span className="font-display text-lg font-bold">{o.order_number}</span>
                   <StatusBadge status={o.status} />
                   <PaymentBadge method={o.payment_method} status={o.payment_status} />
@@ -431,10 +525,17 @@ function OrdersInbox({
               </div>
               <div className="text-right">
                 <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
-                <div className="text-xs text-muted-foreground">{o.order_items.length} item(s)</div>
+                <div className="text-xs text-muted-foreground">{o.order_items.length} line(s) · {totalUnits} unit(s)</div>
               </div>
             </div>
 
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+              {canManageOrders && next && <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
+              {o.status === "pending" || o.status === "accepted" || o.status === "packed" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
+              <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
+            </div>
+
+            {open && <>
             <OrderTimeline o={o} />
 
             <ReceiptStatusPanel order={o} />
@@ -507,9 +608,25 @@ function OrdersInbox({
                 </Button>
               )}
             </div>
+            </>}
           </Card>
         );
       })}
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>Showing {pagedOrders.length} of {visibleOrders.length} orders</span>
+        <div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div>
+      </div>
+      {bulkPrint && (
+        <div className="print-documents">
+          {selectedOrders.map((order) => (
+            <PrintableOrderDocument
+              key={order.id}
+              mode="pick-pack"
+              order={{ ...order, wholesaler: { name: wholesalerName } }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
