@@ -40,7 +40,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
-    meta: [{ title: "Admin - PharmaHub GH" }],
+    meta: [{ title: "Admin - Drugxone" }],
   }),
   component: AdminPanel,
 });
@@ -298,7 +298,7 @@ function mapAuditLogs(rows: AuditLogRow[]): ActivityItem[] {
       id: row.id,
       timestamp: row.created_at,
       activity: row.activity,
-      organization: row.organization ?? "PharmaHub GH",
+      organization: row.organization ?? "Drugxone",
       performedBy: row.performed_by_email ?? "System",
       record: row.record_label ?? row.record_type,
       ipAddress: row.ip_address ?? "Not captured",

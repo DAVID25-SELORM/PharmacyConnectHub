@@ -189,7 +189,7 @@ export function DashboardHeader({
               <Home className="h-4 w-4" />
             </Button>
             <Link to="/" className="flex min-w-0 items-center gap-2">
-              <img src={logo} alt="PharmaHub GH" className="h-9 w-9 rounded-xl object-contain" />
+              <img src={logo} alt="Drugxone" className="h-9 w-9 rounded-xl object-contain" />
               <div className="hidden min-w-0 sm:block">
                 <div className="truncate font-display text-base font-bold leading-none">
                   Pharma<span className="text-primary">Hub GH</span>

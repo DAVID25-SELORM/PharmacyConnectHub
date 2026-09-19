@@ -11,7 +11,7 @@ export function SiteFooter() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-hero">
                 <Pill className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="font-display font-bold">PharmaHub GH</span>
+              <span className="font-display font-bold">Drugxone</span>
             </Link>
             <p className="mt-3 max-w-md text-sm text-muted-foreground">
               Ghana's trusted B2B pharmaceutical marketplace. Connecting retail pharmacies with
@@ -42,13 +42,13 @@ export function SiteFooter() {
             <h4 className="font-semibold text-sm">Company</h4>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               <li>Accra, Ghana</li>
-              <li>hello@pharmahub.gh</li>
+              <li>hello@drugxone.com</li>
               <li>+233 20 000 0000</li>
             </ul>
           </div>
         </div>
         <div className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
-          © {new Date().getFullYear()} PharmaHub GH. All rights reserved.
+          © {new Date().getFullYear()} Drugxone. All rights reserved. Developed by Daventra Technologies.
         </div>
       </div>
     </footer>

@@ -20,13 +20,13 @@ import heroImage from "@/assets/hero-pharma.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "PharmaHub GH — B2B Pharmaceutical Marketplace for Ghana" },
+      { title: "Drugxone — B2B Pharmaceutical Marketplace for Ghana" },
       {
         name: "description",
         content:
           "Connect retail pharmacies with verified pharmaceutical wholesalers across Ghana. Browse, compare, and order medicines in one place.",
       },
-      { property: "og:title", content: "PharmaHub GH — B2B Pharmaceutical Marketplace" },
+      { property: "og:title", content: "Drugxone — B2B Pharmaceutical Marketplace" },
       {
         property: "og:description",
         content: "Ghana's trusted multi-wholesaler pharma marketplace.",
@@ -219,7 +219,7 @@ function Features() {
             Built for the way pharmacies actually buy
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Stop juggling WhatsApp orders and scattered price lists. PharmaHub brings the wholesale
+            Stop juggling WhatsApp orders and scattered price lists. Drugxone brings the wholesale
             catalog into one clean workspace.
           </p>
         </div>

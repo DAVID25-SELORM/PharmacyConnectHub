@@ -47,7 +47,7 @@ import { shouldShowPrivateTeamGuidance } from "@/lib/private-team-guidance";
 
 export const Route = createFileRoute("/admin/staff")({
   head: () => ({
-    meta: [{ title: "Platform Team - PharmaHub GH" }],
+    meta: [{ title: "Platform Team - Drugxone" }],
   }),
   component: PlatformStaffManagement,
 });
@@ -154,7 +154,7 @@ function PlatformStaffManagement() {
       businessId: workspace.id,
     }));
 
-    return [{ kind: "platform", label: "PharmaHub Admin", value: "platform" }, ...businessTargets];
+    return [{ kind: "platform", label: "Drugxone Admin", value: "platform" }, ...businessTargets];
   }, [businesses]);
 
   useEffect(() => {

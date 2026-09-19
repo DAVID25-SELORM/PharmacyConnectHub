@@ -46,7 +46,7 @@ import { OrderPrintActions } from "@/components/order-print";
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
     meta: [
-      { title: "Pharmacy Dashboard — PharmaHub GH" },
+      { title: "Pharmacy Dashboard — Drugxone" },
       { name: "description", content: "Browse medicines, compare prices, place orders." },
     ],
   }),

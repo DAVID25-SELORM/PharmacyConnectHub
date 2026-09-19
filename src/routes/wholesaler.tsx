@@ -59,7 +59,7 @@ import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-pr
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
     meta: [
-      { title: "Wholesaler Dashboard — PharmaHub GH" },
+      { title: "Wholesaler Dashboard — Drugxone" },
       { name: "description", content: "Manage inventory, receive orders, update fulfilment." },
     ],
   }),

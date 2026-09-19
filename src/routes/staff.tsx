@@ -46,7 +46,7 @@ import {
 
 export const Route = createFileRoute("/staff")({
   head: () => ({
-    meta: [{ title: "Team - PharmaHub GH" }],
+    meta: [{ title: "Team - Drugxone" }],
   }),
   component: StaffManagement,
 });
@@ -154,7 +154,7 @@ function StaffManagement() {
     if (roles.includes("admin")) {
       return [
         ...businessTargets,
-        { kind: "platform" as const, label: "PharmaHub Admin", value: "platform" },
+        { kind: "platform" as const, label: "Drugxone Admin", value: "platform" },
       ];
     }
 
