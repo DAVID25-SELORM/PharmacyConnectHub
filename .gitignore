@@ -33,5 +33,7 @@ dist-ssr
 
 .vercel
 
+supabase/.temp/
+
 # Local test databases and browser artifacts
 .tmp/
