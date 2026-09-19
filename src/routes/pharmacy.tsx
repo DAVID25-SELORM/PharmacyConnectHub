@@ -41,6 +41,7 @@ import { createMarketplaceOrders } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { OrderPrintActions } from "@/components/order-print";
 
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
@@ -191,7 +192,7 @@ function PharmacyDashboard() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,paystack_reference,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,wholesaler:businesses!orders_wholesaler_id_fkey(name),order_items(product_name,quantity,unit_price_ghs)",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,paystack_reference,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,wholesaler:businesses!orders_wholesaler_id_fkey(name),order_items(product_id,product_name,quantity,unit_price_ghs,products(form,pack_size))",
       )
       .eq("pharmacy_id", business.id)
       .order("created_at", { ascending: false });
@@ -909,6 +910,10 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
           <OrderTimeline o={o} />
 
           <ReceiptStatusPanel order={o} />
+
+          <OrderPrintActions
+            order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}
+          />
 
           <div className="mt-4 divide-y divide-border rounded-xl border border-border">
             {o.order_items.map((it, i) => (

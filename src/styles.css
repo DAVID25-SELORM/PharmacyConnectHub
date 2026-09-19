@@ -2,6 +2,15 @@
 @source "../src";
 @import "tw-animate-css";
 
+@media print {
+  body * { visibility: hidden !important; }
+  .print-document, .print-document * { visibility: visible !important; }
+  .print-document { display: block !important; position: absolute; inset: 0; width: 100%; padding: 12mm; color: #000; background: #fff; }
+  thead { display: table-header-group; }
+  tr, img { break-inside: avoid; }
+  @page { size: A4; margin: 10mm; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @layer base {

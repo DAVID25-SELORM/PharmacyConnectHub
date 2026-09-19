@@ -605,6 +605,11 @@ export type Database = {
           pack_size: string | null;
           price_ghs: number;
           stock: number;
+          warehouse: string | null;
+          zone: string | null;
+          rack: string | null;
+          shelf: string | null;
+          bin: string | null;
           updated_at: string;
           wholesaler_id: string;
         };
@@ -620,6 +625,11 @@ export type Database = {
           pack_size?: string | null;
           price_ghs: number;
           stock?: number;
+          warehouse?: string | null;
+          zone?: string | null;
+          rack?: string | null;
+          shelf?: string | null;
+          bin?: string | null;
           updated_at?: string;
           wholesaler_id: string;
         };
@@ -635,6 +645,11 @@ export type Database = {
           pack_size?: string | null;
           price_ghs?: number;
           stock?: number;
+          warehouse?: string | null;
+          zone?: string | null;
+          rack?: string | null;
+          shelf?: string | null;
+          bin?: string | null;
           updated_at?: string;
           wholesaler_id?: string;
         };

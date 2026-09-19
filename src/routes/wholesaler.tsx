@@ -54,6 +54,7 @@ import {
   OrderTimeline,
   type OrderStatus,
 } from "@/components/order-status";
+import { OrderPrintActions } from "@/components/order-print";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -75,6 +76,11 @@ type Product = {
   price_ghs: number;
   stock: number;
   image_hue: number | null;
+  warehouse: string | null;
+  zone: string | null;
+  rack: string | null;
+  shelf: string | null;
+  bin: string | null;
   active: boolean;
 };
 
@@ -152,7 +158,7 @@ function WholesalerDashboard() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,pharmacy:businesses!orders_pharmacy_id_fkey(name,city),order_items(product_name,quantity,unit_price_ghs)",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
@@ -342,6 +348,7 @@ function WholesalerDashboard() {
               confirmingPaymentOrderId={confirmingPaymentOrderId}
               sendReceiptEmail={sendReceiptEmail}
               sendingReceiptOrderId={sendingReceiptOrderId}
+              wholesalerName={business.name}
             />
           </TabsContent>
           <TabsContent value="products">
@@ -367,6 +374,7 @@ function OrdersInbox({
   confirmingPaymentOrderId,
   sendReceiptEmail,
   sendingReceiptOrderId,
+  wholesalerName,
 }: {
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
@@ -376,6 +384,7 @@ function OrdersInbox({
   confirmingPaymentOrderId: string | null;
   sendReceiptEmail: (id: string) => Promise<void>;
   sendingReceiptOrderId: string | null;
+  wholesalerName: string;
 }) {
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
@@ -429,6 +438,11 @@ function OrdersInbox({
             <OrderTimeline o={o} />
 
             <ReceiptStatusPanel order={o} />
+
+            <OrderPrintActions
+              wholesaler
+              order={{ ...o, wholesaler: { name: wholesalerName } }}
+            />
 
             <div className="mt-4 divide-y divide-border rounded-xl border border-border">
               {o.order_items.map((it, i) => (
@@ -892,6 +906,11 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
     price_ghs: product.price_ghs.toString(),
     stock: product.stock.toString(),
     image_hue: (product.image_hue ?? 200).toString(),
+    warehouse: product.warehouse ?? "",
+    zone: product.zone ?? "",
+    rack: product.rack ?? "",
+    shelf: product.shelf ?? "",
+    bin: product.bin ?? "",
   });
 
   const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -914,6 +933,11 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
         price_ghs: Number(form.price_ghs),
         stock: Number(form.stock || 0),
         image_hue: Number(form.image_hue || 200),
+        warehouse: form.warehouse.trim() || null,
+        zone: form.zone.trim() || null,
+        rack: form.rack.trim() || null,
+        shelf: form.shelf.trim() || null,
+        bin: form.bin.trim() || null,
       })
       .eq("id", product.id);
     setSaving(false);
@@ -1036,6 +1060,15 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
                 onChange={(e) => update("image_hue", e.target.value)}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Warehouse location (optional)</Label>
+            <div className="grid gap-2 sm:grid-cols-5">
+              {(["warehouse", "zone", "rack", "shelf", "bin"] as const).map((key) => (
+                <Input key={key} aria-label={key} placeholder={key} value={form[key]} onChange={(e) => update(key, e.target.value)} />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Pick sheets display zone-rack-shelf-bin, for example A-03-02-B.</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
