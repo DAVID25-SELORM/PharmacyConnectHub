@@ -43,7 +43,7 @@ export function SiteFooter() {
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               <li>Accra, Ghana</li>
               <li>hello@drugxone.com</li>
-              <li>+233 20 000 0000</li>
+              <li>0247654381</li>
             </ul>
           </div>
         </div>
