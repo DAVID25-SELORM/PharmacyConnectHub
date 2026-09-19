@@ -16,6 +16,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PharmacyRouteImport } from './routes/pharmacy'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
@@ -57,6 +58,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
+    | '/help'
     | '/login'
     | '/onboarding'
     | '/pharmacy'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
+    | '/help'
     | '/login'
     | '/onboarding'
     | '/pharmacy'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
+    | '/help'
     | '/login'
     | '/onboarding'
     | '/pharmacy'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   PharmacyRoute: typeof PharmacyRoute
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/forgot-password': {
       id: '/forgot-password'
       path: '/forgot-password'
@@ -289,6 +309,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   PharmacyRoute: PharmacyRoute,
