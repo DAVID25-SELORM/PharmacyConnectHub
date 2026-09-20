@@ -9,6 +9,8 @@ export type PrintableOrder = {
   order_number: string;
   created_at: string;
   total_ghs: number;
+  subtotal_ghs?: number | null;
+  discount_amount_ghs?: number | null;
   status: string;
   payment_status: string;
   payment_method?: string;
@@ -173,8 +175,8 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
       </table>
       {mode === "pharmacy" && (
         <div className="mt-6 ml-auto w-64 space-y-1 text-right text-sm">
-          <div>Subtotal: {formatGHS(order.total_ghs)}</div>
-          <div>Discounts: __________</div>
+          <div>Subtotal: {formatGHS(order.subtotal_ghs ?? order.total_ghs)}</div>
+          <div>Discounts: {formatGHS(order.discount_amount_ghs ?? 0)}</div>
           <div>Delivery fee: __________</div>
           <div className="border-t border-black pt-2 text-lg font-bold">
             Grand total: {formatGHS(order.total_ghs)}
