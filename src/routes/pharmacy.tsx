@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
   Search,
   ShoppingCart,
@@ -209,8 +209,8 @@ function PharmacyDashboard() {
     });
   }, [loading, user]);
 
-  const loadOrders = useEffectEvent(async (query: OrderHistoryQuery = { page: 1, search: "", status: "all", payment: "all", sort: "newest" }) => {
-    if (!business) return;
+  const loadOrders = useCallback(async (query: OrderHistoryQuery = { page: 1, search: "", status: "all", payment: "all", sort: "newest" }) => {
+    if (!businessId) return;
     const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
       p_page: query.page, p_page_size: 20, p_search: query.search || null,
       p_status: query.status === "all" ? null : query.status,
@@ -222,14 +222,16 @@ function PharmacyDashboard() {
     }
     const rows = Array.isArray(data?.orders) ? data.orders : [];
     setTotalOrderCount(Number(data?.total_count ?? 0));
-    setOrders(rows.map((row: Record<string, unknown>) => ({
+    setOrders((current) => rows.map((row: Record<string, unknown>) => ({
       ...row, paystack_reference: null, accepted_at: null, packed_at: null,
       dispatched_at: null, delivered_at: null, cancelled_at: null, paid_at: null,
       payment_confirmed_at: null, receipt_sent_at: null, receipt_sent_to: null,
+      ...current.find((order) => order.id === row.id),
+      ...row,
       wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
-      order_items: [], item_count: Number(row.item_count ?? 0), unit_count: Number(row.unit_count ?? 0),
+      order_items: current.find((order) => order.id === row.id)?.order_items ?? [], item_count: Number(row.item_count ?? 0), unit_count: Number(row.unit_count ?? 0),
     })) as OrderRow[]);
-  });
+  }, [businessId]);
 
   const loadOrderDetail = async (orderId: string, expectedItemCount?: number) => {
     const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", { p_order_id: orderId });
