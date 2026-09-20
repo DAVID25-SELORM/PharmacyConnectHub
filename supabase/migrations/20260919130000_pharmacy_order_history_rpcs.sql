@@ -26,7 +26,11 @@ AS $$
       SELECT 1 FROM public.businesses pb
       WHERE pb.id = o.pharmacy_id AND pb.owner_id = auth.uid() AND pb.type = 'pharmacy'
     )
-    AND (NULLIF(btrim(p_status), '') IS NULL OR o.status::TEXT = p_status)
+    AND (
+      NULLIF(btrim(p_status), '') IS NULL
+      OR (p_status = 'active' AND o.status::TEXT IN ('pending', 'accepted', 'packed', 'dispatched'))
+      OR (p_status <> 'active' AND o.status::TEXT = p_status)
+    )
     AND (NULLIF(btrim(p_payment_status), '') IS NULL OR o.payment_status::TEXT = p_payment_status)
     AND (
       NULLIF(btrim(p_search), '') IS NULL

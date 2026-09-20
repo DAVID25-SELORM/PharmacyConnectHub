@@ -36,7 +36,7 @@ import {
 import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
-import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
+import { formatGHS, timeAgo } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
@@ -121,7 +121,11 @@ type OrderRow = {
   receipt_sent_to: string | null;
   wholesaler: { name: string } | null;
   order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
+  item_count?: number;
+  unit_count?: number;
 };
+
+type OrderHistoryQuery = { page: number; search: string; status: string; payment: string; sort: string };
 
 function PharmacyDashboard() {
   const navigate = useNavigate();
@@ -130,6 +134,7 @@ function PharmacyDashboard() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [totalOrderCount, setTotalOrderCount] = useState(0);
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
@@ -187,22 +192,25 @@ function PharmacyDashboard() {
     });
   }, [loading, user]);
 
-  const loadOrders = useEffectEvent(async () => {
+  const loadOrders = useEffectEvent(async (query: OrderHistoryQuery = { page: 1, search: "", status: "all", payment: "all", sort: "newest" }) => {
     if (!business) return;
     const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
-      p_page: 1, p_page_size: 100, p_sort: "newest",
+      p_page: query.page, p_page_size: 20, p_search: query.search || null,
+      p_status: query.status === "all" ? null : query.status,
+      p_payment_status: query.payment === "all" ? null : query.payment, p_sort: query.sort,
     });
     if (error) {
       toast.error("We couldn't load your orders. Please try again.");
       return;
     }
     const rows = Array.isArray(data?.orders) ? data.orders : [];
+    setTotalOrderCount(Number(data?.total_count ?? 0));
     setOrders(rows.map((row: Record<string, unknown>) => ({
       ...row, paystack_reference: null, accepted_at: null, packed_at: null,
       dispatched_at: null, delivered_at: null, cancelled_at: null, paid_at: null,
       payment_confirmed_at: null, receipt_sent_at: null, receipt_sent_to: null,
       wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
-      order_items: [],
+      order_items: [], item_count: Number(row.item_count ?? 0), unit_count: Number(row.unit_count ?? 0),
     })) as OrderRow[]);
   });
 
@@ -460,7 +468,7 @@ function PharmacyDashboard() {
             />
           </TabsContent>
           <TabsContent value="orders">
-            <OrdersView orders={orders} loadOrderDetail={loadOrderDetail} />
+            <OrdersView orders={orders} totalCount={totalOrderCount} loadOrders={loadOrders} loadOrderDetail={loadOrderDetail} />
           </TabsContent>
         </Tabs>
       </main>
@@ -642,10 +650,14 @@ function CatalogView({
     }
   }, [wholesalerId, wholesalers]);
 
-  const categoryCount = useMemo(
-    () => new Set(products.map((product) => product.category).filter(Boolean)).size,
+  const availableCategories = useMemo(
+    () => [...new Set(products.map((product) => product.category).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)),
     [products],
   );
+
+  useEffect(() => {
+    if (category !== "all" && !availableCategories.includes(category)) setCategory("all");
+  }, [availableCategories, category]);
 
   const filtered = useMemo(() => {
     let list = products.filter((p) => {
@@ -710,7 +722,7 @@ function CatalogView({
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">Categories</div>
-          <div className="mt-2 font-display text-3xl font-bold">{categoryCount}</div>
+          <div className="mt-2 font-display text-3xl font-bold">{availableCategories.length}</div>
           <p className="mt-2 text-sm text-muted-foreground">
             Therapeutic groups represented in the current catalog.
           </p>
@@ -735,7 +747,7 @@ function CatalogView({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {PRODUCT_CATEGORIES.map((c) => (
+                {availableCategories.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>
@@ -889,7 +901,7 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders, loadOrderDetail }: { orders: OrderRow[]; loadOrderDetail: (id: string) => Promise<OrderRow | null> }) {
+function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: { orders: OrderRow[]; totalCount: number; loadOrders: (query?: OrderHistoryQuery) => Promise<void>; loadOrderDetail: (id: string) => Promise<OrderRow | null> }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -903,21 +915,10 @@ function OrdersView({ orders, loadOrderDetail }: { orders: OrderRow[]; loadOrder
     transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
     delivered: orders.filter((o) => o.status === "delivered").length,
   }), [orders]);
-  const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return [...orders]
-      .filter((o) => status === "all" || (status === "active" ? ["pending", "accepted", "packed"].includes(o.status) : o.status === status))
-      .filter((o) => payment === "all" || o.payment_status === payment)
-      .filter((o) => !term || `${o.order_number} ${o.wholesaler?.name ?? ""} ${o.order_items.map((i) => i.product_name).join(" ")}`.toLowerCase().includes(term))
-      .sort((a, b) => {
-        if (sort === "highest") return Number(b.total_ghs) - Number(a.total_ghs);
-        if (sort === "lowest") return Number(a.total_ghs) - Number(b.total_ghs);
-        const result = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        return sort === "oldest" ? result : -result;
-      });
-  }, [orders, payment, query, sort, status]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageOrders = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const filtered = orders;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pageOrders = orders;
+  useEffect(() => { void loadOrders({ page, search: query, status, payment, sort }); }, [loadOrders, page, payment, query, sort, status]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
   if (orders.length === 0) {
@@ -963,7 +964,7 @@ function OrdersView({ orders, loadOrderDetail }: { orders: OrderRow[]; loadOrder
             </div>
             <div className="text-right">
               <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
-              <div className="text-xs text-muted-foreground">{o.order_items.length} item(s) · {units} unit(s)</div>
+              <div className="text-xs text-muted-foreground">{o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)</div>
             </div>
           </div>
 
@@ -994,7 +995,7 @@ function OrdersView({ orders, loadOrderDetail }: { orders: OrderRow[]; loadOrder
           </div></>}
         </Card>;
       })}
-      <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Showing {pageOrders.length} of {filtered.length} orders</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
+      <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Showing {pageOrders.length} of {totalCount} orders</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
     </div>
   );
 }
