@@ -968,7 +968,7 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: { order
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={() => { if (!open && o.order_items.length === 0) void loadOrderDetail(o.id); setOpenOrderId(open ? null : o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
+          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
           {open && <>
           <OrderTimeline o={o} />
 
