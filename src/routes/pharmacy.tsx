@@ -231,14 +231,28 @@ function PharmacyDashboard() {
     })) as OrderRow[]);
   });
 
-  const loadOrderDetail = async (orderId: string) => {
+  const loadOrderDetail = async (orderId: string, expectedItemCount?: number) => {
     const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", { p_order_id: orderId });
     if (error || !data?.order) {
+      console.error("[Drugxone] get_pharmacy_order_detail failed", {
+        orderId,
+        error,
+        response: data,
+      });
       toast.error("We couldn't load this order. Please try again.");
       return null;
     }
     const detail = data.order as OrderRow & { items?: OrderRow["order_items"] };
     const hydrated = { ...detail, order_items: detail.items ?? [] };
+    if ((expectedItemCount ?? hydrated.item_count ?? 0) > 0 && hydrated.order_items.length === 0) {
+      console.error("[Drugxone] order detail returned no items", {
+        orderId,
+        expectedItemCount: expectedItemCount ?? hydrated.item_count,
+        response: data,
+      });
+      toast.error("This order has items, but the detail response was empty. Check the Supabase migration and browser console.");
+      return null;
+    }
     setOrders((current) => current.map((order) => order.id === orderId ? { ...order, ...hydrated } : order));
     return hydrated;
   };
@@ -924,7 +938,12 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: { orders: OrderRow[]; totalCount: number; loadOrders: (query?: OrderHistoryQuery) => Promise<void>; loadOrderDetail: (id: string) => Promise<OrderRow | null> }) {
+function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: {
+  orders: OrderRow[];
+  totalCount: number;
+  loadOrders: (query?: OrderHistoryQuery) => Promise<void>;
+  loadOrderDetail: (id: string, expectedItemCount?: number) => Promise<OrderRow | null>;
+}) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -991,7 +1010,7 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: { order
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
+          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
           {open && <>
           <OrderTimeline o={o} />
 
