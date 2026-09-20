@@ -641,6 +641,8 @@ function CustomerDiscounts({ wholesalerId }: { wholesalerId: string }) {
   const [type, setType] = useState("percentage");
   const [value, setValue] = useState("");
   const [minimum, setMinimum] = useState("0");
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -662,6 +664,8 @@ function CustomerDiscounts({ wholesalerId }: { wholesalerId: string }) {
       p_discount_percent: type === "percentage" ? Number(value) : null,
       p_discount_amount: type === "fixed" ? Number(value) : null,
       p_minimum_order_value: Number(minimum) || 0,
+      p_starts_at: startsAt ? new Date(`${startsAt}T00:00:00`).toISOString() : new Date().toISOString(),
+      p_ends_at: endsAt ? new Date(`${endsAt}T23:59:59`).toISOString() : null,
     });
     setSaving(false);
     if (error) toast.error(error.message); else { toast.success("Customer discount saved."); setValue(""); void load(); }
@@ -675,15 +679,17 @@ function CustomerDiscounts({ wholesalerId }: { wholesalerId: string }) {
   return <div className="space-y-6">
     <Card className="p-5"><div className="flex items-center gap-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-display text-xl font-bold">Customer discounts</h2></div>
       <p className="mt-1 text-sm text-muted-foreground">Set a private percentage or fixed discount for an approved pharmacy. Discounts are applied securely at checkout.</p>
-      <div className="mt-4 grid gap-3 md:grid-cols-5">
+      <div className="mt-4 grid gap-3 md:grid-cols-7">
         <Select value={pharmacyId} onValueChange={setPharmacyId}><SelectTrigger><SelectValue placeholder="Pharmacy" /></SelectTrigger><SelectContent>{pharmacies.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
         <Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">Percentage</SelectItem><SelectItem value="fixed">Fixed GHS</SelectItem></SelectContent></Select>
         <Input type="number" min="0.01" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} placeholder={type === "percentage" ? "Discount %" : "Discount GHS"} />
         <Input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} placeholder="Minimum order GHS" />
+        <Input type="date" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} aria-label="Discount start date" />
+        <Input type="date" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} aria-label="Discount expiry date" />
         <Button onClick={() => void save()} disabled={saving}>{saving ? "Saving..." : "Save discount"}</Button>
       </div>
     </Card>
-    <Card className="overflow-hidden"><div className="border-b p-4 font-semibold">Active and previous discounts</div><div className="divide-y">{rows.length === 0 ? <p className="p-4 text-sm text-muted-foreground">No discounts configured.</p> : rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm"><div><div className="font-medium">{pharmacies.find((p) => p.id === row.pharmacy_id)?.name ?? row.pharmacy_id}</div><div className="text-muted-foreground">{row.discount_type === "percentage" ? `${row.discount_percent}%` : `GHS ${row.discount_amount}`} · minimum GHS {row.minimum_order_value}</div></div>{row.active && <Button size="sm" variant="outline" onClick={() => void deactivate(row.id)}>Deactivate</Button>}</div>)}</div></Card>
+    <Card className="overflow-hidden"><div className="border-b p-4 font-semibold">Active and previous discounts</div><div className="divide-y">{rows.length === 0 ? <p className="p-4 text-sm text-muted-foreground">No discounts configured.</p> : rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm"><div><div className="font-medium">{pharmacies.find((p) => p.id === row.pharmacy_id)?.name ?? row.pharmacy_id}</div><div className="text-muted-foreground">{row.discount_type === "percentage" ? `${row.discount_percent}%` : `GHS ${row.discount_amount}`} · minimum GHS {row.minimum_order_value}</div><div className="text-xs text-muted-foreground">{new Date(row.starts_at).toLocaleDateString()} – {row.ends_at ? new Date(row.ends_at).toLocaleDateString() : "No expiry"}</div></div>{row.active && <Button size="sm" variant="outline" onClick={() => void deactivate(row.id)}>Deactivate</Button>}</div>)}</div></Card>
   </div>;
 }
 
