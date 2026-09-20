@@ -243,7 +243,23 @@ function PharmacyDashboard() {
       return null;
     }
     const detail = data.order as OrderRow & { items?: OrderRow["order_items"] };
-    const hydrated = { ...detail, order_items: detail.items ?? [] };
+    let items = Array.isArray(detail.items) ? detail.items : [];
+    if (items.length === 0) {
+      const fallback = await supabase
+        .from("order_items")
+        .select("product_name,quantity,unit_price_ghs")
+        .eq("order_id", orderId)
+        .order("id");
+      if (!fallback.error && Array.isArray(fallback.data)) {
+        items = fallback.data as OrderRow["order_items"];
+      } else if (fallback.error) {
+        console.error("[Drugxone] order_items fallback query failed", {
+          orderId,
+          error: fallback.error,
+        });
+      }
+    }
+    const hydrated = { ...detail, order_items: items };
     if ((expectedItemCount ?? hydrated.item_count ?? 0) > 0 && hydrated.order_items.length === 0) {
       console.error("[Drugxone] order detail returned no items", {
         orderId,
