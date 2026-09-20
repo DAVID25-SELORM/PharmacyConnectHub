@@ -86,7 +86,7 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
   return (
     <article className="print-document hidden print:block">
       <header className="mb-6 border-b-2 border-black pb-3">
-        <h1 className="text-2xl font-bold">Drugxone</h1>
+        <h1 className="text-2xl font-bold">PharmaHub GH</h1>
         <p className="text-xs">Developed by Daventra Technologies</p>
         <h2 className="mt-2 text-xl font-bold uppercase">{modeLabels[mode]}</h2>
         <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
