@@ -189,15 +189,34 @@ function PharmacyDashboard() {
 
   const loadOrders = useEffectEvent(async () => {
     if (!business) return;
-    const { data } = await supabase
-      .from("orders")
-      .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,paystack_reference,accepted_at,packed_at,dispatched_at,delivered_at,cancelled_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,wholesaler:businesses!orders_wholesaler_id_fkey(name),order_items(product_id,product_name,quantity,unit_price_ghs,products(form,pack_size))",
-      )
-      .eq("pharmacy_id", business.id)
-      .order("created_at", { ascending: false });
-    setOrders((data as unknown as OrderRow[]) ?? []);
+    const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
+      p_page: 1, p_page_size: 100, p_sort: "newest",
+    });
+    if (error) {
+      toast.error("We couldn't load your orders. Please try again.");
+      return;
+    }
+    const rows = Array.isArray(data?.orders) ? data.orders : [];
+    setOrders(rows.map((row: Record<string, unknown>) => ({
+      ...row, paystack_reference: null, accepted_at: null, packed_at: null,
+      dispatched_at: null, delivered_at: null, cancelled_at: null, paid_at: null,
+      payment_confirmed_at: null, receipt_sent_at: null, receipt_sent_to: null,
+      wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
+      order_items: [],
+    })) as OrderRow[]);
   });
+
+  const loadOrderDetail = async (orderId: string) => {
+    const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", { p_order_id: orderId });
+    if (error || !data?.order) {
+      toast.error("We couldn't load this order. Please try again.");
+      return null;
+    }
+    const detail = data.order as OrderRow & { items?: OrderRow["order_items"] };
+    const hydrated = { ...detail, order_items: detail.items ?? [] };
+    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, ...hydrated } : order));
+    return hydrated;
+  };
   useEffect(() => {
     if (businessId) {
       void loadOrders();
@@ -441,7 +460,7 @@ function PharmacyDashboard() {
             />
           </TabsContent>
           <TabsContent value="orders">
-            <OrdersView orders={orders} />
+            <OrdersView orders={orders} loadOrderDetail={loadOrderDetail} />
           </TabsContent>
         </Tabs>
       </main>
@@ -870,24 +889,65 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders }: { orders: OrderRow[] }) {
+function OrdersView({ orders, loadOrderDetail }: { orders: OrderRow[]; loadOrderDetail: (id: string) => Promise<OrderRow | null> }) {
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const [payment, setPayment] = useState("all");
+  const [sort, setSort] = useState("newest");
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const counts = useMemo(() => ({
+    active: orders.filter((o) => ["pending", "accepted", "packed", "dispatched"].includes(o.status)).length,
+    awaiting: orders.filter((o) => o.payment_status === "unpaid").length,
+    transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
+    delivered: orders.filter((o) => o.status === "delivered").length,
+  }), [orders]);
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return [...orders]
+      .filter((o) => status === "all" || (status === "active" ? ["pending", "accepted", "packed"].includes(o.status) : o.status === status))
+      .filter((o) => payment === "all" || o.payment_status === payment)
+      .filter((o) => !term || `${o.order_number} ${o.wholesaler?.name ?? ""} ${o.order_items.map((i) => i.product_name).join(" ")}`.toLowerCase().includes(term))
+      .sort((a, b) => {
+        if (sort === "highest") return Number(b.total_ghs) - Number(a.total_ghs);
+        if (sort === "lowest") return Number(a.total_ghs) - Number(b.total_ghs);
+        const result = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return sort === "oldest" ? result : -result;
+      });
+  }, [orders, payment, query, sort, status]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageOrders = filtered.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+
   if (orders.length === 0) {
     return (
       <Card className="p-12 text-center text-muted-foreground">
-        You haven't placed any orders yet.
+        <p>No orders yet</p>
+        <p className="mt-2 text-sm">Orders you place with approved wholesalers will appear here.</p>
       </Card>
     );
   }
   return (
     <div className="space-y-4">
-      <div className="flex justify-end print:hidden">
-        <Button type="button" variant="outline" onClick={() => window.print()}>
-          <Printer className="mr-2 h-4 w-4" />
-          Print order report
-        </Button>
+      <div className="grid gap-3 sm:grid-cols-4">
+        <SummaryCard label="Active Orders" value={counts.active} />
+        <SummaryCard label="Awaiting Payment" value={counts.awaiting} />
+        <SummaryCard label="In Transit" value={counts.transit} />
+        <SummaryCard label="Delivered" value={counts.delivered} />
       </div>
-      {orders.map((o) => (
-        <Card key={o.id} className="p-5">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row">
+        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search orders" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search orders..." className="pl-9" /></div>
+        <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger className="sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="packed">Packed</SelectItem><SelectItem value="dispatched">Dispatched</SelectItem><SelectItem value="delivered">Delivered</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>
+        <Select value={payment} onValueChange={(value) => { setPayment(value); setPage(1); }}><SelectTrigger className="sm:w-40"><SelectValue placeholder="Payment" /></SelectTrigger><SelectContent><SelectItem value="all">All payments</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="unpaid">Awaiting payment</SelectItem><SelectItem value="failed">Failed</SelectItem><SelectItem value="refunded">Refunded</SelectItem></SelectContent></Select>
+        <Select value={sort} onValueChange={setSort}><SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="highest">Highest amount</SelectItem><SelectItem value="lowest">Lowest amount</SelectItem></SelectContent></Select>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">{["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => <Button key={item} size="sm" variant={status === item ? "secondary" : "ghost"} onClick={() => { setStatus(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</Button>)}</div>
+      {pageOrders.length === 0 ? <Card className="p-10 text-center text-muted-foreground">No orders match your filters.</Card> : null}
+      {pageOrders.map((o) => {
+        const open = openOrderId === o.id;
+        const units = o.order_items.reduce((total, item) => total + item.quantity, 0);
+        return <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -898,15 +958,17 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
               <div className="mt-1 text-sm text-muted-foreground">
                 From{" "}
                 <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span> ·{" "}
-                {timeAgo(o.created_at)}
+                {new Date(o.created_at).toLocaleDateString()} · {timeAgo(o.created_at)}
               </div>
             </div>
             <div className="text-right">
               <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
-              <div className="text-xs text-muted-foreground">{o.order_items.length} item(s)</div>
+              <div className="text-xs text-muted-foreground">{o.order_items.length} item(s) · {units} unit(s)</div>
             </div>
           </div>
 
+          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={() => { if (!open && o.order_items.length === 0) void loadOrderDetail(o.id); setOpenOrderId(open ? null : o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
+          {open && <>
           <OrderTimeline o={o} />
 
           <ReceiptStatusPanel order={o} />
@@ -929,11 +991,16 @@ function OrdersView({ orders }: { orders: OrderRow[] }) {
                 </div>
               </div>
             ))}
-          </div>
-        </Card>
-      ))}
+          </div></>}
+        </Card>;
+      })}
+      <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Showing {pageOrders.length} of {filtered.length} orders</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
     </div>
   );
+}
+
+function SummaryCard({ label, value }: { label: string; value: number }) {
+  return <Card className="p-4"><div className="text-sm text-muted-foreground">{label}</div><div className="mt-1 font-display text-2xl font-bold">{value}</div></Card>;
 }
 
 function ReceiptStatusPanel({ order }: { order: OrderRow }) {

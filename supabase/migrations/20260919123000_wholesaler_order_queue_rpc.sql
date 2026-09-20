@@ -56,7 +56,13 @@ AS $$
         'payment_method', payment_method,
         'payment_status', payment_status,
         'pharmacy', jsonb_build_object('name', pharmacy_name, 'city', pharmacy_city)
-      ) ORDER BY created_at ASC, id
+      ) ORDER BY
+        CASE WHEN p_sort = 'highest' THEN total_ghs END DESC NULLS LAST,
+        CASE WHEN p_sort = 'lowest' THEN total_ghs END ASC NULLS LAST,
+        CASE WHEN p_sort = 'pharmacy' THEN pharmacy_name END ASC NULLS LAST,
+        CASE WHEN p_sort = 'newest' THEN created_at END DESC NULLS LAST,
+        CASE WHEN p_sort NOT IN ('highest', 'lowest', 'pharmacy', 'newest') THEN created_at END ASC NULLS LAST,
+        id
     ), '[]'::JSONB)
   )
   FROM counted;
