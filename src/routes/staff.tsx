@@ -241,7 +241,7 @@ function StaffManagement() {
         });
         toast.success(
           result.mode === "invited"
-            ? "Platform invite sent. They will finish setup inside PharmaHub Admin."
+            ? "Platform invite sent. They will finish setup inside Drugxone Admin."
             : "Platform staff added successfully.",
         );
         navigate({ to: "/admin/staff" });
@@ -777,7 +777,7 @@ function StaffManagement() {
               <DialogTitle>Add Team Member</DialogTitle>
               <DialogDescription>
                 {showPrivateTeamGuidance
-                  ? "Choose the interface first. Business staff stay in the selected workspace, while platform staff stay inside PharmaHub Admin."
+                  ? "Choose the interface first. Business staff stay in the selected workspace, while platform staff stay inside Drugxone Admin."
                   : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>

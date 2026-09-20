@@ -1,6 +1,6 @@
-# PharmaHub GH
+# Drugxone
 
-PharmaHub GH is a Supabase-backed B2B pharmaceutical marketplace for wholesalers and retail pharmacies in Ghana.
+Drugxone is a Supabase-backed B2B pharmaceutical marketplace for wholesalers and retail pharmacies in Ghana.
 
 ## Current product scope
 

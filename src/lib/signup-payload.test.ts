@@ -3,7 +3,7 @@ import { buildSignupPayload } from "@/lib/signup-payload";
 
 const baseForm = {
   businessEmail: "hello@pharmacy.com",
-  businessName: "PharmaHub Pharmacy",
+  businessName: "Drugxone Pharmacy",
   businessPhone: "0241234567",
   city: "Accra",
   gpsAddress: "GA-123-4567",

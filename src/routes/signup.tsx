@@ -258,7 +258,7 @@ function SignupPage() {
                       value={form.businessName}
                       onChange={(e) => update("businessName", e.target.value)}
                       placeholder={
-                        role === "pharmacy" ? "e.g. Goodlife Pharmacy" : "e.g. PharmaHub Wholesale"
+                        role === "pharmacy" ? "e.g. Goodlife Pharmacy" : "e.g. Drugxone Wholesale"
                       }
                       required
                     />

@@ -390,7 +390,7 @@ function PlatformStaffManagement() {
               Platform Team
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Manage who can access the PharmaHub Admin interface.
+              Manage who can access the Drugxone Admin interface.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -717,7 +717,7 @@ function PlatformStaffManagement() {
               <DialogTitle>Add Staff</DialogTitle>
               <DialogDescription>
                 {showPrivateTeamGuidance
-                  ? "Choose the interface first. Platform staff stay inside PharmaHub Admin, while business staff stay inside the selected workspace."
+                  ? "Choose the interface first. Platform staff stay inside Drugxone Admin, while business staff stay inside the selected workspace."
                   : "Choose where this person should work, then complete the access details below."}
               </DialogDescription>
             </DialogHeader>

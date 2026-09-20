@@ -312,7 +312,7 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     PERFORM public.write_audit_log(
       'Platform staff invited',
-      'PharmaHub GH',
+      'Drugxone',
       'platform_staff',
       NEW.id,
       COALESCE(staff_email, NEW.user_id::TEXT),
@@ -324,7 +324,7 @@ BEGIN
   IF NEW.role IS DISTINCT FROM OLD.role OR NEW.status IS DISTINCT FROM OLD.status THEN
     PERFORM public.write_audit_log(
       'Platform staff updated',
-      'PharmaHub GH',
+      'Drugxone',
       'platform_staff',
       NEW.id,
       COALESCE(staff_email, NEW.user_id::TEXT),

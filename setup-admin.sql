@@ -33,7 +33,7 @@ BEGIN
   ) VALUES (
     v_user_id,
     'pharmacy',
-    'PharmaHub Admin',
+    'Drugxone Admin',
     'PCG-ADMIN-001',
     'Accra',
     'Greater Accra',
