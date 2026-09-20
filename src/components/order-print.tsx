@@ -56,7 +56,14 @@ export function OrderPrintActions({
   const [mode, setMode] = useState<OrderPrintMode | null>(null);
   const print = (next: OrderPrintMode) => {
     setMode(next);
-    window.setTimeout(() => window.print(), 0);
+    window.setTimeout(() => {
+      const previousTitle = document.title;
+      document.title = "Drugxone";
+      window.print();
+      window.setTimeout(() => {
+        document.title = previousTitle;
+      }, 0);
+    }, 0);
   };
   return (
     <div className="mt-4">
@@ -86,7 +93,7 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
   return (
     <article className="print-document hidden print:block">
       <header className="mb-6 border-b-2 border-black pb-3">
-        <h1 className="text-2xl font-bold">PharmaHub GH</h1>
+        <h1 className="text-2xl font-bold">Drugxone</h1>
         <p className="text-xs">Developed by Daventra Technologies</p>
         <h2 className="mt-2 text-xl font-bold uppercase">{modeLabels[mode]}</h2>
         <div className="mt-2 grid grid-cols-2 gap-1 text-sm">

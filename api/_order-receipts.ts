@@ -144,7 +144,7 @@ function buildReceiptText(input: SendOrderReceiptEmailInput, loginUrl: string) {
     "",
     `Total: ${formatGhs(input.order.totalGhs)}`,
     "",
-    loginUrl ? `Open PharmaHub GH: ${loginUrl}` : "",
+    loginUrl ? `Open Drugxone: ${loginUrl}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -171,7 +171,7 @@ function buildReceiptHtml(input: SendOrderReceiptEmailInput, loginUrl: string) {
     <div style="background:#f5faf8;padding:32px 16px;font-family:Segoe UI,Arial,sans-serif;color:#102a43;">
       <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #d9e7df;border-radius:20px;overflow:hidden;">
         <div style="padding:28px 32px;background:linear-gradient(135deg,#0f766e,#0b4f4b);color:#ffffff;">
-          <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">PharmaHub GH</div>
+          <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">Drugxone</div>
           <h1 style="margin:12px 0 0;font-size:28px;line-height:1.15;">Order receipt</h1>
           <p style="margin:10px 0 0;font-size:15px;line-height:1.6;opacity:.92;">
             This receipt was issued after the wholesaler confirmed payment for your delivered order.
@@ -257,7 +257,7 @@ function buildReceiptHtml(input: SendOrderReceiptEmailInput, loginUrl: string) {
                   <a href="${escapeHtml(
                     loginUrl,
                   )}" style="display:inline-block;padding:14px 20px;border-radius:999px;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;">
-                    Open PharmaHub GH
+                    Open Drugxone
                   </a>
                 </div>`
               : ""
@@ -274,7 +274,7 @@ export async function sendOrderReceiptEmail(
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const fromEmail =
     process.env.RECEIPT_FROM_EMAIL?.trim() || process.env.MAIL_FROM_EMAIL?.trim() || "";
-  const fromName = process.env.RECEIPT_FROM_NAME?.trim() || "PharmaHub GH";
+  const fromName = process.env.RECEIPT_FROM_NAME?.trim() || "Drugxone";
   const replyTo =
     process.env.RECEIPT_REPLY_TO_EMAIL?.trim() || process.env.MAIL_REPLY_TO_EMAIL?.trim();
 
