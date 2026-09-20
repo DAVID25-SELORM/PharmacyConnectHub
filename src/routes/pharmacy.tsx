@@ -74,6 +74,8 @@ type Product = {
     region: string | null;
     verification_status: string;
   } | null;
+  customer_price_ghs?: number | null;
+  customer_discount_percent?: number | null;
 };
 
 type MasterCatalogueEntry = {
@@ -127,12 +129,22 @@ type OrderRow = {
 
 type OrderHistoryQuery = { page: number; search: string; status: string; payment: string; sort: string };
 
+function customerPrice(product: Product, discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>) {
+  const discount = discounts[product.wholesaler_id];
+  if (!discount || Number(discount.minimum_order_value) > 0) return Number(product.price_ghs);
+  if (discount.discount_type === "percentage" && discount.discount_percent) {
+    return Math.max(0, Math.round(Number(product.price_ghs) * (1 - Number(discount.discount_percent) / 100) * 100) / 100);
+  }
+  return Math.max(0, Number(product.price_ghs) - Number(discount.discount_amount ?? 0));
+}
+
 function PharmacyDashboard() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, roles } = useSession();
   const businessId = business?.id ?? null;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [discounts, setDiscounts] = useState<Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>>({});
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [totalOrderCount, setTotalOrderCount] = useState(0);
   const [placing, setPlacing] = useState(false);
@@ -168,14 +180,13 @@ function PharmacyDashboard() {
   useEffect(() => {
     if (loading || !user) return;
 
-    void supabase.rpc("list_marketplace_catalogue").then(({ data, error }) => {
+    void supabase.rpc("list_marketplace_catalogue").then(async ({ data, error }) => {
       if (error) {
         toast.error("Could not load the medicine catalogue. Please refresh and try again.");
         return;
       }
       const catalogue = (Array.isArray(data) ? data : []) as unknown as MasterCatalogueEntry[];
-      setProducts(
-        (catalogue ?? []).flatMap((master) =>
+      const loadedProducts = (catalogue ?? []).flatMap((master) =>
           (Array.isArray(master.offers) ? master.offers : []).map((offer) => ({
             ...offer,
             master_product_id: master.id,
@@ -187,8 +198,14 @@ function PharmacyDashboard() {
             pack_size: master.pack_size,
             category: master.category,
           })),
-        ),
-      );
+        );
+      setProducts(loadedProducts);
+      const wholesalerIds = [...new Set(loadedProducts.map((p) => p.wholesaler_id))];
+      const discountResults = await Promise.all(wholesalerIds.map(async (id) => {
+        const result = await (supabase as any).rpc("get_my_customer_discount", { p_wholesaler_id: id });
+        return [id, Array.isArray(result.data) ? result.data[0] : null] as const;
+      }));
+      setDiscounts(Object.fromEntries(discountResults.filter(([, value]) => value)));
     });
   }, [loading, user]);
 
@@ -462,6 +479,7 @@ function PharmacyDashboard() {
           <TabsContent value="catalog">
             <CatalogView
               products={products}
+              discounts={discounts}
               wholesalers={approvedWholesalers}
               addToCart={addToCart}
               canOrder={business.verification_status === "approved" && canPlaceOrders}
@@ -629,11 +647,13 @@ function CartSheet({
 
 function CatalogView({
   products,
+  discounts,
   wholesalers,
   addToCart,
   canOrder,
 }: {
   products: Product[];
+  discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
   wholesalers: WholesalerSummary[];
   addToCart: (id: string) => void;
   canOrder: boolean;
@@ -871,7 +891,10 @@ function CatalogView({
                                   {offer.wholesaler?.city}
                                 </div>
                               </td>
-                              <td className="p-2 font-semibold">{formatGHS(offer.price_ghs)}</td>
+                              <td className="p-2 font-semibold">
+                                {formatGHS(customerPrice(offer, discounts))}
+                                {discounts[offer.wholesaler_id] && <div className="text-xs font-normal text-success">Customer discount available</div>}
+                              </td>
                               <td className="p-2">
                                 {offer.stock > 0 ? `${offer.stock} in stock` : "Out of stock"}
                               </td>

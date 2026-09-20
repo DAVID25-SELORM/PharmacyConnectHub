@@ -13,6 +13,7 @@ import {
   Trash2,
   Upload,
   Download,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -336,6 +337,7 @@ function WholesalerDashboard() {
           <TabsList className="mb-6">
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
+            {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="orders">
@@ -359,6 +361,7 @@ function WholesalerDashboard() {
               canManageProducts={canManageProducts}
             />
           </TabsContent>
+          {canManageProducts && <TabsContent value="discounts"><CustomerDiscounts wholesalerId={business.id} /></TabsContent>}
         </Tabs>
       </main>
     </div>
@@ -629,6 +632,59 @@ function OrdersInbox({
       )}
     </div>
   );
+}
+
+function CustomerDiscounts({ wholesalerId }: { wholesalerId: string }) {
+  const [pharmacies, setPharmacies] = useState<{ id: string; name: string }[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
+  const [pharmacyId, setPharmacyId] = useState("");
+  const [type, setType] = useState("percentage");
+  const [value, setValue] = useState("");
+  const [minimum, setMinimum] = useState("0");
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    const [{ data: pharmacyData }, { data: discountData, error }] = await Promise.all([
+      supabase.from("businesses").select("id,name").eq("type", "pharmacy").eq("verification_status", "approved").order("name"),
+      (supabase as any).rpc("list_wholesaler_customer_discounts", { p_wholesaler_id: wholesalerId }),
+    ]);
+    if (error) toast.error(error.message);
+    setPharmacies((pharmacyData as { id: string; name: string }[]) ?? []);
+    setRows(Array.isArray(discountData) ? discountData : []);
+  };
+  useEffect(() => { void load(); }, [wholesalerId]);
+
+  const save = async () => {
+    if (!pharmacyId || !value || Number(value) <= 0) { toast.error("Choose a pharmacy and enter a valid discount."); return; }
+    setSaving(true);
+    const { error } = await (supabase as any).rpc("upsert_customer_discount", {
+      p_wholesaler_id: wholesalerId, p_pharmacy_id: pharmacyId, p_discount_type: type,
+      p_discount_percent: type === "percentage" ? Number(value) : null,
+      p_discount_amount: type === "fixed" ? Number(value) : null,
+      p_minimum_order_value: Number(minimum) || 0,
+    });
+    setSaving(false);
+    if (error) toast.error(error.message); else { toast.success("Customer discount saved."); setValue(""); void load(); }
+  };
+
+  const deactivate = async (id: string) => {
+    const { error } = await (supabase as any).rpc("deactivate_customer_discount", { p_discount_id: id });
+    if (error) toast.error(error.message); else { toast.success("Discount deactivated."); void load(); }
+  };
+
+  return <div className="space-y-6">
+    <Card className="p-5"><div className="flex items-center gap-2"><Percent className="h-5 w-5 text-primary" /><h2 className="font-display text-xl font-bold">Customer discounts</h2></div>
+      <p className="mt-1 text-sm text-muted-foreground">Set a private percentage or fixed discount for an approved pharmacy. Discounts are applied securely at checkout.</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-5">
+        <Select value={pharmacyId} onValueChange={setPharmacyId}><SelectTrigger><SelectValue placeholder="Pharmacy" /></SelectTrigger><SelectContent>{pharmacies.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent></Select>
+        <Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentage">Percentage</SelectItem><SelectItem value="fixed">Fixed GHS</SelectItem></SelectContent></Select>
+        <Input type="number" min="0.01" step="0.01" value={value} onChange={(e) => setValue(e.target.value)} placeholder={type === "percentage" ? "Discount %" : "Discount GHS"} />
+        <Input type="number" min="0" step="0.01" value={minimum} onChange={(e) => setMinimum(e.target.value)} placeholder="Minimum order GHS" />
+        <Button onClick={() => void save()} disabled={saving}>{saving ? "Saving..." : "Save discount"}</Button>
+      </div>
+    </Card>
+    <Card className="overflow-hidden"><div className="border-b p-4 font-semibold">Active and previous discounts</div><div className="divide-y">{rows.length === 0 ? <p className="p-4 text-sm text-muted-foreground">No discounts configured.</p> : rows.map((row) => <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm"><div><div className="font-medium">{pharmacies.find((p) => p.id === row.pharmacy_id)?.name ?? row.pharmacy_id}</div><div className="text-muted-foreground">{row.discount_type === "percentage" ? `${row.discount_percent}%` : `GHS ${row.discount_amount}`} · minimum GHS {row.minimum_order_value}</div></div>{row.active && <Button size="sm" variant="outline" onClick={() => void deactivate(row.id)}>Deactivate</Button>}</div>)}</div></Card>
+  </div>;
 }
 
 function ReceiptStatusPanel({ order }: { order: OrderRow }) {
