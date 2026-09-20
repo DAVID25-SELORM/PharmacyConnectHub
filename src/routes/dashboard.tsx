@@ -699,7 +699,7 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/pharmacy">Open browse</Link>
+          <Link to="/pharmacy" search={{ tab: "orders" }}>View orders</Link>
         </Button>
       </div>
 

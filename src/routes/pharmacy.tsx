@@ -481,7 +481,7 @@ function PharmacyDashboard() {
 
         <VerificationBanner business={business} />
 
-        <Tabs defaultValue="catalog" className="w-full">
+        <Tabs defaultValue={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "orders" ? "orders" : "catalog"} className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="catalog">
               Catalog ({approvedWholesalers.length} wholesaler
