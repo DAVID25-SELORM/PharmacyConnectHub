@@ -31,6 +31,8 @@ export type SessionState = {
   roles: AppRole[];
   business: Business | null;
   businesses: Business[];
+  /** True when roles/business memberships could not be resolved. Callers must fail closed. */
+  loadError?: boolean;
 };
 
 type QueryError = {
@@ -56,6 +58,7 @@ type WorkspaceQueryResult = {
   businesses: Business[];
   roles: AppRole[];
   unauthorized: boolean;
+  failed: boolean;
 };
 
 type BusinessMembershipRow = {
@@ -362,6 +365,7 @@ async function loadWorkspace(userId: string): Promise<WorkspaceQueryResult> {
     businesses: businessesResult.businesses,
     roles: rolesResult.roles,
     unauthorized,
+    failed: Boolean(rolesResult.error || businessesResult.error),
   };
 }
 
@@ -394,6 +398,7 @@ function applyLoadedSession(loadId: number, session: Session, workspace: Workspa
     roles: workspace.roles,
     business: workspace.business,
     businesses: workspace.businesses,
+    loadError: workspace.failed,
   });
 }
 

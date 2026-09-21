@@ -47,12 +47,13 @@ function buildUploadPath(userId: string, businessId: string, docType: string, fi
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const { loading, user, business, businesses, roles, refresh } = useSession();
+  const { loading, user, business, businesses, roles, refresh, loadError } = useSession();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadFeedback, setUploadFeedback] = useState<Record<string, UploadFeedback>>({});
   const [accessState, setAccessState] = useState<AccessState>("checking");
   const [refreshing, setRefreshing] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login" });
@@ -169,6 +170,34 @@ function OnboardingPage() {
     }
   };
 
+  const onResubmit = async () => {
+    if (!business) return;
+    setResubmitting(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).rpc("resubmit_business_verification", {
+        _business_id: business.id,
+      });
+      if (error) {
+        throw error;
+      }
+      await refresh();
+      toast.success("Submitted for review");
+    } catch (error) {
+      // Business-rule messages raised by the RPC (SQLSTATE P0001) are written for users;
+      // anything else stays generic so raw database errors are never shown.
+      const code = (error as { code?: string } | null)?.code;
+      const message = (error as { message?: string } | null)?.message;
+      toast.error(
+        code === "P0001" && message
+          ? message
+          : "We could not resubmit your verification right now. Please try again.",
+      );
+    } finally {
+      setResubmitting(false);
+    }
+  };
+
   const onUpload = async (docType: string, file: File) => {
     if (!user || !business) return;
 
@@ -273,6 +302,19 @@ function OnboardingPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="max-w-sm text-muted-foreground">
+          We couldn't verify your account status. Please try again.
+        </p>
+        <Button onClick={() => void onRefreshStatus()} disabled={refreshing}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   if (!business && businesses.length > 1) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
@@ -348,16 +390,28 @@ function OnboardingPage() {
   const progressValue =
     docTypes.length === 0 ? 0 : Math.round((uploadedCount / docTypes.length) * 100);
   const allRequiredDocsUploaded = uploadedCount === docTypes.length;
+  const statusCopy =
+    business.verification_status === "rejected"
+      ? {
+          title: "Verification requires attention",
+          body: "Some information or documents need to be updated before your DrugXOne business account can be approved. Replace the affected documents below.",
+        }
+      : !allRequiredDocsUploaded
+        ? {
+            title: "Complete your verification",
+            body: "Upload the required business documents to continue.",
+          }
+        : {
+            title: "Verification pending",
+            body: "Your documents have been submitted and are awaiting review. You can continue to update the required onboarding information while your account is under review.",
+          };
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Verification" />
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="font-display text-3xl font-bold">Verify your business</h1>
-        <p className="mt-2 text-muted-foreground">
-          We review every business to keep counterfeit drugs off the platform. Verification usually
-          takes 24-48 hours.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{statusCopy.title}</h1>
+        <p className="mt-2 text-muted-foreground">{statusCopy.body}</p>
 
         <Card className="mt-6 border-primary/15 bg-primary/5 p-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -384,7 +438,7 @@ function OnboardingPage() {
             </div>
             {business.verification_status === "rejected" && business.rejection_reason && (
               <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-                Rejection reason: {business.rejection_reason}
+                Review feedback: {business.rejection_reason}
               </div>
             )}
           </div>
@@ -431,8 +485,8 @@ function OnboardingPage() {
             <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
               <div className="text-sm font-semibold">3. You get notified</div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Once approved, you can continue straight into your dashboard and start using the
-                platform.
+                Once approved, your workspace opens automatically the next time you sign in or
+                refresh your status.
               </p>
             </div>
           </div>
@@ -507,19 +561,19 @@ function OnboardingPage() {
           <Button variant="ghost" onClick={() => void onRefreshStatus()} disabled={refreshing}>
             {refreshing ? "Checking..." : "Refresh status"}
           </Button>
-          <div className="flex flex-col items-end gap-1">
-            {!allRequiredDocsUploaded && (
-              <p className="text-xs text-muted-foreground">
-                Upload all required documents to continue.
-              </p>
-            )}
-            <Button
-              variant="hero"
-              onClick={() => navigate({ to: workspaceRoute(business.type) })}
-              disabled={!allRequiredDocsUploaded}
-            >
-              Continue to dashboard
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate({ to: "/help" })}>
+              Help Centre
             </Button>
+            {business.verification_status === "rejected" && (
+              <Button
+                variant="hero"
+                onClick={() => void onResubmit()}
+                disabled={!allRequiredDocsUploaded || resubmitting}
+              >
+                {resubmitting ? "Submitting..." : "Resubmit for review"}
+              </Button>
+            )}
           </div>
         </div>
       </main>

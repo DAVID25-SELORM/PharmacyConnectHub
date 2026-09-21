@@ -1,3 +1,4 @@
+import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -27,7 +28,7 @@ import { formatGHS, timeAgo } from "@/lib/format";
 import { useSession, type Business } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/dashboard")({
-  component: WorkspaceDashboard,
+  component: DashboardRoute,
 });
 
 type PharmacyOrderSummary = {
@@ -198,7 +199,7 @@ async function loadWholesalerOrderSummaries(
   };
 }
 
-function WorkspaceDashboard() {
+function WorkspaceDashboardContent() {
   const { loading, user, roles, business, businesses, setActiveBusiness } = useSession();
   const navigate = useNavigate();
   const businessId = business?.id ?? null;
@@ -446,6 +447,11 @@ function WorkspaceDashboard() {
                 </Card>
               );
             })}
+          </div>
+          <div className="mt-8 text-center">
+            <Button variant="outline" onClick={() => navigate({ to: "/add-business" })}>
+              Add another business
+            </Button>
           </div>
         </main>
       </div>
@@ -820,5 +826,13 @@ function QuickActionsCard({
         ))}
       </div>
     </Card>
+  );
+}
+
+function DashboardRoute() {
+  return (
+    <WorkspaceGate allowWorkspaceChooser>
+      <WorkspaceDashboardContent />
+    </WorkspaceGate>
   );
 }

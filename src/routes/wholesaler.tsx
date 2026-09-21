@@ -1,3 +1,4 @@
+import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
@@ -64,7 +65,7 @@ export const Route = createFileRoute("/wholesaler")({
       { name: "description", content: "Manage inventory, receive orders, update fulfilment." },
     ],
   }),
-  component: WholesalerDashboard,
+  component: WholesalerRoute,
 });
 
 type Product = {
@@ -107,7 +108,7 @@ type OrderRow = {
   order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
 };
 
-function WholesalerDashboard() {
+function WholesalerDashboardContent() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, roles } = useSession();
   const businessId = business?.id ?? null;
@@ -1678,5 +1679,13 @@ Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500`}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function WholesalerRoute() {
+  return (
+    <WorkspaceGate>
+      <WholesalerDashboardContent />
+    </WorkspaceGate>
   );
 }

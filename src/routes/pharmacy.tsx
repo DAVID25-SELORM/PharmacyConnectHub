@@ -1,3 +1,4 @@
+import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import {
@@ -50,7 +51,7 @@ export const Route = createFileRoute("/pharmacy")({
       { name: "description", content: "Browse medicines, compare prices, place orders." },
     ],
   }),
-  component: PharmacyDashboard,
+  component: PharmacyRoute,
 });
 
 type Product = {
@@ -138,7 +139,7 @@ function customerPrice(product: Product, discounts: Record<string, { discount_ty
   return Math.max(0, Number(product.price_ghs) - Number(discount.discount_amount ?? 0));
 }
 
-function PharmacyDashboard() {
+function PharmacyDashboardContent() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, roles } = useSession();
   const businessId = business?.id ?? null;
@@ -1084,5 +1085,13 @@ function ReceiptStatusPanel({ order }: { order: OrderRow }) {
       <div className="font-medium">{title}</div>
       <div className="mt-1 text-muted-foreground">{body}</div>
     </div>
+  );
+}
+
+function PharmacyRoute() {
+  return (
+    <WorkspaceGate>
+      <PharmacyDashboardContent />
+    </WorkspaceGate>
   );
 }

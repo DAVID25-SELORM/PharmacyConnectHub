@@ -93,7 +93,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // 4. Verify caller manages the business
   const [{ data: biz }, { data: adminRole }] = await Promise.all([
-    admin.from("businesses").select("id, owner_id").eq("id", businessId).single(),
+    admin
+      .from("businesses")
+      .select("id, owner_id, verification_status")
+      .eq("id", businessId)
+      .single(),
     admin
       .from("user_roles")
       .select("role")
@@ -104,6 +108,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!biz || (biz.owner_id !== caller.id && !adminRole)) {
     return res.status(403).json({ error: "Only the business owner or an admin can invite staff" });
+  }
+
+  // Pending and rejected businesses may only use onboarding. Platform admins are exempt.
+  if (!adminRole && biz.verification_status !== "approved") {
+    return res
+      .status(403)
+      .json({ error: "Your business must be verified before you can invite staff" });
   }
 
   // 5. Look up existing user by email via RPC (avoids loading all users)

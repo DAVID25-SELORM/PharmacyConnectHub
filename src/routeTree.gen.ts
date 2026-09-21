@@ -20,6 +20,7 @@ import { Route as HelpRouteImport } from './routes/help'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AddBusinessRouteImport } from './routes/add-business'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 
@@ -78,6 +79,11 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AddBusinessRoute = AddBusinessRouteImport.update({
+  id: '/add-business',
+  path: '/add-business',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -91,6 +97,7 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/add-business': typeof AddBusinessRoute
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/add-business': typeof AddBusinessRoute
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -122,6 +130,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/add-business': typeof AddBusinessRoute
   '/admin': typeof AdminRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/add-business'
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
@@ -154,6 +164,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/add-business'
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/add-business'
     | '/admin'
     | '/dashboard'
     | '/forgot-password'
@@ -185,6 +197,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AddBusinessRoute: typeof AddBusinessRoute
   AdminRoute: typeof AdminRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/add-business': {
+      id: '/add-business'
+      path: '/add-business'
+      fullPath: '/add-business'
+      preLoaderRoute: typeof AddBusinessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -306,6 +326,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AddBusinessRoute: AddBusinessRoute,
   AdminRoute: AdminRouteWithChildren,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,

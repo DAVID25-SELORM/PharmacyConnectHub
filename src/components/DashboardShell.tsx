@@ -158,7 +158,9 @@ export function DashboardHeader({
   const { business, businesses, setActiveBusiness } = useSession();
   const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
   const workspaceLabel = business?.type === "wholesaler" ? "Workspace" : "Browse";
-  const canSwitchWorkspaces = showNav && businesses.length > 1 && business;
+  // The switcher stays available without the full nav so a user stuck on a pending
+  // workspace's onboarding page can still switch to an approved one.
+  const canSwitchWorkspaces = businesses.length > 1 && business;
 
   const onSignOut = async () => {
     await supabase.auth.signOut();
@@ -252,6 +254,11 @@ export function DashboardHeader({
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           {rightSlot}
+          {business && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/add-business">Add business</Link>
+            </Button>
+          )}
           <NotificationBell />
           <Button variant="ghost" size="sm" onClick={onSignOut} aria-label="Sign out">
             <LogOut className="h-4 w-4" />

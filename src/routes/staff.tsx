@@ -1,3 +1,4 @@
+import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { Loader2, Pencil, Trash2, UserPlus, Users } from "lucide-react";
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/staff")({
   head: () => ({
     meta: [{ title: "Team - Drugxone" }],
   }),
-  component: StaffManagement,
+  component: StaffRoute,
 });
 
 type ManageableStaffRole = Exclude<BusinessStaffRole, "owner">;
@@ -124,7 +125,7 @@ function getEditableStatuses(member: StaffMember): StaffStatus[] {
   return ["active", "inactive"];
 }
 
-function StaffManagement() {
+function StaffManagementContent() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, roles, setActiveBusiness } = useSession();
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -872,5 +873,13 @@ function StaffManagement() {
         </Dialog>
       </main>
     </div>
+  );
+}
+
+function StaffRoute() {
+  return (
+    <WorkspaceGate>
+      <StaffManagementContent />
+    </WorkspaceGate>
   );
 }

@@ -158,7 +158,13 @@ function SignupPage() {
       });
 
       if (error) {
-        toast.error(error.message);
+        const rateLimited =
+          error.status === 429 || /rate limit|too many/i.test(error.message ?? "");
+        toast.error(
+          rateLimited
+            ? "Too many signup attempts right now. Please wait a few minutes and try again."
+            : error.message,
+        );
         return;
       }
 
@@ -171,7 +177,7 @@ function SignupPage() {
       // and email-confirmed signups land in the same workspace shape.
       // If session exists Supabase skipped email confirmation - go straight to dashboard
       if (data.session) {
-        toast.success("Account created! Upload your license to get verified.");
+        toast.success("Account created! Complete your business verification to start using the DrugXOne marketplace.");
         navigate({ to: "/dashboard" });
       } else {
         // Email confirmation is enabled - prompt the user to check inbox
