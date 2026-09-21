@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -572,6 +573,7 @@ function CartSheet({
       <SheetContent className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Your cart</SheetTitle>
+          <SheetDescription>Review your items before placing your order.</SheetDescription>
         </SheetHeader>
         {items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
