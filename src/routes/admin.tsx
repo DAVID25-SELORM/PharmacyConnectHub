@@ -2,6 +2,7 @@ import { Outlet, createFileRoute, Link, useNavigate, useRouterState } from "@tan
 import { useEffect, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   Building2,
   Edit,
@@ -22,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -31,6 +33,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
+import { ActivityDetailSheet } from "@/components/admin/ActivityDetailSheet";
+import { ActivityTable } from "@/components/admin/ActivityTable";
+import { AdminNav } from "@/components/admin/AdminNav";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ActivityRow } from "@/lib/activity-log";
 import { useSession } from "@/hooks/use-session";
 import { getIncompleteVerificationFields } from "@/lib/business-verification";
 import { timeAgo, formatGHS } from "@/lib/format";
@@ -65,41 +72,6 @@ type Biz = {
   updated_at?: string | null;
   verified_at?: string | null;
   owner_id: string;
-};
-
-type AdminOrderSummary = {
-  id: string;
-  order_number: string;
-  status: string;
-  total_ghs: number;
-  created_at: string;
-  updated_at: string | null;
-  pharmacy: { name: string } | null;
-  wholesaler: { name: string } | null;
-};
-
-type ActivityItem = {
-  id: string;
-  timestamp: string;
-  activity: string;
-  organization: string;
-  performedBy: string;
-  record: string;
-  ipAddress: string;
-  details: string;
-  tone: "business" | "order" | "review";
-};
-
-type AuditLogRow = {
-  id: string;
-  activity: string;
-  organization: string | null;
-  performed_by_email: string | null;
-  record_type: string;
-  record_label: string | null;
-  ip_address: string | null;
-  details: Record<string, unknown> | null;
-  created_at: string;
 };
 
 type DocRow = {
@@ -198,179 +170,41 @@ function DetailField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function buildActivityLog(businesses: Biz[], orders: AdminOrderSummary[]) {
-  const businessActivity: ActivityItem[] = businesses.flatMap((business) => {
-    const items: ActivityItem[] = [
-      {
-        id: `business-created-${business.id}`,
-        timestamp: business.created_at,
-        activity: `${business.type === "pharmacy" ? "Pharmacy" : "Wholesaler"} submitted`,
-        organization: business.name,
-        performedBy: "Business owner",
-        record: business.license_number ?? business.id.slice(0, 8),
-        ipAddress: "Not captured",
-        details: `Joined from ${business.city ?? "an unspecified city"}${
-          business.region ? `, ${business.region}` : ""
-        }.`,
-        tone: "business",
-      },
-    ];
+type PlatformSummary = {
+  pharmacies: { total: number; approved: number; pending: number; rejected: number };
+  wholesalers: { total: number; approved: number; pending: number; rejected: number };
+  resubmitted_pending: number;
+  orders_total: number;
+  gmv_ghs: number | string;
+};
 
-    if (business.verification_status !== "pending") {
-      items.push({
-        id: `business-reviewed-${business.id}`,
-        timestamp: business.verified_at ?? business.updated_at ?? business.created_at,
-        activity:
-          business.verification_status === "approved" ? "Business approved" : "Business rejected",
-        organization: business.name,
-        performedBy: "Platform admin",
-        record: business.license_number ?? business.id.slice(0, 8),
-        ipAddress: "Not captured",
-        details:
-          business.verification_status === "approved"
-            ? "Marketplace access enabled."
-            : business.rejection_reason || "Follow-up required before marketplace access.",
-        tone: "review",
-      });
-    }
+const RECENT_ACTIVITY_LIMIT = 15;
 
-    return items;
-  });
-
-  const orderActivity: ActivityItem[] = orders.map((order) => ({
-    id: `order-${order.id}`,
-    timestamp: order.updated_at ?? order.created_at,
-    activity: `Order ${order.status}`,
-    organization: order.pharmacy?.name ?? "Pharmacy",
-    performedBy: "Marketplace",
-    record: order.order_number,
-    ipAddress: "Not captured",
-    details: `Wholesaler: ${order.wholesaler?.name ?? "Unknown"}; value ${formatGHS(
-      order.total_ghs,
-    )}.`,
-    tone: "order",
-  }));
-
-  return [...businessActivity, ...orderActivity]
-    .sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime())
-    .slice(0, 12);
-}
-
-function formatAuditDetail(value: unknown) {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  return String(value);
-}
-
-function formatAuditDetails(details: Record<string, unknown> | null) {
-  if (!details) {
-    return "";
-  }
-
-  const entries = Object.entries(details)
-    .map(([key, value]) => {
-      const formattedValue = formatAuditDetail(value);
-      if (!formattedValue) {
-        return null;
-      }
-
-      return `${key.replace(/_/g, " ")}: ${formattedValue}`;
-    })
-    .filter((entry): entry is string => Boolean(entry));
-
-  return entries.join("; ");
-}
-
-function mapAuditLogs(rows: AuditLogRow[]): ActivityItem[] {
-  return rows.map((row) => {
-    const recordType = row.record_type.toLowerCase();
-    const tone: ActivityItem["tone"] =
-      recordType === "order"
-        ? "order"
-        : row.activity.toLowerCase().includes("approved") ||
-            row.activity.toLowerCase().includes("rejected")
-          ? "review"
-          : "business";
-
-    return {
-      id: row.id,
-      timestamp: row.created_at,
-      activity: row.activity,
-      organization: row.organization ?? "Drugxone",
-      performedBy: row.performed_by_email ?? "System",
-      record: row.record_label ?? row.record_type,
-      ipAddress: row.ip_address ?? "Not captured",
-      details: formatAuditDetails(row.details) || "No extra details.",
-      tone,
-    };
-  });
-}
-
-function ActivityLog({ items }: { items: ActivityItem[] }) {
-  const toneClass: Record<ActivityItem["tone"], string> = {
-    business: "bg-primary/10 text-primary border-primary/20",
-    order: "bg-accent/10 text-accent border-accent/20",
-    review: "bg-success/10 text-success border-success/20",
-  };
-
+function KpiCard({
+  label,
+  value,
+  helper,
+  icon,
+  loading,
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: React.ReactNode;
+  loading: boolean;
+}) {
   return (
-    <Card className="mb-8 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Activity className="h-4 w-4 text-primary" />
-            Activity log
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Recent business reviews, signups, and marketplace order movement.
-          </p>
-        </div>
-        <Badge variant="secondary">{items.length} recent</Badge>
+    <Card className="flex h-full flex-col justify-between p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <span aria-hidden="true">{icon}</span>
       </div>
-
-      {items.length === 0 ? (
-        <div className="mt-5 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-          No platform activity yet.
-        </div>
+      {loading ? (
+        <Skeleton className="mt-2 h-8 w-20" />
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">Timestamp</th>
-                <th className="px-4 py-3 font-medium">Activity</th>
-                <th className="px-4 py-3 font-medium">Organization</th>
-                <th className="px-4 py-3 font-medium">Performed By</th>
-                <th className="px-4 py-3 font-medium">Record</th>
-                <th className="px-4 py-3 font-medium">IP Address</th>
-                <th className="px-4 py-3 font-medium">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {items.map((item) => (
-                <tr key={item.id} className="align-top">
-                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                    <div>{new Date(item.timestamp).toLocaleString()}</div>
-                    <div className="mt-1 text-xs">{timeAgo(item.timestamp)}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="secondary" className={`border ${toneClass[item.tone]}`}>
-                      {item.activity}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 font-medium">{item.organization}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{item.performedBy}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{item.record}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{item.ipAddress}</td>
-                  <td className="max-w-sm px-4 py-3 text-muted-foreground">{item.details}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="mt-2 font-display text-3xl font-bold">{value}</div>
       )}
+      <div className="mt-1 text-xs text-muted-foreground">{helper}</div>
     </Card>
   );
 }
@@ -386,13 +220,12 @@ function AdminPanel() {
   const [incompleteVerificationRecords, setIncompleteVerificationRecords] = useState<
     IncompleteVerificationRecord[]
   >([]);
-  const [stats, setStats] = useState({
-    pharmacies: { total: 0, pending: 0, approved: 0, rejected: 0 },
-    wholesalers: { total: 0, pending: 0, approved: 0, rejected: 0 },
-    orders: 0,
-    gmv: 0,
-  });
-  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [summary, setSummary] = useState<PlatformSummary | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
+  const [recentActivity, setRecentActivity] = useState<ActivityRow[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityError, setActivityError] = useState(false);
+  const [openActivityId, setOpenActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -406,37 +239,13 @@ function AdminPanel() {
   }, [loading, navigate, roles, user]);
 
   const load = async () => {
-    const [bizResult, orderResult, privateContactsResult, auditResult] = await Promise.all([
+    const [bizResult, privateContactsResult] = await Promise.all([
       supabase.from("businesses").select("*").order("created_at", { ascending: false }),
-      supabase
-        .from("orders")
-        .select(
-          "id,order_number,status,total_ghs,created_at,updated_at,pharmacy:businesses!orders_pharmacy_id_fkey(name),wholesaler:businesses!orders_wholesaler_id_fkey(name)",
-        )
-        .order("updated_at", { ascending: false })
-        .limit(25),
       supabase.from("business_private_contacts").select("*"),
-      supabase
-        .from("audit_logs")
-        .select(
-          "id,activity,organization,performed_by_email,record_type,record_label,ip_address,details,created_at",
-        )
-        .order("created_at", { ascending: false })
-        .limit(50),
     ]);
 
     const all = (bizResult.data as Biz[]) ?? [];
     setBusinessRows(all);
-
-    const pharmacies = all.filter((row) => row.type === "pharmacy");
-    const wholesalers = all.filter((row) => row.type === "wholesaler");
-    const orders = (orderResult.data as unknown as AdminOrderSummary[]) ?? [];
-
-    setActivityItems(
-      auditResult.error || !auditResult.data?.length
-        ? buildActivityLog(all, orders)
-        : mapAuditLogs((auditResult.data as unknown as AuditLogRow[]) ?? []),
-    );
 
     if (!privateContactsResult.error) {
       const privateContacts = (privateContactsResult.data as PrivateContact[]) ?? [];
@@ -473,27 +282,43 @@ function AdminPanel() {
       setIncompleteVerificationRecords([]);
     }
 
-    setStats({
-      pharmacies: {
-        total: pharmacies.length,
-        pending: pharmacies.filter((row) => row.verification_status === "pending").length,
-        approved: pharmacies.filter((row) => row.verification_status === "approved").length,
-        rejected: pharmacies.filter((row) => row.verification_status === "rejected").length,
-      },
-      wholesalers: {
-        total: wholesalers.length,
-        pending: wholesalers.filter((row) => row.verification_status === "pending").length,
-        approved: wholesalers.filter((row) => row.verification_status === "approved").length,
-        rejected: wholesalers.filter((row) => row.verification_status === "rejected").length,
-      },
-      orders: orders.length,
-      gmv: orders.reduce((sum, order) => sum + Number(order.total_ghs), 0),
+  };
+
+  // KPIs come from database aggregates, not from a client-side sample.
+  const loadSummary = async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("admin_platform_summary");
+    if (error || !data) {
+      setSummaryError(true);
+      return;
+    }
+    setSummaryError(false);
+    setSummary(data as PlatformSummary);
+  };
+
+  // Recent Activity preview: only the newest RECENT_ACTIVITY_LIMIT events. It loads independently
+  // of the rest of the page, so a slow or failing activity query never blocks the dashboard.
+  const loadActivity = async () => {
+    setActivityLoading(true);
+    setActivityError(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc("admin_list_activity", {
+      p_limit: RECENT_ACTIVITY_LIMIT,
     });
+    if (error) {
+      setActivityError(true);
+      setActivityLoading(false);
+      return;
+    }
+    setRecentActivity(((data as ActivityRow[]) ?? []).slice(0, RECENT_ACTIVITY_LIMIT));
+    setActivityLoading(false);
   };
 
   useEffect(() => {
     if (pathname === "/admin" && roles.includes("admin")) {
       void load();
+      void loadSummary();
+      void loadActivity();
     }
   }, [pathname, roles]);
 
@@ -510,6 +335,33 @@ function AdminPanel() {
     return <Outlet />;
   }
 
+  const pendingPharmacies = summary?.pharmacies.pending ?? 0;
+  const pendingWholesalers = summary?.wholesalers.pending ?? 0;
+  const pendingTotal = pendingPharmacies + pendingWholesalers;
+  const attentionItems = [
+    {
+      label: "Pending pharmacy verification",
+      count: pendingPharmacies,
+      helper: "New pharmacies waiting for a decision",
+    },
+    {
+      label: "Pending wholesaler verification",
+      count: pendingWholesalers,
+      helper: "New wholesalers waiting for a decision",
+    },
+    {
+      label: "Resubmitted for review",
+      count: summary?.resubmitted_pending ?? 0,
+      helper: "Rejected businesses that updated their documents",
+    },
+    {
+      label: "Incomplete verification records",
+      count: incompleteVerificationRecords.length,
+      helper: "Older records missing private contact details",
+    },
+  ].filter((item) => item.count > 0);
+  const scrollToApprovals = () =>
+    document.getElementById("approvals")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const pending = businessRows.filter((row) => row.verification_status === "pending");
   const approved = businessRows.filter((row) => row.verification_status === "approved");
   const rejected = businessRows.filter((row) => row.verification_status === "rejected");
@@ -519,76 +371,146 @@ function AdminPanel() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Admin console" />
+      <AdminNav />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="font-display text-3xl font-bold">Admin console</h1>
-        <p className="mt-1 text-muted-foreground">
-          Approve businesses and monitor platform health.
-        </p>
-
-        <div className="my-8 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Card className="border-primary/20 bg-primary/5 p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-primary">Pharmacies</div>
-                <Store className="h-5 w-5 text-primary" />
-              </div>
-              <div className="font-display text-3xl font-bold">{stats.pharmacies.total}</div>
-              <div className="mt-2 flex gap-3 text-xs">
-                <span className="text-muted-foreground">{stats.pharmacies.approved} approved</span>
-                <span className="text-muted-foreground">|</span>
-                <span className="text-warning">{stats.pharmacies.pending} pending</span>
-              </div>
-            </Card>
-
-            <Card className="border-accent/20 bg-accent/5 p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-accent">Wholesalers</div>
-                <Building2 className="h-5 w-5 text-accent" />
-              </div>
-              <div className="font-display text-3xl font-bold">{stats.wholesalers.total}</div>
-              <div className="mt-2 flex gap-3 text-xs">
-                <span className="text-muted-foreground">{stats.wholesalers.approved} approved</span>
-                <span className="text-muted-foreground">|</span>
-                <span className="text-warning">{stats.wholesalers.pending} pending</span>
-              </div>
-            </Card>
-
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-muted-foreground">
-                  Pending Verification
-                </div>
-                <ShieldX className="h-5 w-5 text-warning" />
-              </div>
-              <div className="font-display text-3xl font-bold">
-                {stats.pharmacies.pending + stats.wholesalers.pending}
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">Requires your approval</div>
-            </Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-bold">Admin Console</h1>
+            <p className="mt-1 text-muted-foreground">
+              Approve businesses, monitor platform activity, and manage platform health.
+            </p>
           </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-muted-foreground">Total Orders</div>
-                <FileText className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div className="font-display text-3xl font-bold">{stats.orders}</div>
-              <div className="mt-2 text-xs text-muted-foreground">All-time platform orders</div>
-            </Card>
-
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-semibold text-muted-foreground">Platform GMV</div>
-                <ShieldCheck className="h-5 w-5 text-success" />
-              </div>
-              <div className="font-display text-3xl font-bold">{formatGHS(stats.gmv)}</div>
-              <div className="mt-2 text-xs text-muted-foreground">Gross merchandise value</div>
-            </Card>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="hero" size="sm" onClick={scrollToApprovals}>
+              Review Approvals
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/activity">View Activity</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/staff">Platform Team</Link>
+            </Button>
           </div>
         </div>
 
-        <ActivityLog items={activityItems} />
+        <section aria-label="Platform summary" className="my-6">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            <KpiCard
+              label="Pharmacies"
+              value={summary ? String(summary.pharmacies.total) : "—"}
+              helper={summary ? summary.pharmacies.approved + " approved" : "Registered pharmacies"}
+              icon={<Store className="h-4 w-4 text-primary" />}
+              loading={!summary && !summaryError}
+            />
+            <KpiCard
+              label="Wholesalers"
+              value={summary ? String(summary.wholesalers.total) : "—"}
+              helper={summary ? summary.wholesalers.approved + " approved" : "Registered wholesalers"}
+              icon={<Building2 className="h-4 w-4 text-accent" />}
+              loading={!summary && !summaryError}
+            />
+            <KpiCard
+              label="Pending Verification"
+              value={summary ? String(pendingTotal) : "—"}
+              helper="Requires your approval"
+              icon={<ShieldX className="h-4 w-4 text-warning" />}
+              loading={!summary && !summaryError}
+            />
+            <KpiCard
+              label="Total Orders"
+              value={summary ? String(summary.orders_total) : "—"}
+              helper="All-time platform orders"
+              icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+              loading={!summary && !summaryError}
+            />
+            <KpiCard
+              label="Platform GMV"
+              value={summary ? formatGHS(Number(summary.gmv_ghs)) : "—"}
+              helper="Gross merchandise value"
+              icon={<ShieldCheck className="h-4 w-4 text-success" />}
+              loading={!summary && !summaryError}
+            />
+          </div>
+          {summaryError && (
+            <p role="alert" className="mt-2 text-xs text-muted-foreground">
+              Platform totals are unavailable right now. Reload the page to try again.
+            </p>
+          )}
+        </section>
+
+        <Card className="mb-8 p-6" aria-labelledby="recent-activity-heading">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2
+                id="recent-activity-heading"
+                className="flex items-center gap-2 font-display text-xl font-bold"
+              >
+                <Activity className="h-5 w-5 text-primary" aria-hidden="true" />
+                Recent Activity
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Latest important actions across DrugXOne.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/admin/activity">
+                View All Activity
+                <ArrowRight className="ml-1 h-4 w-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          </div>
+
+          <div className="mt-4">
+            <ActivityTable
+              rows={recentActivity}
+              loading={activityLoading}
+              error={activityError}
+              onRetry={() => void loadActivity()}
+              onOpen={(row) => setOpenActivityId(row.id)}
+              skeletonRows={5}
+              emptyState={
+                <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                  <p className="font-medium">No activity yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Platform activity will appear here as businesses, orders and admin actions are
+                    recorded.
+                  </p>
+                </div>
+              }
+            />
+          </div>
+        </Card>
+
+        <ActivityDetailSheet activityId={openActivityId} onClose={() => setOpenActivityId(null)} />
+
+        <Card className="mb-8 p-6" aria-labelledby="needs-attention-heading">
+          <h2
+            id="needs-attention-heading"
+            className="flex items-center gap-2 font-display text-xl font-bold"
+          >
+            <AlertTriangle className="h-5 w-5 text-warning" aria-hidden="true" />
+            Needs Attention
+          </h2>
+          {attentionItems.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">No pending verification reviews.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-border">
+              {attentionItems.map((item) => (
+                <li key={item.label} className="flex items-center justify-between gap-3 py-3">
+                  <div>
+                    <div className="text-sm font-medium">
+                      {item.label}: {item.count}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{item.helper}</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={scrollToApprovals}>
+                    Review
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
 
         {incompleteVerificationRecords.length > 0 && (
           <Card className="mb-8 border-warning/30 bg-warning/5 p-6">
@@ -722,6 +644,7 @@ function AdminPanel() {
           )}
         </Card>
 
+        <div id="approvals" className="scroll-mt-24" />
         <Tabs defaultValue="pending">
           <TabsList className="mb-6">
             <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
@@ -1170,6 +1093,9 @@ function BusinessCard({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject {biz.name}</DialogTitle>
+            <DialogDescription>
+              Tell the business why it was rejected so they can correct and resubmit.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
@@ -1197,6 +1123,9 @@ function BusinessCard({
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Business Details</DialogTitle>
+            <DialogDescription>
+              Registration details, private contacts and uploaded documents for this business.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-6 overflow-y-auto pr-1">
@@ -1331,6 +1260,9 @@ function BusinessCard({
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Edit Business Details</DialogTitle>
+            <DialogDescription>
+              Update this business's public profile and private verification contacts.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-6 overflow-y-auto pr-1">

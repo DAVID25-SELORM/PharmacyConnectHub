@@ -23,6 +23,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AddBusinessRouteImport } from './routes/add-business'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminActivityRouteImport } from './routes/admin.activity'
 
 const WholesalerRoute = WholesalerRouteImport.update({
   id: '/wholesaler',
@@ -94,6 +95,11 @@ const AdminStaffRoute = AdminStaffRouteImport.update({
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminActivityRoute = AdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRoutesByTo {
@@ -125,6 +132,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRoutesById {
@@ -142,6 +150,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/staff': typeof AdminStaffRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/activity'
     | '/admin/staff'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/activity'
     | '/admin/staff'
   id:
     | '__root__'
@@ -192,6 +203,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/staff'
     | '/wholesaler'
+    | '/admin/activity'
     | '/admin/staff'
   fileRoutesById: FileRoutesById
 }
@@ -311,14 +323,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/activity': {
+      id: '/admin/activity'
+      path: '/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
 interface AdminRouteChildren {
+  AdminActivityRoute: typeof AdminActivityRoute
   AdminStaffRoute: typeof AdminStaffRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminActivityRoute: AdminActivityRoute,
   AdminStaffRoute: AdminStaffRoute,
 }
 

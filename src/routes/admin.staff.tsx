@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Pencil, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
+import { AdminNav } from "@/components/admin/AdminNav";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -382,6 +383,7 @@ function PlatformStaffManagement() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Platform team" isAdmin={true} />
+      <AdminNav />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
