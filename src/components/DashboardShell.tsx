@@ -194,7 +194,7 @@ export function DashboardHeader({
               <img src={logo} alt="Drugxone" className="h-9 w-9 rounded-xl object-contain" />
               <div className="hidden min-w-0 sm:block">
                 <div className="truncate font-display text-base font-bold leading-none">
-                  Pharma<span className="text-primary">Hub GH</span>
+                  Drug<span className="text-primary">xone</span>
                 </div>
                 <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
               </div>

@@ -57,7 +57,7 @@ function LoginPage() {
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <img src={logo} alt="Drugxone" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
-            Pharma<span className="text-primary">Hub GH</span>
+            Drug<span className="text-primary">xone</span>
           </span>
         </Link>
 
