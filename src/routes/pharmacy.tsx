@@ -978,20 +978,12 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: {
     transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
     delivered: orders.filter((o) => o.status === "delivered").length,
   }), [orders]);
-  const filtered = orders;
+  const hasFilters = query.trim() !== "" || status !== "all" || payment !== "all";
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const pageOrders = orders;
   useEffect(() => { void loadOrders({ page, search: query, status, payment, sort }); }, [loadOrders, page, payment, query, sort, status]);
   useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
-  if (orders.length === 0) {
-    return (
-      <Card className="p-12 text-center text-muted-foreground">
-        <p>No orders yet</p>
-        <p className="mt-2 text-sm">Orders you place with approved wholesalers will appear here.</p>
-      </Card>
-    );
-  }
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-4">
@@ -1007,7 +999,19 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: {
         <Select value={sort} onValueChange={setSort}><SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="highest">Highest amount</SelectItem><SelectItem value="lowest">Lowest amount</SelectItem></SelectContent></Select>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">{["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => <Button key={item} size="sm" variant={status === item ? "secondary" : "ghost"} onClick={() => { setStatus(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</Button>)}</div>
-      {pageOrders.length === 0 ? <Card className="p-10 text-center text-muted-foreground">No orders match your filters.</Card> : null}
+      {pageOrders.length === 0 && (
+        <Card className="p-10 text-center text-muted-foreground" role="status">
+          <p>{hasFilters ? "No orders match your filters." : "No orders yet"}</p>
+          <p className="mt-2 text-sm">
+            {hasFilters ? "Try different filters or clear the filters to see all orders." : "Orders you place with approved wholesalers will appear here."}
+          </p>
+          {hasFilters && (
+            <Button className="mt-4" variant="outline" onClick={() => {
+              setQuery(""); setStatus("all"); setPayment("all"); setPage(1);
+            }}>Clear filters</Button>
+          )}
+        </Card>
+      )}
       {pageOrders.map((o) => {
         const open = openOrderId === o.id;
         const units = o.order_items.reduce((total, item) => total + item.quantity, 0);
