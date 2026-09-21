@@ -3,6 +3,7 @@ import {
   Bell,
   CheckCheck,
   Clock,
+  HelpCircle,
   Home,
   LayoutDashboard,
   LogOut,
@@ -259,6 +260,12 @@ export function DashboardHeader({
               <Link to="/add-business">Add business</Link>
             </Button>
           )}
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/help" aria-label="Help Centre">
+              <HelpCircle className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Help</span>
+            </Link>
+          </Button>
           <NotificationBell />
           <Button variant="ghost" size="sm" onClick={onSignOut} aria-label="Sign out">
             <LogOut className="h-4 w-4" />
