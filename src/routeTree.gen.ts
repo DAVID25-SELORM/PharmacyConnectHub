@@ -22,7 +22,10 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AddBusinessRouteImport } from './routes/add-business'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WholesalerReportsRouteImport } from './routes/wholesaler.reports'
+import { Route as PharmacyReportsRouteImport } from './routes/pharmacy.reports'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminActivityRouteImport } from './routes/admin.activity'
 
 const WholesalerRoute = WholesalerRouteImport.update({
@@ -90,9 +93,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WholesalerReportsRoute = WholesalerReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => WholesalerRoute,
+} as any)
+const PharmacyReportsRoute = PharmacyReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => PharmacyRoute,
+} as any)
 const AdminStaffRoute = AdminStaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminActivityRoute = AdminActivityRouteImport.update({
@@ -110,13 +128,16 @@ export interface FileRoutesByFullPath {
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/pharmacy': typeof PharmacyRoute
+  '/pharmacy': typeof PharmacyRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/wholesaler': typeof WholesalerRoute
+  '/wholesaler': typeof WholesalerRouteWithChildren
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/pharmacy/reports': typeof PharmacyReportsRoute
+  '/wholesaler/reports': typeof WholesalerReportsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -127,13 +148,16 @@ export interface FileRoutesByTo {
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/pharmacy': typeof PharmacyRoute
+  '/pharmacy': typeof PharmacyRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/wholesaler': typeof WholesalerRoute
+  '/wholesaler': typeof WholesalerRouteWithChildren
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/pharmacy/reports': typeof PharmacyReportsRoute
+  '/wholesaler/reports': typeof WholesalerReportsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -145,13 +169,16 @@ export interface FileRoutesById {
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
-  '/pharmacy': typeof PharmacyRoute
+  '/pharmacy': typeof PharmacyRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
-  '/wholesaler': typeof WholesalerRoute
+  '/wholesaler': typeof WholesalerRouteWithChildren
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
+  '/pharmacy/reports': typeof PharmacyReportsRoute
+  '/wholesaler/reports': typeof WholesalerReportsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -170,7 +197,10 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/reports'
     | '/admin/staff'
+    | '/pharmacy/reports'
+    | '/wholesaler/reports'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -187,7 +217,10 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/reports'
     | '/admin/staff'
+    | '/pharmacy/reports'
+    | '/wholesaler/reports'
   id:
     | '__root__'
     | '/'
@@ -204,7 +237,10 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/reports'
     | '/admin/staff'
+    | '/pharmacy/reports'
+    | '/wholesaler/reports'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -216,11 +252,11 @@ export interface RootRouteChildren {
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
-  PharmacyRoute: typeof PharmacyRoute
+  PharmacyRoute: typeof PharmacyRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
-  WholesalerRoute: typeof WholesalerRoute
+  WholesalerRoute: typeof WholesalerRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -316,11 +352,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wholesaler/reports': {
+      id: '/wholesaler/reports'
+      path: '/reports'
+      fullPath: '/wholesaler/reports'
+      preLoaderRoute: typeof WholesalerReportsRouteImport
+      parentRoute: typeof WholesalerRoute
+    }
+    '/pharmacy/reports': {
+      id: '/pharmacy/reports'
+      path: '/reports'
+      fullPath: '/pharmacy/reports'
+      preLoaderRoute: typeof PharmacyReportsRouteImport
+      parentRoute: typeof PharmacyRoute
+    }
     '/admin/staff': {
       id: '/admin/staff'
       path: '/staff'
       fullPath: '/admin/staff'
       preLoaderRoute: typeof AdminStaffRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/activity': {
@@ -335,15 +392,41 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminReportsRoute: typeof AdminReportsRoute
   AdminStaffRoute: typeof AdminStaffRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminReportsRoute: AdminReportsRoute,
   AdminStaffRoute: AdminStaffRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface PharmacyRouteChildren {
+  PharmacyReportsRoute: typeof PharmacyReportsRoute
+}
+
+const PharmacyRouteChildren: PharmacyRouteChildren = {
+  PharmacyReportsRoute: PharmacyReportsRoute,
+}
+
+const PharmacyRouteWithChildren = PharmacyRoute._addFileChildren(
+  PharmacyRouteChildren,
+)
+
+interface WholesalerRouteChildren {
+  WholesalerReportsRoute: typeof WholesalerReportsRoute
+}
+
+const WholesalerRouteChildren: WholesalerRouteChildren = {
+  WholesalerReportsRoute: WholesalerReportsRoute,
+}
+
+const WholesalerRouteWithChildren = WholesalerRoute._addFileChildren(
+  WholesalerRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -354,11 +437,11 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
-  PharmacyRoute: PharmacyRoute,
+  PharmacyRoute: PharmacyRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
-  WholesalerRoute: WholesalerRoute,
+  WholesalerRoute: WholesalerRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

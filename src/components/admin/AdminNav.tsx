@@ -1,9 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Activity, BarChart3, LayoutDashboard, ShieldCheck } from "lucide-react";
 
 const ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/activity", label: "Activity", icon: Activity, exact: false },
+  { to: "/admin/reports", label: "Reports", icon: BarChart3, exact: false },
   { to: "/admin/staff", label: "Platform Team", icon: ShieldCheck, exact: false },
 ] as const;
 

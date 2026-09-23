@@ -16,3 +16,7 @@ Never points at a hosted project. Uses throwaway local keys.
    `HANDLER_PATH=file:///.../api/staff/invite.ts`; users need passwords (see the UPDATE auth.users in the report/session).
 
 7. `activity-log.sql` (33 checks on a 300k-row audit_logs) and `activity-log-explain.sql` (query plans): run after `setup.sql` with 20260921120000 applied.
+
+8. `reports.sql` (46 checks: KPIs, sales/wholesaler/pharmacy/customer/product rollups, keyset
+   pagination, cross-tenant and staff access, pending-business self-access): run after `setup.sql`
+   with 20260923100000 applied.
