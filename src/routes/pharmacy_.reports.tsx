@@ -24,7 +24,7 @@ import {
   type ReportRangeState,
 } from "@/lib/reports";
 
-export const Route = createFileRoute("/pharmacy/reports")({
+export const Route = createFileRoute("/pharmacy_/reports")({
   head: () => ({ meta: [{ title: "Reports - Drugxone" }] }),
   component: () => (
     <WorkspaceGate>
