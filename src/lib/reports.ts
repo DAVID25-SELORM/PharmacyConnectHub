@@ -31,7 +31,7 @@ export type ReportRangeState = {
   to: string; // yyyy-mm-dd, custom only (inclusive)
 };
 
-export const DEFAULT_RANGE: ReportRangeState = { range: "30d", from: "", to: "" };
+export const DEFAULT_RANGE: ReportRangeState = { range: "all", from: "", to: "" };
 
 /** Arguments the resolve_report_range() RPC/DB helper expects. */
 export function rangeToRpcArgs(state: ReportRangeState) {

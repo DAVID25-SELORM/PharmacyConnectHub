@@ -407,7 +407,7 @@ function PharmacyDashboardContent() {
       }
 
       added = true;
-      return [...prev, { productId, quantity: 1 }];
+      return [...prev, { productId, quantity: Math.min(Math.max(1, Number(product.minimum_order_quantity ?? 1)), product.stock) }];
     });
 
     if (added) {
