@@ -44,6 +44,19 @@ import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
+import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
+import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
+import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
+import { ReorderReviewDialog } from "@/components/pharmacy/ReorderReviewDialog";
+import { useReorderLists, type ReorderListsApi } from "@/hooks/use-reorder-lists";
+import {
+  groupOffersByMaster,
+  mergeIntoCart,
+  netPrice,
+  resolveLine,
+  type CatalogueOffer,
+  type ResolvedLine,
+} from "@/lib/reorder";
 
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
@@ -67,6 +80,8 @@ type Product = {
   pack_size: string | null;
   price_ghs: number;
   stock: number;
+  minimum_order_quantity?: number | null;
+  lead_time_days?: number | null;
   image_hue: number | null;
   wholesaler_id: string;
   wholesaler: {
@@ -132,12 +147,7 @@ type OrderRow = {
 type OrderHistoryQuery = { page: number; search: string; status: string; payment: string; sort: string };
 
 function customerPrice(product: Product, discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>) {
-  const discount = discounts[product.wholesaler_id];
-  if (!discount || Number(discount.minimum_order_value) > 0) return Number(product.price_ghs);
-  if (discount.discount_type === "percentage" && discount.discount_percent) {
-    return Math.max(0, Math.round(Number(product.price_ghs) * (1 - Number(discount.discount_percent) / 100) * 100) / 100);
-  }
-  return Math.max(0, Number(product.price_ghs) - Number(discount.discount_amount ?? 0));
+  return netPrice(product, discounts[product.wholesaler_id]);
 }
 
 function PharmacyDashboardContent() {
@@ -284,6 +294,51 @@ function PharmacyDashboardContent() {
   }, [businessId]);
 
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  const reorderLists = useReorderLists(businessId);
+  const [reviewLines, setReviewLines] = useState<{ title: string; lines: ResolvedLine[] } | null>(null);
+  const offersByMaster = useMemo(
+    () => groupOffersByMaster(products as unknown as Array<CatalogueOffer>),
+    [products],
+  );
+
+  const addLinesToCart = (lines: Array<{ offer: { id: string }; quantity: number }>) => {
+    const { cart: nextCart, added } = mergeIntoCart(
+      cart,
+      lines.map((line) => ({
+        productId: line.offer.id,
+        quantity: line.quantity,
+        stock: productMap[line.offer.id]?.stock ?? 0,
+      })),
+    );
+    setCart(nextCart);
+    return added;
+  };
+
+  const reorderFromOrder = async (orderId: string, orderLabel: string) => {
+    const { data, error } = await (supabase as any).rpc("get_order_reorder_lines", { p_order_id: orderId });
+    if (error || !Array.isArray(data)) {
+      toast.error("We couldn't load this order to reorder it. Please try again.");
+      return;
+    }
+    const lines = (data as Array<{
+      master_product_id: string | null;
+      product_name: string;
+      quantity: number;
+      wholesaler_id: string;
+    }>).map((row) =>
+      resolveLine(
+        {
+          masterProductId: row.master_product_id,
+          name: row.product_name,
+          quantity: Number(row.quantity),
+          preferredWholesalerId: row.wholesaler_id,
+        },
+        offersByMaster,
+        discounts,
+      ),
+    );
+    setReviewLines({ title: `Reorder ${orderLabel}`, lines });
+  };
   const approvedWholesalers = useMemo<WholesalerSummary[]>(() => {
     const grouped = new Map<
       string,
@@ -430,6 +485,8 @@ function PharmacyDashboardContent() {
     return s + (p ? Number(p.price_ghs) * c.quantity : 0);
   }, 0);
   const canPlaceOrders = business?.staff_role !== "assistant";
+  const canOrder = business?.verification_status === "approved" && canPlaceOrders;
+  const canEditLists = canOrder;
 
   if (loading || !business) {
     return (
@@ -501,12 +558,38 @@ function PharmacyDashboardContent() {
 
         <VerificationBanner business={business} />
 
-        <Tabs defaultValue={typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "orders" ? "orders" : "catalog"} className="w-full">
+        <ReorderReviewDialog
+          title={reviewLines?.title ?? ""}
+          lines={reviewLines?.lines ?? null}
+          canOrder={canOrder}
+          onClose={() => setReviewLines(null)}
+          onConfirm={(lines) => {
+            const added = addLinesToCart(
+              lines.filter((line) => line.status !== "unavailable" && line.offer).map((line) => ({ offer: line.offer!, quantity: line.quantity })),
+            );
+            const unavailable = lines.filter((line) => line.status === "unavailable").length;
+            toast.success(
+              unavailable > 0
+                ? `Added ${added} of ${lines.length} products to your cart. ${unavailable} unavailable.`
+                : `Added ${added} product${added === 1 ? "" : "s"} to your cart.`,
+            );
+            setReviewLines(null);
+          }}
+        />
+
+        <Tabs
+          defaultValue={(() => {
+            const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+            return tab === "orders" || tab === "lists" ? tab : "catalog";
+          })()}
+          className="w-full"
+        >
           <TabsList className="mb-6">
             <TabsTrigger value="catalog">
               Catalog ({approvedWholesalers.length} wholesaler
               {approvedWholesalers.length === 1 ? "" : "s"})
             </TabsTrigger>
+            <TabsTrigger value="lists">Reorder lists ({reorderLists.lists.length})</TabsTrigger>
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
           </TabsList>
 
@@ -516,11 +599,29 @@ function PharmacyDashboardContent() {
               discounts={discounts}
               wholesalers={approvedWholesalers}
               addToCart={addToCart}
-              canOrder={business.verification_status === "approved" && canPlaceOrders}
+              canOrder={canOrder}
+              canEditLists={canEditLists}
+              reorderLists={reorderLists}
+            />
+          </TabsContent>
+          <TabsContent value="lists">
+            <ReorderListsView
+              api={reorderLists}
+              products={products as unknown as Array<CatalogueOffer>}
+              discounts={discounts}
+              canEdit={canEditLists}
+              canOrder={canOrder}
+              onAddLines={addLinesToCart}
             />
           </TabsContent>
           <TabsContent value="orders">
-            <OrdersView orders={orders} totalCount={totalOrderCount} loadOrders={loadOrders} loadOrderDetail={loadOrderDetail} />
+            <OrdersView
+              orders={orders}
+              totalCount={totalOrderCount}
+              loadOrders={loadOrders}
+              loadOrderDetail={loadOrderDetail}
+              onReorder={canOrder ? reorderFromOrder : undefined}
+            />
           </TabsContent>
         </Tabs>
       </main>
@@ -686,12 +787,16 @@ function CatalogView({
   wholesalers,
   addToCart,
   canOrder,
+  canEditLists,
+  reorderLists,
 }: {
   products: Product[];
   discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
   wholesalers: WholesalerSummary[];
   addToCart: (id: string) => void;
   canOrder: boolean;
+  canEditLists: boolean;
+  reorderLists: ReorderListsApi;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -897,58 +1002,29 @@ function CatalogView({
                       {supplierCount} verified supplier{supplierCount === 1 ? "" : "s"}
                     </p>
                   </div>
+                  {canEditLists && (
+                    <div className="ml-auto">
+                      <AddToListMenu
+                        masterProductId={medicine.master_product_id}
+                        name={medicine.name}
+                        lists={reorderLists}
+                      />
+                    </div>
+                  )}
                 </div>
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm font-medium text-primary">
                     Compare suppliers - from{" "}
-                    {formatGHS(Math.min(...offers.map((offer) => Number(offer.price_ghs))))}
+                    {formatGHS(
+                      Math.min(...offers.map((offer) => customerPrice(offer, discounts))),
+                    )}
                   </summary>
-                  <div className="mt-3 overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr>
-                          <th className="p-2">Supplier</th>
-                          <th className="p-2">Price</th>
-                          <th className="p-2">Available</th>
-                          <th className="p-2">
-                            <span className="sr-only">Order</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...offers]
-                          .sort((a, b) => Number(a.price_ghs) - Number(b.price_ghs))
-                          .map((offer) => (
-                            <tr key={offer.id} className="border-t">
-                              <td className="p-2">
-                                <div className="font-medium">{offer.wholesaler?.name}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {offer.wholesaler?.city}
-                                </div>
-                              </td>
-                              <td className="p-2 font-semibold">
-                                {formatGHS(customerPrice(offer, discounts))}
-                                {discounts[offer.wholesaler_id] && <div className="text-xs font-normal text-success">Customer discount available</div>}
-                              </td>
-                              <td className="p-2">
-                                {offer.stock > 0 ? `${offer.stock} in stock` : "Out of stock"}
-                              </td>
-                              <td className="p-2 text-right">
-                                <Button
-                                  size="sm"
-                                  variant="hero"
-                                  onClick={() => addToCart(offer.id)}
-                                  disabled={!canOrder || offer.stock <= 0}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                  Add
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <SupplierComparison
+                    offers={offers as unknown as CatalogueOffer[]}
+                    discounts={discounts}
+                    canOrder={canOrder}
+                    addToCart={addToCart}
+                  />
                 </details>
               </Card>
             );
@@ -959,7 +1035,8 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: {
+function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder }: {
+  onReorder?: (orderId: string, orderLabel: string) => Promise<void>;
   orders: OrderRow[];
   totalCount: number;
   loadOrders: (query?: OrderHistoryQuery) => Promise<void>;
@@ -1035,7 +1112,7 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail }: {
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end border-t border-border pt-3"><Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
+          <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">{onReorder && <Button type="button" variant="secondary" size="sm" onClick={() => void onReorder(o.id, o.order_number)}>Reorder</Button>}<Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
           {open && <>
           <OrderTimeline o={o} />
 
