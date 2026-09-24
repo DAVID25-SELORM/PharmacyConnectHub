@@ -57,6 +57,7 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
+import { CustomersView } from "@/components/wholesaler/CustomersView";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -338,6 +339,7 @@ function WholesalerDashboardContent() {
           <TabsList className="mb-6">
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
+            {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -362,6 +364,7 @@ function WholesalerDashboardContent() {
               canManageProducts={canManageProducts}
             />
           </TabsContent>
+          {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
           {canManageProducts && <TabsContent value="discounts"><CustomerDiscounts wholesalerId={business.id} /></TabsContent>}
         </Tabs>
       </main>

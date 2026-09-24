@@ -47,6 +47,7 @@ import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
+import { PharmacyStatements } from "@/components/statements/PharmacyStatements";
 import { ReorderReviewDialog } from "@/components/pharmacy/ReorderReviewDialog";
 import { useReorderLists, type ReorderListsApi } from "@/hooks/use-reorder-lists";
 import {
@@ -580,7 +581,7 @@ function PharmacyDashboardContent() {
         <Tabs
           defaultValue={(() => {
             const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab === "orders" || tab === "lists" ? tab : "catalog";
+            return tab === "orders" || tab === "lists" || tab === "statements" ? tab : "catalog";
           })()}
           className="w-full"
         >
@@ -591,6 +592,7 @@ function PharmacyDashboardContent() {
             </TabsTrigger>
             <TabsTrigger value="lists">Reorder lists ({reorderLists.lists.length})</TabsTrigger>
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
+            <TabsTrigger value="statements">Statements</TabsTrigger>
           </TabsList>
 
           <TabsContent value="catalog">
@@ -613,6 +615,9 @@ function PharmacyDashboardContent() {
               canOrder={canOrder}
               onAddLines={addLinesToCart}
             />
+          </TabsContent>
+          <TabsContent value="statements">
+            <PharmacyStatements pharmacyId={business.id} wholesalers={approvedWholesalers} />
           </TabsContent>
           <TabsContent value="orders">
             <OrdersView
