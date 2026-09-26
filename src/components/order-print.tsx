@@ -183,7 +183,12 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
         <div className="mt-6 ml-auto w-64 space-y-1 text-right text-sm">
           <div>Subtotal: {formatGHS(order.subtotal_ghs ?? order.total_ghs)}</div>
           <div>Discounts: {formatGHS(order.discount_amount_ghs ?? 0)}</div>
-          <div>Delivery fee: __________</div>
+          <div>
+            Delivery fee:{" "}
+            {order.subtotal_ghs != null
+              ? formatGHS(Math.max(0, Math.round((order.total_ghs - (order.subtotal_ghs - (order.discount_amount_ghs ?? 0))) * 100) / 100))
+              : "__________"}
+          </div>
           <div className="border-t border-black pt-2 text-lg font-bold">
             Grand total: {formatGHS(order.total_ghs)}
           </div>

@@ -23,6 +23,8 @@ export type OrderReceiptPayload = {
   orderId: string;
   orderNumber: string;
   totalGhs: number;
+  /** Delivery fee included in totalGhs, when the wholesaler charged one. */
+  deliveryFeeGhs?: number;
   deliveredAt: string | null;
   paidAt: string | null;
   paymentMethod: "cod" | "paystack";
@@ -142,6 +144,7 @@ function buildReceiptText(input: SendOrderReceiptEmailInput, loginUrl: string) {
     "Items:",
     itemLines,
     "",
+    input.order.deliveryFeeGhs ? `Delivery fee: ${formatGhs(input.order.deliveryFeeGhs)}` : "",
     `Total: ${formatGhs(input.order.totalGhs)}`,
     "",
     loginUrl ? `Open Drugxone: ${loginUrl}` : "",
@@ -246,6 +249,11 @@ function buildReceiptHtml(input: SendOrderReceiptEmailInput, loginUrl: string) {
             <tbody>${itemsHtml}</tbody>
           </table>
 
+          ${
+            input.order.deliveryFeeGhs
+              ? `<div style="margin-top:16px;display:flex;justify-content:space-between;font-size:14px;color:#486581;"><span>Delivery fee</span><span>${escapeHtml(formatGhs(input.order.deliveryFeeGhs))}</span></div>`
+              : ""
+          }
           <div style="margin-top:24px;padding-top:18px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:12px;align-items:center;">
             <span style="font-size:14px;color:#486581;">Receipt total</span>
             <strong style="font-size:22px;">${escapeHtml(formatGhs(input.order.totalGhs))}</strong>

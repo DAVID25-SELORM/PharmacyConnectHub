@@ -45,6 +45,7 @@ import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-sta
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
+import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -161,6 +162,7 @@ function PharmacyDashboardContent() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [discounts, setDiscounts] = useState<Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>>({});
+  const [terms, setTerms] = useState<Record<string, OrderTerms>>({});
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [totalOrderCount, setTotalOrderCount] = useState(0);
   const [placing, setPlacing] = useState(false);
@@ -222,6 +224,12 @@ function PharmacyDashboardContent() {
         return [id, Array.isArray(result.data) ? result.data[0] : null] as const;
       }));
       setDiscounts(Object.fromEntries(discountResults.filter(([, value]) => value)));
+      const termsResult = await (supabase as any).rpc("list_order_terms", { p_wholesaler_ids: wholesalerIds });
+      setTerms(
+        Object.fromEntries(
+          (Array.isArray(termsResult.data) ? (termsResult.data as OrderTerms[]) : []).map((row) => [row.wholesaler_id, row]),
+        ),
+      );
     });
   }, [loading, user]);
 
@@ -541,6 +549,8 @@ function PharmacyDashboardContent() {
             cart={cart}
             cartCount={cartCount}
             subtotal={subtotal}
+            discounts={discounts}
+            terms={terms}
             productMap={productMap}
             updateQty={updateQty}
             placeOrder={placeOrder}
@@ -616,6 +626,7 @@ function PharmacyDashboardContent() {
               canOrder={canOrder}
               canEditLists={canEditLists}
               reorderLists={reorderLists}
+              terms={terms}
             />
           </TabsContent>
           <TabsContent value="lists">
@@ -660,6 +671,8 @@ function CartSheet({
   cart,
   cartCount,
   subtotal,
+  discounts,
+  terms,
   productMap,
   updateQty,
   placeOrder,
@@ -669,6 +682,8 @@ function CartSheet({
   cart: CartItem[];
   cartCount: number;
   subtotal: number;
+  discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
+  terms: Record<string, OrderTerms>;
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
   placeOrder: () => Promise<boolean>;
@@ -685,6 +700,20 @@ function CartSheet({
     (acc[key] ??= []).push(it);
     return acc;
   }, {});
+
+  const estimates = Object.fromEntries(
+    Object.entries(grouped).map(([wid, group]) => [
+      wid,
+      estimateGroup(
+        group.map((it) => ({ price_ghs: it.p!.price_ghs, quantity: it.qty })),
+        discounts[wid],
+        terms[wid],
+      ),
+    ]),
+  );
+  const cartTotal = Object.values(estimates).reduce((sum, estimate) => sum + estimate.total, 0);
+  const cartDelivery = Object.values(estimates).reduce((sum, estimate) => sum + estimate.deliveryFee, 0);
+  const belowMinimum = Object.entries(estimates).filter(([, estimate]) => !estimate.minimumMet);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -766,14 +795,46 @@ function CartSheet({
                       </div>
                     ))}
                   </div>
+                  <div className="mt-2 space-y-1 rounded-lg bg-muted/40 p-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Goods (estimated, after discounts)</span>
+                      <span>{formatGHS(estimates[wid].goods)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Delivery</span>
+                      <span>
+                        {estimates[wid].deliveryFee > 0
+                          ? formatGHS(estimates[wid].deliveryFee)
+                          : terms[wid] && Number(terms[wid].delivery_fee_ghs) > 0
+                            ? "Free"
+                            : "None"}
+                      </span>
+                    </div>
+                    {!estimates[wid].minimumMet && (
+                      <div role="alert" className="font-medium text-destructive">
+                        Add {formatGHS(estimates[wid].shortfall)} more to order from{" "}
+                        {group[0].p!.wholesaler?.name ?? "this wholesaler"} (minimum{" "}
+                        {formatGHS(terms[wid].min_order_value_ghs)}).
+                      </div>
+                    )}
+                    {estimates[wid].freeDeliveryRemaining !== null && estimates[wid].minimumMet && (
+                      <div className="text-success">
+                        Add {formatGHS(estimates[wid].freeDeliveryRemaining!)} more for free delivery.
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
             <SheetFooter className="border-t border-border pt-4">
               <div className="w-full space-y-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-semibold">{formatGHS(subtotal)}</span>
+                  <span className="text-muted-foreground">Estimated delivery</span>
+                  <span className="font-medium">{cartDelivery > 0 ? formatGHS(cartDelivery) : "None"}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Estimated total</span>
+                  <span className="font-semibold">{formatGHS(cartTotal || subtotal)}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Payment</span>
@@ -789,7 +850,7 @@ function CartSheet({
                   variant="hero"
                   size="lg"
                   className="w-full"
-                  disabled={placing || !canPlaceOrders}
+                  disabled={placing || !canPlaceOrders || belowMinimum.length > 0}
                   onClick={async () => {
                     const placed = await placeOrder();
                     if (placed) {
@@ -797,7 +858,7 @@ function CartSheet({
                     }
                   }}
                 >
-                  {placing ? "Placing…" : `Place order · ${formatGHS(subtotal)}`}
+                  {placing ? "Placing…" : belowMinimum.length > 0 ? "Minimum order not reached" : `Place order · ${formatGHS(cartTotal || subtotal)}`}
                 </Button>
               </div>
             </SheetFooter>
@@ -816,6 +877,7 @@ function CatalogView({
   canOrder,
   canEditLists,
   reorderLists,
+  terms,
 }: {
   products: Product[];
   discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
@@ -824,6 +886,7 @@ function CatalogView({
   canOrder: boolean;
   canEditLists: boolean;
   reorderLists: ReorderListsApi;
+  terms: Record<string, OrderTerms>;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -1051,6 +1114,7 @@ function CatalogView({
                     discounts={discounts}
                     canOrder={canOrder}
                     addToCart={addToCart}
+                    terms={terms}
                   />
                 </details>
               </Card>

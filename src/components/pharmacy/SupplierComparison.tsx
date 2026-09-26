@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatGHS } from "@/lib/format";
+import { describeTerms, type OrderTerms } from "@/lib/order-terms";
 import {
   comparisonHighlights,
   discountApplies,
@@ -26,11 +27,13 @@ export function SupplierComparison({
   discounts,
   canOrder,
   addToCart,
+  terms,
 }: {
   offers: CatalogueOffer[];
   discounts: DiscountMap;
   canOrder: boolean;
   addToCart: (offerId: string) => void;
+  terms?: Record<string, OrderTerms>;
 }) {
   const [sort, setSort] = useState<CompareSort>("net-price");
   const highlights = useMemo(() => comparisonHighlights(offers, discounts), [offers, discounts]);
@@ -91,6 +94,11 @@ export function SupplierComparison({
                 <tr key={offer.id} className="border-t align-top">
                   <td className="p-2">
                     <div className="font-medium">{offer.wholesaler?.name}</div>
+                    {describeTerms(terms?.[offer.wholesaler_id]) && (
+                      <div className="text-xs text-muted-foreground">
+                        {describeTerms(terms?.[offer.wholesaler_id])}
+                      </div>
+                    )}
                     <div className="mt-1 flex flex-wrap gap-1">
                       {offer.id === highlights.cheapestId && (
                         <Badge variant="secondary">Best price</Badge>

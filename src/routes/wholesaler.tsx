@@ -59,6 +59,7 @@ import {
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
 import { announceNotificationsChanged } from "@/lib/notifications";
+import { OrderTermsCard } from "@/components/wholesaler/OrderTermsCard";
 import { BatchesPanel } from "@/components/batches/BatchesPanel";
 import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -394,7 +395,7 @@ function WholesalerDashboardContent() {
           {canProcessOrders && <TabsContent value="batches"><BatchesPanel businessId={business.id} canManage={canManageProducts} products={products.map((p) => ({ id: p.id, name: p.name }))} /></TabsContent>}
           {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canProcessOrders} canManage={canManageProducts} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
-          {canManageProducts && <TabsContent value="discounts"><CustomerDiscounts wholesalerId={business.id} /></TabsContent>}
+          {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}
         </Tabs>
       </main>
     </div>

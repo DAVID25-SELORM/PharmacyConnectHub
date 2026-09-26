@@ -12,6 +12,8 @@ type ManagedOrder = {
   payment_method: "cod" | "paystack";
   payment_status: PaymentStatus;
   total_ghs: number;
+  subtotal_ghs: number | null;
+  discount_amount_ghs: number | null;
   delivered_at: string | null;
   paid_at: string | null;
   receipt_sent_at: string | null;
@@ -105,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: orderData, error: orderErr } = await callerDb
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,public_email,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(product_name,quantity,unit_price_ghs)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,subtotal_ghs,discount_amount_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,public_email,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(product_name,quantity,unit_price_ghs)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -216,6 +218,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       orderId: order.id,
       orderNumber: order.order_number,
       totalGhs: Number(order.total_ghs),
+      deliveryFeeGhs: Math.max(0, Math.round((Number(order.total_ghs) - (Number(order.subtotal_ghs ?? order.total_ghs) - Number(order.discount_amount_ghs ?? 0))) * 100) / 100),
       deliveredAt: order.delivered_at,
       paidAt: order.paid_at ?? paymentConfirmedAt,
       paymentMethod: order.payment_method,
