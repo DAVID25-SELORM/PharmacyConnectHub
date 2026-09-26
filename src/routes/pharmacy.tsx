@@ -47,6 +47,8 @@ import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
+import { RequestReturnDialog } from "@/components/returns/RequestReturnDialog";
+import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { PharmacyStatements } from "@/components/statements/PharmacyStatements";
 import { ReorderReviewDialog } from "@/components/pharmacy/ReorderReviewDialog";
 import { useReorderLists, type ReorderListsApi } from "@/hooks/use-reorder-lists";
@@ -296,6 +298,8 @@ function PharmacyDashboardContent() {
 
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const reorderLists = useReorderLists(businessId);
+  const [returnOrder, setReturnOrder] = useState<{ id: string; order_number: string } | null>(null);
+  const [returnsVersion, setReturnsVersion] = useState(0);
   const [reviewLines, setReviewLines] = useState<{ title: string; lines: ResolvedLine[] } | null>(null);
   const offersByMaster = useMemo(
     () => groupOffersByMaster(products as unknown as Array<CatalogueOffer>),
@@ -559,6 +563,12 @@ function PharmacyDashboardContent() {
 
         <VerificationBanner business={business} />
 
+        <RequestReturnDialog
+          order={returnOrder}
+          onClose={() => setReturnOrder(null)}
+          onDone={() => setReturnsVersion((value) => value + 1)}
+        />
+
         <ReorderReviewDialog
           title={reviewLines?.title ?? ""}
           lines={reviewLines?.lines ?? null}
@@ -581,17 +591,18 @@ function PharmacyDashboardContent() {
         <Tabs
           defaultValue={(() => {
             const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab === "orders" || tab === "lists" || tab === "statements" ? tab : "catalog";
+            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements" ? tab : "catalog";
           })()}
           className="w-full"
         >
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="catalog">
               Catalog ({approvedWholesalers.length} wholesaler
               {approvedWholesalers.length === 1 ? "" : "s"})
             </TabsTrigger>
             <TabsTrigger value="lists">Reorder lists ({reorderLists.lists.length})</TabsTrigger>
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
+            <TabsTrigger value="returns">Returns</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
           </TabsList>
 
@@ -616,6 +627,15 @@ function PharmacyDashboardContent() {
               onAddLines={addLinesToCart}
             />
           </TabsContent>
+          <TabsContent value="returns">
+            <ReturnsPanel
+              businessId={business.id}
+              side="pharmacy"
+              canProcess={canOrder}
+              canManage={false}
+              refreshKey={returnsVersion}
+            />
+          </TabsContent>
           <TabsContent value="statements">
             <PharmacyStatements pharmacyId={business.id} wholesalers={approvedWholesalers} />
           </TabsContent>
@@ -626,6 +646,7 @@ function PharmacyDashboardContent() {
               loadOrders={loadOrders}
               loadOrderDetail={loadOrderDetail}
               onReorder={canOrder ? reorderFromOrder : undefined}
+              onRequestReturn={canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined}
             />
           </TabsContent>
         </Tabs>
@@ -1040,7 +1061,8 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder }: {
+function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder, onRequestReturn }: {
+  onRequestReturn?: (orderId: string, orderLabel: string) => void;
   onReorder?: (orderId: string, orderLabel: string) => Promise<void>;
   orders: OrderRow[];
   totalCount: number;
@@ -1117,7 +1139,7 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder
             </div>
           </div>
 
-          <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">{onReorder && <Button type="button" variant="secondary" size="sm" onClick={() => void onReorder(o.id, o.order_number)}>Reorder</Button>}<Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
+          <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">{onRequestReturn && o.status === "delivered" && <Button type="button" variant="outline" size="sm" onClick={() => onRequestReturn(o.id, o.order_number)}>Request return</Button>}{onReorder && <Button type="button" variant="secondary" size="sm" onClick={() => void onReorder(o.id, o.order_number)}>Reorder</Button>}<Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
           {open && <>
           <OrderTimeline o={o} />
 

@@ -2,7 +2,7 @@ import { formatGHSCell, formatReportDate, rowsToCsv } from "@/lib/reports";
 
 export type StatementLine = {
   date: string;
-  kind: "order" | "payment";
+  kind: "order" | "payment" | "return";
   order_id: string;
   order_number: string;
   debit: number;
@@ -34,9 +34,9 @@ export const SEGMENT_LABELS: Record<string, string> = {
 };
 
 export function lineDescription(line: Pick<StatementLine, "kind" | "order_number">) {
-  return line.kind === "order"
-    ? `Order ${line.order_number}`
-    : `Payment received for ${line.order_number}`;
+  if (line.kind === "order") return `Order ${line.order_number}`;
+  if (line.kind === "return") return `Return credited ${line.order_number}`;
+  return `Payment received for ${line.order_number}`;
 }
 
 /** yyyy-mm-dd inputs -> [from, to) timestamps; the end date is inclusive for the person choosing it. */
