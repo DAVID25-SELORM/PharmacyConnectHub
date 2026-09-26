@@ -338,7 +338,13 @@ function WholesalerDashboardContent() {
           ))}
         </div>
 
-        <Tabs defaultValue="orders" className="w-full">
+        <Tabs
+          defaultValue={(() => {
+            const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+            return tab && ["orders", "products", "insights", "returns", "customers", "discounts"].includes(tab) ? tab : "orders";
+          })()}
+          className="w-full"
+        >
           <TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>

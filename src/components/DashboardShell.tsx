@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   Bell,
   CheckCheck,
@@ -27,42 +27,39 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
-
-type NotificationRow = {
-  id: string;
-  type: string;
-  title: string;
-  body: string;
-  read: boolean;
-  created_at: string;
-};
-
-function timeAgoShort(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
+import {
+  NOTIFICATIONS_CHANGED_EVENT,
+  openInternalLink,
+  timeAgoShort,
+  type NotificationRow,
+} from "@/lib/notifications";
 
 function NotificationBell() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState<NotificationRow[]>([]);
+  const [unreadTotal, setUnreadTotal] = useState(0);
 
   const load = async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (!session) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("id,type,title,body,read,created_at")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(30);
-    setNotes((data as NotificationRow[]) ?? []);
+    const [{ data }, { count }] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("id,type,title,body,read,link,created_at")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(15),
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", session.user.id)
+        .eq("read", false),
+    ]);
+    setNotes((data as unknown as NotificationRow[]) ?? []);
+    setUnreadTotal(count ?? 0);
   };
 
   useEffect(() => {
@@ -73,33 +70,53 @@ function NotificationBell() {
     // notifications available without depending on that connection.
     const pollInterval = window.setInterval(() => void load(), 60_000);
 
+    const onChanged = () => void load();
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
+
     return () => {
       window.clearInterval(pollInterval);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markAllRead = async () => {
-    const unread = notes.filter((n) => !n.read).map((n) => n.id);
-    if (unread.length === 0) return;
-    await supabase.from("notifications").update({ read: true }).in("id", unread);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", session.user.id)
+      .eq("read", false);
     setNotes((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadTotal(0);
   };
 
-  const unreadCount = notes.filter((n) => !n.read).length;
-
-  const handleOpen = (value: boolean) => {
-    setOpen(value);
-    if (value) void markAllRead();
+  const openNote = async (note: NotificationRow) => {
+    setOpen(false);
+    if (!note.read) {
+      setNotes((prev) => prev.map((n) => (n.id === note.id ? { ...n, read: true } : n)));
+      setUnreadTotal((count) => Math.max(0, count - 1));
+      await supabase.from("notifications").update({ read: true }).eq("id", note.id);
+    }
+    openInternalLink(router, note.link);
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpen}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="relative">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="relative"
+          aria-label={unreadTotal > 0 ? `Notifications, ${unreadTotal} unread` : "Notifications"}
+        >
           <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
+          {unreadTotal > 0 && (
             <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground ring-2 ring-background">
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {unreadTotal > 9 ? "9+" : unreadTotal}
             </span>
           )}
         </Button>
@@ -107,7 +124,7 @@ function NotificationBell() {
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold">Notifications</span>
-          {notes.some((n) => !n.read) && (
+          {unreadTotal > 0 && (
             <button
               onClick={markAllRead}
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -124,9 +141,11 @@ function NotificationBell() {
             </div>
           ) : (
             notes.map((n) => (
-              <div
+              <button
+                type="button"
                 key={n.id}
-                className={`border-b border-border px-4 py-3 last:border-0 ${n.read ? "opacity-60" : "bg-primary/5"}`}
+                onClick={() => void openNote(n)}
+                className={`block w-full border-b border-border px-4 py-3 text-left last:border-0 hover:bg-muted/50 ${n.read ? "opacity-60" : "bg-primary/5"}`}
               >
                 {!n.read && (
                   <span className="mb-1 inline-block h-1.5 w-1.5 rounded-full bg-primary" />
@@ -136,9 +155,18 @@ function NotificationBell() {
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   {timeAgoShort(n.created_at)}
                 </div>
-              </div>
+              </button>
             ))
           )}
+        </div>
+        <div className="border-t border-border px-4 py-2 text-center">
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            View all notifications
+          </Link>
         </div>
       </PopoverContent>
     </Popover>
