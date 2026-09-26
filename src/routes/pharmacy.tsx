@@ -47,6 +47,7 @@ import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
+import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { RequestReturnDialog } from "@/components/returns/RequestReturnDialog";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { PharmacyStatements } from "@/components/statements/PharmacyStatements";
@@ -1144,6 +1145,8 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder
           <OrderTimeline o={o} />
 
           <ReceiptStatusPanel order={o} />
+
+          <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
 
           <OrderPrintActions
             order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}

@@ -58,6 +58,7 @@ import {
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
+import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { InventoryInsights } from "@/components/wholesaler/InventoryInsights";
 
@@ -552,6 +553,8 @@ function OrdersInbox({
             <OrderTimeline o={o} />
 
             <ReceiptStatusPanel order={o} />
+
+            <DeliveryPanel orderId={o.id} status={o.status} side="wholesaler" canEdit={canManageOrders} />
 
             <OrderPrintActions
               wholesaler
