@@ -58,6 +58,8 @@ import {
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
+import { BatchesPanel } from "@/components/batches/BatchesPanel";
+import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { InventoryInsights } from "@/components/wholesaler/InventoryInsights";
@@ -341,7 +343,7 @@ function WholesalerDashboardContent() {
         <Tabs
           defaultValue={(() => {
             const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab && ["orders", "products", "insights", "returns", "customers", "discounts"].includes(tab) ? tab : "orders";
+            return tab && ["orders", "products", "insights", "batches", "returns", "customers", "discounts"].includes(tab) ? tab : "orders";
           })()}
           className="w-full"
         >
@@ -349,6 +351,7 @@ function WholesalerDashboardContent() {
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
             {canManageProducts && <TabsTrigger value="insights">Stock insights</TabsTrigger>}
+            {canProcessOrders && <TabsTrigger value="batches">Batches</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="returns">Returns</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
@@ -376,6 +379,7 @@ function WholesalerDashboardContent() {
             />
           </TabsContent>
           {canManageProducts && <TabsContent value="insights"><InventoryInsights businessId={business.id} /></TabsContent>}
+          {canProcessOrders && <TabsContent value="batches"><BatchesPanel businessId={business.id} canManage={canManageProducts} products={products.map((p) => ({ id: p.id, name: p.name }))} /></TabsContent>}
           {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canProcessOrders} canManage={canManageProducts} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
           {canManageProducts && <TabsContent value="discounts"><CustomerDiscounts wholesalerId={business.id} /></TabsContent>}
@@ -561,6 +565,8 @@ function OrdersInbox({
             <ReceiptStatusPanel order={o} />
 
             <DeliveryPanel orderId={o.id} status={o.status} side="wholesaler" canEdit={canManageOrders} />
+
+            {canManageOrders && o.status !== "pending" && o.status !== "cancelled" && <PickPanel orderId={o.id} status={o.status} canEdit={canManageOrders} />}
 
             <OrderPrintActions
               wholesaler
