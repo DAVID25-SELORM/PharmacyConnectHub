@@ -1,8 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, BarChart3, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Activity, BarChart3, ClipboardCheck, LayoutDashboard, ShieldCheck } from "lucide-react";
 
 const ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/verification", label: "Verification", icon: ClipboardCheck, exact: false },
   { to: "/admin/activity", label: "Activity", icon: Activity, exact: false },
   { to: "/admin/reports", label: "Reports", icon: BarChart3, exact: false },
   { to: "/admin/staff", label: "Platform Team", icon: ShieldCheck, exact: false },
@@ -22,6 +23,7 @@ export function AdminNav() {
             <Link
               key={item.to}
               to={item.to}
+              activeOptions={{ exact: item.exact }}
               aria-current={active ? "page" : undefined}
               className={`inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
                 active

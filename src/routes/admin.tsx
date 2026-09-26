@@ -503,8 +503,10 @@ function AdminPanel() {
                     </div>
                     <div className="text-xs text-muted-foreground">{item.helper}</div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={scrollToApprovals}>
-                    Review
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to={item.label === "Incomplete verification records" ? "/admin" : "/admin/verification"}>
+                      Review
+                    </Link>
                   </Button>
                 </li>
               ))}

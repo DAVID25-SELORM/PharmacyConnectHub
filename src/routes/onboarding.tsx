@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
+import { buildVerificationChecklist } from "@/lib/onboarding-checklist";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
@@ -429,6 +431,14 @@ function OnboardingPage() {
           </div>
           <Progress value={progressValue} className="mt-4 h-2.5" />
         </Card>
+
+        <OnboardingChecklist
+          steps={buildVerificationChecklist({
+            business,
+            uploadedDocTypes: docs.map((doc) => doc.doc_type),
+            requiredDocs: docTypes,
+          })}
+        />
 
         <Card className="mt-6 p-6">
           <div className="mb-4">
