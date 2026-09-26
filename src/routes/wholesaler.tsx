@@ -58,6 +58,7 @@ import {
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
+import { InventoryInsights } from "@/components/wholesaler/InventoryInsights";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -336,9 +337,10 @@ function WholesalerDashboardContent() {
         </div>
 
         <Tabs defaultValue="orders" className="w-full">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
+            {canManageProducts && <TabsTrigger value="insights">Stock insights</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
@@ -364,6 +366,7 @@ function WholesalerDashboardContent() {
               canManageProducts={canManageProducts}
             />
           </TabsContent>
+          {canManageProducts && <TabsContent value="insights"><InventoryInsights businessId={business.id} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
           {canManageProducts && <TabsContent value="discounts"><CustomerDiscounts wholesalerId={business.id} /></TabsContent>}
         </Tabs>
