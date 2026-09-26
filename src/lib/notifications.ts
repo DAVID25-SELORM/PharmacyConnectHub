@@ -27,7 +27,7 @@ const GROUP_TYPES: Record<NotificationGroup, string[]> = {
   payments: ["payment_update"],
   returns: ["return_requested", "return_update"],
   delivery: ["delivery_update"],
-  stock: ["low_stock"],
+  stock: ["low_stock", "expiry_alert"],
   account: ["business_approved", "business_rejected", "verification_pending"],
 };
 

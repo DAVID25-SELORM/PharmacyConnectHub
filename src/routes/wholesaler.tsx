@@ -58,6 +58,7 @@ import {
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
+import { announceNotificationsChanged } from "@/lib/notifications";
 import { BatchesPanel } from "@/components/batches/BatchesPanel";
 import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -242,6 +243,17 @@ function WholesalerDashboardContent() {
       setSendingReceiptOrderId(null);
     }
   };
+
+  const expiryBusinessId = business?.verification_status === "approved" && (business.staff_role === "owner" || business.staff_role === "manager") ? business.id : null;
+  useEffect(() => {
+    // Generates expiry alerts for this business (server-side, at most once every 6 hours).
+    if (!expiryBusinessId) return;
+    void (supabase as any)
+      .rpc("refresh_my_expiry_alerts", { p_business_id: expiryBusinessId })
+      .then(({ data }: { data: string | null }) => {
+        if (typeof data === "string" && data.startsWith("ran:") && data !== "ran:0") announceNotificationsChanged();
+      });
+  }, [expiryBusinessId]);
 
   if (loading || !business) {
     return (

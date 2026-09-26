@@ -11,6 +11,7 @@ describe("notification helpers", () => {
       "return_update",
       "delivery_update",
       "low_stock",
+      "expiry_alert",
       "business_approved",
       "business_rejected",
       "verification_pending",
