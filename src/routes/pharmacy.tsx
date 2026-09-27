@@ -1,6 +1,6 @@
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   Search,
   ShoppingCart,
@@ -48,6 +48,9 @@ import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
+import { SavedCartsMenu } from "@/components/pharmacy/SavedCartsMenu";
+import { useSavedCarts, type SavedCartsApi } from "@/hooks/use-saved-carts";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -150,7 +153,13 @@ type OrderRow = {
   unit_count?: number;
 };
 
-type OrderHistoryQuery = { page: number; search: string; status: string; payment: string; sort: string };
+type OrderHistoryQuery = {
+  page: number;
+  search: string;
+  status: string;
+  payment: string;
+  sort: string;
+};
 
 function PharmacyDashboardContent() {
   const navigate = useNavigate();
@@ -158,7 +167,17 @@ function PharmacyDashboardContent() {
   const businessId = business?.id ?? null;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [discounts, setDiscounts] = useState<Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>>({});
+  const [discounts, setDiscounts] = useState<
+    Record<
+      string,
+      {
+        discount_type: string;
+        discount_percent?: number;
+        discount_amount?: number;
+        minimum_order_value: number;
+      }
+    >
+  >({});
   const [terms, setTerms] = useState<Record<string, OrderTerms>>({});
   const [productRules, setProductRules] = useState<ProductRule[]>([]);
   const [creditTerms, setCreditTerms] = useState<Record<string, CreditTerms>>({});
@@ -204,29 +223,38 @@ function PharmacyDashboardContent() {
       }
       const catalogue = (Array.isArray(data) ? data : []) as unknown as MasterCatalogueEntry[];
       const loadedProducts = (catalogue ?? []).flatMap((master) =>
-          (Array.isArray(master.offers) ? master.offers : []).map((offer) => ({
-            ...offer,
-            master_product_id: master.id,
-            name: master.name,
-            generic_name: master.generic_name,
-            strength: master.strength,
-            brand: master.brand_name,
-            form: master.dosage_form,
-            pack_size: master.pack_size,
-            category: master.category,
-          })),
-        );
+        (Array.isArray(master.offers) ? master.offers : []).map((offer) => ({
+          ...offer,
+          master_product_id: master.id,
+          name: master.name,
+          generic_name: master.generic_name,
+          strength: master.strength,
+          brand: master.brand_name,
+          form: master.dosage_form,
+          pack_size: master.pack_size,
+          category: master.category,
+        })),
+      );
       setProducts(loadedProducts);
       const wholesalerIds = [...new Set(loadedProducts.map((p) => p.wholesaler_id))];
-      const discountResults = await Promise.all(wholesalerIds.map(async (id) => {
-        const result = await (supabase as any).rpc("get_my_customer_discount", { p_wholesaler_id: id });
-        return [id, Array.isArray(result.data) ? result.data[0] : null] as const;
-      }));
+      const discountResults = await Promise.all(
+        wholesalerIds.map(async (id) => {
+          const result = await (supabase as any).rpc("get_my_customer_discount", {
+            p_wholesaler_id: id,
+          });
+          return [id, Array.isArray(result.data) ? result.data[0] : null] as const;
+        }),
+      );
       setDiscounts(Object.fromEntries(discountResults.filter(([, value]) => value)));
-      const termsResult = await (supabase as any).rpc("list_order_terms", { p_wholesaler_ids: wholesalerIds });
+      const termsResult = await (supabase as any).rpc("list_order_terms", {
+        p_wholesaler_ids: wholesalerIds,
+      });
       setTerms(
         Object.fromEntries(
-          (Array.isArray(termsResult.data) ? (termsResult.data as OrderTerms[]) : []).map((row) => [row.wholesaler_id, row]),
+          (Array.isArray(termsResult.data) ? (termsResult.data as OrderTerms[]) : []).map((row) => [
+            row.wholesaler_id,
+            row,
+          ]),
         ),
       );
     });
@@ -243,39 +271,73 @@ function PharmacyDashboardContent() {
     void (supabase as any)
       .rpc("get_my_credit_terms", { p_pharmacy_id: businessId })
       .then(({ data }: { data: CreditTerms[] | null }) => {
-        if (!cancelled) setCreditTerms(Object.fromEntries((Array.isArray(data) ? data : []).map((row) => [row.wholesaler_id, row])));
+        if (!cancelled)
+          setCreditTerms(
+            Object.fromEntries(
+              (Array.isArray(data) ? data : []).map((row) => [row.wholesaler_id, row]),
+            ),
+          );
       });
     return () => {
       cancelled = true;
     };
   }, [businessId]);
 
-  const loadOrders = useCallback(async (query: OrderHistoryQuery = { page: 1, search: "", status: "all", payment: "all", sort: "newest" }) => {
-    if (!businessId) return;
-    const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
-      p_page: query.page, p_page_size: 20, p_search: query.search || null,
-      p_status: query.status === "all" ? null : query.status,
-      p_payment_status: query.payment === "all" ? null : query.payment, p_sort: query.sort,
-    });
-    if (error) {
-      toast.error("We couldn't load your orders. Please try again.");
-      return;
-    }
-    const rows = Array.isArray(data?.orders) ? data.orders : [];
-    setTotalOrderCount(Number(data?.total_count ?? 0));
-    setOrders((current) => rows.map((row: Record<string, unknown>) => ({
-      ...row, paystack_reference: null, accepted_at: null, packed_at: null,
-      dispatched_at: null, delivered_at: null, cancelled_at: null, paid_at: null,
-      payment_confirmed_at: null, receipt_sent_at: null, receipt_sent_to: null,
-      ...current.find((order) => order.id === row.id),
-      ...row,
-      wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
-      order_items: current.find((order) => order.id === row.id)?.order_items ?? [], item_count: Number(row.item_count ?? 0), unit_count: Number(row.unit_count ?? 0),
-    })) as OrderRow[]);
-  }, [businessId]);
+  const loadOrders = useCallback(
+    async (
+      query: OrderHistoryQuery = {
+        page: 1,
+        search: "",
+        status: "all",
+        payment: "all",
+        sort: "newest",
+      },
+    ) => {
+      if (!businessId) return;
+      const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
+        p_page: query.page,
+        p_page_size: 20,
+        p_search: query.search || null,
+        p_status: query.status === "all" ? null : query.status,
+        p_payment_status: query.payment === "all" ? null : query.payment,
+        p_sort: query.sort,
+      });
+      if (error) {
+        toast.error("We couldn't load your orders. Please try again.");
+        return;
+      }
+      const rows = Array.isArray(data?.orders) ? data.orders : [];
+      setTotalOrderCount(Number(data?.total_count ?? 0));
+      setOrders(
+        (current) =>
+          rows.map((row: Record<string, unknown>) => ({
+            ...row,
+            paystack_reference: null,
+            accepted_at: null,
+            packed_at: null,
+            dispatched_at: null,
+            delivered_at: null,
+            cancelled_at: null,
+            paid_at: null,
+            payment_confirmed_at: null,
+            receipt_sent_at: null,
+            receipt_sent_to: null,
+            ...current.find((order) => order.id === row.id),
+            ...row,
+            wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
+            order_items: current.find((order) => order.id === row.id)?.order_items ?? [],
+            item_count: Number(row.item_count ?? 0),
+            unit_count: Number(row.unit_count ?? 0),
+          })) as OrderRow[],
+      );
+    },
+    [businessId],
+  );
 
   const loadOrderDetail = async (orderId: string, expectedItemCount?: number) => {
-    const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", { p_order_id: orderId });
+    const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", {
+      p_order_id: orderId,
+    });
     if (error || !data?.order) {
       console.error("[Drugxone] get_pharmacy_order_detail failed", {
         orderId,
@@ -309,10 +371,14 @@ function PharmacyDashboardContent() {
         expectedItemCount: expectedItemCount ?? hydrated.item_count,
         response: data,
       });
-      toast.error("This order has items, but the detail response was empty. Check the Supabase migration and browser console.");
+      toast.error(
+        "This order has items, but the detail response was empty. Check the Supabase migration and browser console.",
+      );
       return null;
     }
-    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, ...hydrated } : order));
+    setOrders((current) =>
+      current.map((order) => (order.id === orderId ? { ...order, ...hydrated } : order)),
+    );
     return hydrated;
   };
   useEffect(() => {
@@ -326,7 +392,9 @@ function PharmacyDashboardContent() {
   const reorderLists = useReorderLists(businessId);
   const [returnOrder, setReturnOrder] = useState<{ id: string; order_number: string } | null>(null);
   const [returnsVersion, setReturnsVersion] = useState(0);
-  const [reviewLines, setReviewLines] = useState<{ title: string; lines: ResolvedLine[] } | null>(null);
+  const [reviewLines, setReviewLines] = useState<{ title: string; lines: ResolvedLine[] } | null>(
+    null,
+  );
   const offersByMaster = useMemo(
     () => groupOffersByMaster(products as unknown as Array<CatalogueOffer>),
     [products],
@@ -346,17 +414,21 @@ function PharmacyDashboardContent() {
   };
 
   const reorderFromOrder = async (orderId: string, orderLabel: string) => {
-    const { data, error } = await (supabase as any).rpc("get_order_reorder_lines", { p_order_id: orderId });
+    const { data, error } = await (supabase as any).rpc("get_order_reorder_lines", {
+      p_order_id: orderId,
+    });
     if (error || !Array.isArray(data)) {
       toast.error("We couldn't load this order to reorder it. Please try again.");
       return;
     }
-    const lines = (data as Array<{
-      master_product_id: string | null;
-      product_name: string;
-      quantity: number;
-      wholesaler_id: string;
-    }>).map((row) =>
+    const lines = (
+      data as Array<{
+        master_product_id: string | null;
+        product_name: string;
+        quantity: number;
+        wholesaler_id: string;
+      }>
+    ).map((row) =>
       resolveLine(
         {
           masterProductId: row.master_product_id,
@@ -439,7 +511,16 @@ function PharmacyDashboardContent() {
       }
 
       added = true;
-      return [...prev, { productId, quantity: Math.min(Math.max(1, Number(product.minimum_order_quantity ?? 1)), product.stock) }];
+      return [
+        ...prev,
+        {
+          productId,
+          quantity: Math.min(
+            Math.max(1, Number(product.minimum_order_quantity ?? 1)),
+            product.stock,
+          ),
+        },
+      ];
     });
 
     if (added) {
@@ -523,6 +604,75 @@ function PharmacyDashboardContent() {
   const canOrder = business?.verification_status === "approved" && canPlaceOrders;
   const canEditLists = canOrder;
 
+  // The pharmacy's single shared "in progress" cart, persisted so it survives a refresh, a closed
+  // tab or a different device. Loaded once when the catalogue is ready; synced back (debounced)
+  // whenever the cart changes. An empty cart clears the stored draft (see save_draft_cart).
+  const savedCarts = useSavedCarts(businessId);
+  const [draftReady, setDraftReady] = useState(false);
+  const draftHydrated = useRef(false);
+  const debouncedCart = useDebouncedValue(cart, 800);
+
+  useEffect(() => {
+    if (!businessId || products.length === 0 || draftHydrated.current) return;
+    draftHydrated.current = true;
+    void (supabase as any)
+      .from("pharmacy_saved_carts")
+      .select("pharmacy_saved_cart_items(product_id,quantity)")
+      .eq("pharmacy_id", businessId)
+      .is("name", null)
+      .maybeSingle()
+      .then(
+        ({
+          data,
+        }: {
+          data: {
+            pharmacy_saved_cart_items: Array<{ product_id: string; quantity: number }>;
+          } | null;
+        }) => {
+          const items = data?.pharmacy_saved_cart_items ?? [];
+          if (items.length > 0) {
+            const added = addLinesToCart(
+              items.map((item) => ({ offer: { id: item.product_id }, quantity: item.quantity })),
+            );
+            if (added < items.length) {
+              toast.info(
+                `${items.length - added} item${items.length - added === 1 ? "" : "s"} from your saved cart ${items.length - added === 1 ? "is" : "are"} no longer available.`,
+              );
+            }
+          }
+          setDraftReady(true);
+        },
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId, products.length]);
+
+  useEffect(() => {
+    if (!businessId || !draftReady || !canPlaceOrders) return;
+    const items = debouncedCart.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      name: productMap[item.productId]?.name ?? "",
+    }));
+    void (supabase as any)
+      .rpc("save_draft_cart", { p_pharmacy_id: businessId, p_items: items })
+      .then(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedCart, businessId, draftReady, canPlaceOrders]);
+
+  const resumeSavedCart = (
+    items: Array<{ productId: string; quantity: number }>,
+    label: string,
+  ) => {
+    const added = addLinesToCart(
+      items.map((item) => ({ offer: { id: item.productId }, quantity: item.quantity })),
+    );
+    toast.success(
+      added < items.length
+        ? `Added ${added} of ${items.length} item${items.length === 1 ? "" : "s"} from "${label}". ${items.length - added} unavailable.`
+        : `Added ${added} item${added === 1 ? "" : "s"} from "${label}".`,
+    );
+  };
+
   if (loading || !business) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
@@ -579,6 +729,8 @@ function PharmacyDashboardContent() {
             placeOrder={placeOrder}
             placing={placing}
             canPlaceOrders={canPlaceOrders}
+            savedCarts={savedCarts}
+            onResumeSavedCart={resumeSavedCart}
           />
         }
       />
@@ -610,7 +762,9 @@ function PharmacyDashboardContent() {
           onClose={() => setReviewLines(null)}
           onConfirm={(lines) => {
             const added = addLinesToCart(
-              lines.filter((line) => line.status !== "unavailable" && line.offer).map((line) => ({ offer: line.offer!, quantity: line.quantity })),
+              lines
+                .filter((line) => line.status !== "unavailable" && line.offer)
+                .map((line) => ({ offer: line.offer!, quantity: line.quantity })),
             );
             const unavailable = lines.filter((line) => line.status === "unavailable").length;
             toast.success(
@@ -624,8 +778,13 @@ function PharmacyDashboardContent() {
 
         <Tabs
           defaultValue={(() => {
-            const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements" ? tab : "catalog";
+            const tab =
+              typeof window !== "undefined"
+                ? new URLSearchParams(window.location.search).get("tab")
+                : null;
+            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements"
+              ? tab
+              : "catalog";
           })()}
           className="w-full"
         >
@@ -683,7 +842,9 @@ function PharmacyDashboardContent() {
               loadOrders={loadOrders}
               loadOrderDetail={loadOrderDetail}
               onReorder={canOrder ? reorderFromOrder : undefined}
-              onRequestReturn={canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined}
+              onRequestReturn={
+                canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
+              }
             />
           </TabsContent>
         </Tabs>
@@ -705,11 +866,21 @@ function CartSheet({
   placeOrder,
   placing,
   canPlaceOrders,
+  savedCarts,
+  onResumeSavedCart,
 }: {
   cart: CartItem[];
   cartCount: number;
   subtotal: number;
-  discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
+  discounts: Record<
+    string,
+    {
+      discount_type: string;
+      discount_percent?: number;
+      discount_amount?: number;
+      minimum_order_value: number;
+    }
+  >;
   terms: Record<string, OrderTerms>;
   productRules: ProductRule[];
   creditTerms: Record<string, CreditTerms>;
@@ -718,6 +889,8 @@ function CartSheet({
   placeOrder: (creditWholesalerIds?: string[]) => Promise<boolean>;
   placing: boolean;
   canPlaceOrders: boolean;
+  savedCarts: SavedCartsApi;
+  onResumeSavedCart: (items: Array<{ productId: string; quantity: number }>, label: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [creditSelected, setCreditSelected] = useState<Record<string, boolean>>({});
@@ -743,7 +916,10 @@ function CartSheet({
     ]),
   );
   const cartTotal = Object.values(estimates).reduce((sum, estimate) => sum + estimate.total, 0);
-  const cartDelivery = Object.values(estimates).reduce((sum, estimate) => sum + estimate.deliveryFee, 0);
+  const cartDelivery = Object.values(estimates).reduce(
+    (sum, estimate) => sum + estimate.deliveryFee,
+    0,
+  );
   const belowMinimum = Object.entries(estimates).filter(([, estimate]) => !estimate.minimumMet);
 
   return (
@@ -763,6 +939,18 @@ function CartSheet({
           <SheetTitle>Your cart</SheetTitle>
           <SheetDescription>Review your items before placing your order.</SheetDescription>
         </SheetHeader>
+        <div className="flex justify-end">
+          <SavedCartsMenu
+            savedCarts={savedCarts}
+            cartItems={items.map((it) => ({
+              productId: it.p!.id,
+              quantity: it.qty,
+              name: it.p!.name,
+            }))}
+            canSave={canPlaceOrders}
+            onResume={onResumeSavedCart}
+          />
+        </div>
         {items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -828,7 +1016,9 @@ function CartSheet({
                   </div>
                   <div className="mt-2 space-y-1 rounded-lg bg-muted/40 p-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Goods (estimated, after discounts)</span>
+                      <span className="text-muted-foreground">
+                        Goods (estimated, after discounts)
+                      </span>
                       <span>{formatGHS(estimates[wid].goods)}</span>
                     </div>
                     <div className="flex justify-between">
@@ -850,7 +1040,8 @@ function CartSheet({
                     )}
                     {estimates[wid].freeDeliveryRemaining !== null && estimates[wid].minimumMet && (
                       <div className="text-success">
-                        Add {formatGHS(estimates[wid].freeDeliveryRemaining!)} more for free delivery.
+                        Add {formatGHS(estimates[wid].freeDeliveryRemaining!)} more for free
+                        delivery.
                       </div>
                     )}
                     <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
@@ -862,7 +1053,10 @@ function CartSheet({
                             checked={Boolean(creditSelected[wid])}
                             disabled={!canUseCredit(creditTerms[wid], estimates[wid].total)}
                             onChange={(event) =>
-                              setCreditSelected((current) => ({ ...current, [wid]: event.target.checked }))
+                              setCreditSelected((current) => ({
+                                ...current,
+                                [wid]: event.target.checked,
+                              }))
                             }
                           />
                           Use approved credit
@@ -871,17 +1065,22 @@ function CartSheet({
                         <span className="font-medium">Cash on delivery</span>
                       )}
                     </div>
-                    {creditTerms[wid] && creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total) && (
-                      <div className="text-muted-foreground">
-                        Due in {creditTerms[wid].payment_terms_days} days · {formatGHS(creditTerms[wid].available_ghs)} available
-                      </div>
-                    )}
-                    {creditTerms[wid] && creditSelected[wid] && !canUseCredit(creditTerms[wid], estimates[wid].total) && (
-                      <div className="text-warning">
-                        Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is left; this order will be pay on
-                        delivery.
-                      </div>
-                    )}
+                    {creditTerms[wid] &&
+                      creditSelected[wid] &&
+                      canUseCredit(creditTerms[wid], estimates[wid].total) && (
+                        <div className="text-muted-foreground">
+                          Due in {creditTerms[wid].payment_terms_days} days ·{" "}
+                          {formatGHS(creditTerms[wid].available_ghs)} available
+                        </div>
+                      )}
+                    {creditTerms[wid] &&
+                      creditSelected[wid] &&
+                      !canUseCredit(creditTerms[wid], estimates[wid].total) && (
+                        <div className="text-warning">
+                          Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is
+                          left; this order will be pay on delivery.
+                        </div>
+                      )}
                   </div>
                 </div>
               ))}
@@ -890,7 +1089,9 @@ function CartSheet({
               <div className="w-full space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Estimated delivery</span>
-                  <span className="font-medium">{cartDelivery > 0 ? formatGHS(cartDelivery) : "None"}</span>
+                  <span className="font-medium">
+                    {cartDelivery > 0 ? formatGHS(cartDelivery) : "None"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Estimated total</span>
@@ -909,7 +1110,8 @@ function CartSheet({
                   disabled={placing || !canPlaceOrders || belowMinimum.length > 0}
                   onClick={async () => {
                     const creditWholesalerIds = Object.keys(grouped).filter(
-                      (wid) => creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total),
+                      (wid) =>
+                        creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total),
                     );
                     const placed = await placeOrder(creditWholesalerIds);
                     if (placed) {
@@ -918,7 +1120,11 @@ function CartSheet({
                     }
                   }}
                 >
-                  {placing ? "Placing…" : belowMinimum.length > 0 ? "Minimum order not reached" : `Place order · ${formatGHS(cartTotal || subtotal)}`}
+                  {placing
+                    ? "Placing…"
+                    : belowMinimum.length > 0
+                      ? "Minimum order not reached"
+                      : `Place order · ${formatGHS(cartTotal || subtotal)}`}
                 </Button>
               </div>
             </SheetFooter>
@@ -941,7 +1147,15 @@ function CatalogView({
   productRules,
 }: {
   products: Product[];
-  discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
+  discounts: Record<
+    string,
+    {
+      discount_type: string;
+      discount_percent?: number;
+      discount_amount?: number;
+      minimum_order_value: number;
+    }
+  >;
   wholesalers: WholesalerSummary[];
   addToCart: (id: string) => void;
   canOrder: boolean;
@@ -963,7 +1177,14 @@ function CatalogView({
   }, [wholesalerId, wholesalers]);
 
   const availableCategories = useMemo(
-    () => [...new Set(products.map((product) => product.category).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)),
+    () =>
+      [
+        ...new Set(
+          products
+            .map((product) => product.category)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
     [products],
   );
 
@@ -1168,7 +1389,9 @@ function CatalogView({
                   <summary className="cursor-pointer text-sm font-medium text-primary">
                     Compare suppliers - from{" "}
                     {formatGHS(
-                      Math.min(...offers.map((offer) => makePriceOf(discounts, productRules)(offer, 1))),
+                      Math.min(
+                        ...offers.map((offer) => makePriceOf(discounts, productRules)(offer, 1)),
+                      ),
                     )}
                   </summary>
                   <SupplierComparison
@@ -1189,7 +1412,14 @@ function CatalogView({
   );
 }
 
-function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder, onRequestReturn }: {
+function OrdersView({
+  orders,
+  totalCount,
+  loadOrders,
+  loadOrderDetail,
+  onReorder,
+  onRequestReturn,
+}: {
   onRequestReturn?: (orderId: string, orderLabel: string) => void;
   onReorder?: (orderId: string, orderLabel: string) => Promise<void>;
   orders: OrderRow[];
@@ -1204,17 +1434,26 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder
   const [sort, setSort] = useState("newest");
   const [page, setPage] = useState(1);
   const pageSize = 20;
-  const counts = useMemo(() => ({
-    active: orders.filter((o) => ["pending", "accepted", "packed", "dispatched"].includes(o.status)).length,
-    awaiting: orders.filter((o) => o.payment_status === "unpaid").length,
-    transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
-    delivered: orders.filter((o) => o.status === "delivered").length,
-  }), [orders]);
+  const counts = useMemo(
+    () => ({
+      active: orders.filter((o) =>
+        ["pending", "accepted", "packed", "dispatched"].includes(o.status),
+      ).length,
+      awaiting: orders.filter((o) => o.payment_status === "unpaid").length,
+      transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
+      delivered: orders.filter((o) => o.status === "delivered").length,
+    }),
+    [orders],
+  );
   const hasFilters = query.trim() !== "" || status !== "all" || payment !== "all";
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const pageOrders = orders;
-  useEffect(() => { void loadOrders({ page, search: query, status, payment, sort }); }, [loadOrders, page, payment, query, sort, status]);
-  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  useEffect(() => {
+    void loadOrders({ page, search: query, status, payment, sort });
+  }, [loadOrders, page, payment, query, sort, status]);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   return (
     <div className="space-y-4">
@@ -1225,84 +1464,240 @@ function OrdersView({ orders, totalCount, loadOrders, loadOrderDetail, onReorder
         <SummaryCard label="Delivered" value={counts.delivered} />
       </div>
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row">
-        <div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search orders" value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search orders..." className="pl-9" /></div>
-        <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}><SelectTrigger className="sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="packed">Packed</SelectItem><SelectItem value="dispatched">Dispatched</SelectItem><SelectItem value="delivered">Delivered</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>
-        <Select value={payment} onValueChange={(value) => { setPayment(value); setPage(1); }}><SelectTrigger className="sm:w-40"><SelectValue placeholder="Payment" /></SelectTrigger><SelectContent><SelectItem value="all">All payments</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="unpaid">Awaiting payment</SelectItem><SelectItem value="failed">Failed</SelectItem><SelectItem value="refunded">Refunded</SelectItem></SelectContent></Select>
-        <Select value={sort} onValueChange={setSort}><SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="highest">Highest amount</SelectItem><SelectItem value="lowest">Lowest amount</SelectItem></SelectContent></Select>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            aria-label="Search orders"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search orders..."
+            className="pl-9"
+          />
+        </div>
+        <Select
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="sm:w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="packed">Packed</SelectItem>
+            <SelectItem value="dispatched">Dispatched</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={payment}
+          onValueChange={(value) => {
+            setPayment(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="sm:w-40">
+            <SelectValue placeholder="Payment" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All payments</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="unpaid">Awaiting payment</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="refunded">Refunded</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={setSort}>
+          <SelectTrigger className="sm:w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="highest">Highest amount</SelectItem>
+            <SelectItem value="lowest">Lowest amount</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">{["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => <Button key={item} size="sm" variant={status === item ? "secondary" : "ghost"} onClick={() => { setStatus(item); setPage(1); }}>{item[0].toUpperCase() + item.slice(1)}</Button>)}</div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => (
+          <Button
+            key={item}
+            size="sm"
+            variant={status === item ? "secondary" : "ghost"}
+            onClick={() => {
+              setStatus(item);
+              setPage(1);
+            }}
+          >
+            {item[0].toUpperCase() + item.slice(1)}
+          </Button>
+        ))}
+      </div>
       {pageOrders.length === 0 && (
         <Card className="p-10 text-center text-muted-foreground" role="status">
           <p>{hasFilters ? "No orders match your filters." : "No orders yet"}</p>
           <p className="mt-2 text-sm">
-            {hasFilters ? "Try different filters or clear the filters to see all orders." : "Orders you place with approved wholesalers will appear here."}
+            {hasFilters
+              ? "Try different filters or clear the filters to see all orders."
+              : "Orders you place with approved wholesalers will appear here."}
           </p>
           {hasFilters && (
-            <Button className="mt-4" variant="outline" onClick={() => {
-              setQuery(""); setStatus("all"); setPayment("all"); setPage(1);
-            }}>Clear filters</Button>
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={() => {
+                setQuery("");
+                setStatus("all");
+                setPayment("all");
+                setPage(1);
+              }}
+            >
+              Clear filters
+            </Button>
           )}
         </Card>
       )}
       {pageOrders.map((o) => {
         const open = openOrderId === o.id;
         const units = o.order_items.reduce((total, item) => total + item.quantity, 0);
-        return <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-display text-lg font-bold">{o.order_number}</span>
-                <StatusBadge status={o.status} />
-                <PaymentBadge method={o.payment_method} status={o.payment_status} />
-              </div>
-              <div className="mt-1 text-sm text-muted-foreground">
-                From{" "}
-                <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span> ·{" "}
-                {new Date(o.created_at).toLocaleDateString()} · {timeAgo(o.created_at)}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
-              <div className="text-xs text-muted-foreground">{o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)</div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">{onRequestReturn && o.status === "delivered" && <Button type="button" variant="outline" size="sm" onClick={() => onRequestReturn(o.id, o.order_number)}>Request return</Button>}{onReorder && <Button type="button" variant="secondary" size="sm" onClick={() => void onReorder(o.id, o.order_number)}>Reorder</Button>}<Button type="button" variant="outline" size="sm" onClick={async () => { if (open) { setOpenOrderId(null); return; } if (o.order_items.length === 0) { const detail = await loadOrderDetail(o.id, o.item_count); if (!detail) return; } setOpenOrderId(o.id); }} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button></div>
-          {open && <>
-          <OrderTimeline o={o} />
-
-          <ReceiptStatusPanel order={o} />
-
-          <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
-
-          <OrderPrintActions
-            order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}
-          />
-
-          <div className="mt-4 divide-y divide-border rounded-xl border border-border">
-            {o.order_items.map((it, i) => (
-              <div key={i} className="flex items-center justify-between p-3 text-sm">
-                <div>
-                  <div className="font-medium">{it.product_name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {formatGHS(it.unit_price_ghs)} × {it.quantity}
-                  </div>
+        return (
+          <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-display text-lg font-bold">{o.order_number}</span>
+                  <StatusBadge status={o.status} />
+                  <PaymentBadge method={o.payment_method} status={o.payment_status} />
                 </div>
-                <div className="font-medium">
-                  {formatGHS(Number(it.unit_price_ghs) * it.quantity)}
+                <div className="mt-1 text-sm text-muted-foreground">
+                  From{" "}
+                  <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span> ·{" "}
+                  {new Date(o.created_at).toLocaleDateString()} · {timeAgo(o.created_at)}
                 </div>
               </div>
-            ))}
-          </div></>}
-        </Card>;
+              <div className="text-right">
+                <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
+              {onRequestReturn && o.status === "delivered" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRequestReturn(o.id, o.order_number)}
+                >
+                  Request return
+                </Button>
+              )}
+              {onReorder && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void onReorder(o.id, o.order_number)}
+                >
+                  Reorder
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (open) {
+                    setOpenOrderId(null);
+                    return;
+                  }
+                  if (o.order_items.length === 0) {
+                    const detail = await loadOrderDetail(o.id, o.item_count);
+                    if (!detail) return;
+                  }
+                  setOpenOrderId(o.id);
+                }}
+                aria-expanded={open}
+              >
+                {open ? "Hide Order" : "View Order"}
+              </Button>
+            </div>
+            {open && (
+              <>
+                <OrderTimeline o={o} />
+
+                <ReceiptStatusPanel order={o} />
+
+                <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
+
+                <OrderPrintActions
+                  order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}
+                />
+
+                <div className="mt-4 divide-y divide-border rounded-xl border border-border">
+                  {o.order_items.map((it, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 text-sm">
+                      <div>
+                        <div className="font-medium">{it.product_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatGHS(it.unit_price_ghs)} × {it.quantity}
+                        </div>
+                      </div>
+                      <div className="font-medium">
+                        {formatGHS(Number(it.unit_price_ghs) * it.quantity)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+        );
       })}
-      <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Showing {pageOrders.length} of {totalCount} orders</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div></div>
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          Showing {pageOrders.length} of {totalCount} orders
+        </span>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1}
+            onClick={() => setPage((value) => value - 1)}
+          >
+            Previous
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= pageCount}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
-  return <Card className="p-4"><div className="text-sm text-muted-foreground">{label}</div><div className="mt-1 font-display text-2xl font-bold">{value}</div></Card>;
+  return (
+    <Card className="p-4">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="mt-1 font-display text-2xl font-bold">{value}</div>
+    </Card>
+  );
 }
 
 function ReceiptStatusPanel({ order }: { order: OrderRow }) {
