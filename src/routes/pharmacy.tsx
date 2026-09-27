@@ -159,7 +159,12 @@ type OrderRow = {
   receipt_sent_at: string | null;
   receipt_sent_to: string | null;
   wholesaler: { name: string } | null;
-  order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
+  order_items: {
+    product_name: string;
+    quantity: number;
+    unit_price_ghs: number;
+    purchase_category?: PurchaseCategory | null;
+  }[];
   item_count?: number;
   unit_count?: number;
   purchase_category?: PurchaseCategory | null;

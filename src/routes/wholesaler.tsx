@@ -57,6 +57,7 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
+import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
 import { announceNotificationsChanged } from "@/lib/notifications";
 import { OrderTermsCard } from "@/components/wholesaler/OrderTermsCard";
@@ -114,8 +115,14 @@ type OrderRow = {
   receipt_sent_to: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  purchase_category?: PurchaseCategory | null;
   pharmacy: { name: string; city: string | null } | null;
-  order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
+  order_items: {
+    product_name: string;
+    quantity: number;
+    unit_price_ghs: number;
+    purchase_category?: PurchaseCategory | null;
+  }[];
 };
 
 function WholesalerDashboardContent() {
@@ -170,7 +177,7 @@ function WholesalerDashboardContent() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });

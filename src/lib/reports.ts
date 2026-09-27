@@ -4,6 +4,7 @@
 
 export type ReportRange =
   | "today"
+  | "this_week"
   | "7d"
   | "30d"
   | "this_month"
@@ -15,6 +16,7 @@ export type ReportRange =
 
 export const REPORT_RANGES: Array<{ value: ReportRange; label: string }> = [
   { value: "today", label: "Today" },
+  { value: "this_week", label: "This week" },
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
   { value: "this_month", label: "This month" },

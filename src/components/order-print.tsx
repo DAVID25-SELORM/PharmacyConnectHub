@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatGHS } from "@/lib/format";
+import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-category";
 
 export type OrderPrintMode = "pharmacy" | "pick-pack" | "delivery";
 
@@ -15,6 +16,8 @@ export type PrintableOrder = {
   payment_status: string;
   payment_method?: string;
   paystack_reference?: string | null;
+  purchase_category?: PurchaseCategory | null;
+  procurement_reference?: string | null;
   pharmacy?: { name: string; address?: string | null; city?: string | null } | null;
   wholesaler?: { name: string; address?: string | null; city?: string | null } | null;
   order_items: Array<{
@@ -28,6 +31,7 @@ export type PrintableOrder = {
     location?: string | null;
     batch_number?: string | null;
     expiry_date?: string | null;
+    purchase_category?: PurchaseCategory | null;
     product?: {
       form?: string | null;
       pack_size?: string | null;
@@ -90,6 +94,7 @@ export function OrderPrintActions({
 export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder; mode: OrderPrintMode }) {
   const operational = mode !== "pharmacy";
   const items = mode === "pick-pack" ? sortPrintableItems(order.order_items) : order.order_items;
+  const showLineCategory = mode === "pharmacy" && order.purchase_category === "mixed";
   return (
     <article className="print-document hidden print:block">
       <header className="mb-6 border-b-2 border-black pb-3">
@@ -108,6 +113,16 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
           <span>
             Wholesaler: <b>{order.wholesaler?.name ?? "—"}</b>
           </span>
+          {order.procurement_reference && (
+            <span>
+              Procurement ref: <b>{order.procurement_reference}</b>
+            </span>
+          )}
+          {mode === "pharmacy" && order.purchase_category && (
+            <span>
+              Purchase Category: <b>{purchaseCategoryLabel(order.purchase_category)}</b>
+            </span>
+          )}
           {mode === "pick-pack" && (
             <>
               <span>Picker: __________________</span>
@@ -128,6 +143,7 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
               <>
                 <th className="p-2">Unit</th>
                 <th className="p-2">Total</th>
+                {showLineCategory && <th className="p-2">Category</th>}
               </>
             )}
             {mode === "pick-pack" && <th className="p-2">Picked</th>}
@@ -165,6 +181,9 @@ export function PrintableOrderDocument({ order, mode }: { order: PrintableOrder;
                 <>
                   <td className="p-3">{formatGHS(item.unit_price_ghs ?? 0)}</td>
                   <td className="p-3">{formatGHS((item.unit_price_ghs ?? 0) * item.quantity)}</td>
+                  {showLineCategory && (
+                    <td className="p-3">{purchaseCategoryLabel(item.purchase_category)}</td>
+                  )}
                 </>
               )}
               {mode === "pick-pack" && <td className="p-3">________</td>}

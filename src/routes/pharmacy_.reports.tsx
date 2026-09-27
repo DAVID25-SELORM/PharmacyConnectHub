@@ -23,6 +23,7 @@ import {
   rowsToCsv,
   type ReportRangeState,
 } from "@/lib/reports";
+import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-category";
 
 export const Route = createFileRoute("/pharmacy_/reports")({
   head: () => ({ meta: [{ title: "Reports - Drugxone" }] }),
@@ -70,6 +71,35 @@ type SupplierRow = {
   last_order_at: string | null;
 };
 
+type PurchaseLineRow = {
+  id: string;
+  created_at: string;
+  order_id: string;
+  order_number: string;
+  procurement_reference: string | null;
+  wholesaler_id: string;
+  wholesaler_name: string;
+  product_name: string;
+  quantity: number;
+  unit_price_ghs: number;
+  line_total_ghs: number;
+  purchase_category: PurchaseCategory | null;
+  status: string;
+  payment_status: string;
+  receipt_sent_at: string | null;
+};
+
+type PurchaseSummary = {
+  total_value_ghs: number;
+  nhis_value_ghs: number;
+  cash_private_value_ghs: number;
+  other_value_ghs: number;
+  unclassified_value_ghs: number;
+  order_count: number;
+  item_quantity: number;
+  line_count: number;
+};
+
 type ExportRef = React.MutableRefObject<() => void>;
 
 function PharmacyReportsPage() {
@@ -98,6 +128,7 @@ function PharmacyReportsPage() {
           <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="orders">Orders &amp; Payments</TabsTrigger>
+            <TabsTrigger value="purchases">Purchases (NHIS &amp; Cash)</TabsTrigger>
             <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           </TabsList>
 
@@ -106,6 +137,9 @@ function PharmacyReportsPage() {
           </TabsContent>
           <TabsContent value="orders">
             <OrdersTab businessId={business.id} range={applied} exportRef={exportRef} />
+          </TabsContent>
+          <TabsContent value="purchases">
+            <PurchasesTab businessId={business.id} range={applied} exportRef={exportRef} />
           </TabsContent>
           <TabsContent value="suppliers">
             <SuppliersTab businessId={business.id} range={applied} exportRef={exportRef} />
@@ -359,6 +393,252 @@ function OrdersTab({
 
       {(pager.rows.length > 0 || pager.canGoBack) && (
         <nav aria-label="Order pages" className="flex items-center justify-between">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!pager.canGoBack || pager.loading}
+            onClick={pager.previous}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {pager.pageNumber} · newest first
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!pager.hasMore || pager.loading}
+            onClick={pager.next}
+          >
+            Next
+            <ChevronRight className="ml-1 h-4 w-4" aria-hidden="true" />
+          </Button>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A single line-item report table, filterable to "all", NHIS, or Cash/Private. This is the whole
+ * NHIS-audit / Cash-purchase-report requirement: an order that's entirely NHIS has every item tag
+ * 'nhis', so the NHIS filter naturally includes it; a Mixed order only contributes its NHIS-tagged
+ * lines, never its Cash-tagged ones (and vice versa) - no special-casing needed beyond filtering
+ * order_items.purchase_category. The summary cards above the table always show the full NHIS vs
+ * Cash breakdown regardless of which category is selected in the table filter, so a pharmacy can
+ * see "how much was NHIS this period" even while looking at the unfiltered line-item list.
+ */
+function PurchasesTab({
+  businessId,
+  range,
+  exportRef,
+}: {
+  businessId: string;
+  range: ReportRangeState;
+  exportRef: ExportRef;
+}) {
+  const [wholesalerId, setWholesalerId] = useState("");
+  const [purchaseCategory, setPurchaseCategory] = useState("");
+  const [status, setStatus] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  const [summary, setSummary] = useState<PurchaseSummary | null>(null);
+  const key = `${businessId}|${range.range}|${range.from}|${range.to}|${wholesalerId}|${purchaseCategory}|${status}|${paymentStatus}`;
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .rpc("pharmacy_report_supplier_spend", { p_business_id: businessId, ...rangeToRpcArgs(range) })
+      .then(({ data }: { data: SupplierRow[] | null }) => setSuppliers(data ?? []));
+  }, [businessId, range.range, range.from, range.to]);
+
+  useEffect(() => {
+    setSummary(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .rpc("pharmacy_report_purchases_summary", {
+        p_business_id: businessId,
+        ...rangeToRpcArgs(range),
+        p_wholesaler_id: wholesalerId || null,
+        p_status: status || null,
+        p_payment_status: paymentStatus || null,
+      })
+      .then(({ data }: { data: PurchaseSummary[] | null }) => setSummary(data?.[0] ?? null));
+  }, [businessId, range.range, range.from, range.to, wholesalerId, status, paymentStatus]);
+
+  const pager = useKeysetPager<PurchaseLineRow>(
+    async (cursor: KeysetCursor, limit) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("pharmacy_report_purchases", {
+        p_business_id: businessId,
+        ...rangeToRpcArgs(range),
+        p_wholesaler_id: wholesalerId || null,
+        p_purchase_category: purchaseCategory || null,
+        p_status: status || null,
+        p_payment_status: paymentStatus || null,
+        p_cursor_created_at: cursor?.created_at ?? null,
+        p_cursor_id: cursor?.id ?? null,
+        p_limit: limit,
+      });
+      if (error) throw error;
+      return (data ?? []) as PurchaseLineRow[];
+    },
+    key,
+    50,
+  );
+
+  useEffect(() => {
+    exportRef.current = () =>
+      downloadCsv(
+        reportFilename("pharmacy-purchases"),
+        rowsToCsv(
+          [
+            "Date",
+            "Procurement ref",
+            "Order ref",
+            "Supplier",
+            "Product",
+            "Quantity",
+            "Unit price GHS",
+            "Line total GHS",
+            "Category",
+            "Status",
+            "Payment status",
+            "Receipt sent",
+          ],
+          pager.rows.map((r) => [
+            r.created_at,
+            r.procurement_reference ?? "",
+            r.order_number,
+            r.wholesaler_name,
+            r.product_name,
+            r.quantity,
+            r.unit_price_ghs,
+            r.line_total_ghs,
+            purchaseCategoryLabel(r.purchase_category),
+            r.status,
+            r.payment_status,
+            r.receipt_sent_at ?? "",
+          ]),
+        ),
+      );
+  }, [pager.rows, exportRef]);
+
+  const kpis: ReportKpi[] = [
+    {
+      label: "Total Purchases",
+      value: summary ? formatGHSCell(summary.total_value_ghs) : "—",
+      icon: <Wallet className="h-4 w-4 text-primary" />,
+    },
+    { label: "NHIS Value", value: summary ? formatGHSCell(summary.nhis_value_ghs) : "—" },
+    {
+      label: "Cash / Private Value",
+      value: summary ? formatGHSCell(summary.cash_private_value_ghs) : "—",
+    },
+    { label: "Orders", value: summary ? String(summary.order_count) : "—" },
+    { label: "Items Purchased", value: summary ? String(summary.item_quantity) : "—" },
+  ];
+
+  const columns: ReportColumn<PurchaseLineRow>[] = [
+    { key: "date", header: "Date", render: (r) => formatReportDate(r.created_at) },
+    { key: "order", header: "Order", render: (r) => r.order_number },
+    {
+      key: "procurement",
+      header: "Procurement",
+      hideOnMobile: true,
+      render: (r) => r.procurement_reference ?? "—",
+    },
+    { key: "supplier", header: "Supplier", render: (r) => r.wholesaler_name },
+    { key: "product", header: "Product", render: (r) => r.product_name },
+    { key: "qty", header: "Qty", align: "right", render: (r) => r.quantity },
+    {
+      key: "unit",
+      header: "Unit price",
+      align: "right",
+      hideOnMobile: true,
+      render: (r) => formatGHSCell(r.unit_price_ghs),
+    },
+    {
+      key: "total",
+      header: "Line total",
+      align: "right",
+      render: (r) => formatGHSCell(r.line_total_ghs),
+    },
+    { key: "category", header: "Category", render: (r) => purchaseCategoryLabel(r.purchase_category) },
+    { key: "status", header: "Status", hideOnMobile: true, render: (r) => r.status },
+    { key: "payment", header: "Payment", hideOnMobile: true, render: (r) => r.payment_status },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <ReportKpis items={kpis} loading={!summary} />
+      <div className="flex flex-wrap gap-2">
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={purchaseCategory}
+          onChange={(e) => setPurchaseCategory(e.target.value)}
+          aria-label="Purchase category"
+        >
+          <option value="">All categories</option>
+          <option value="nhis">NHIS</option>
+          <option value="cash_private">Cash / Private</option>
+          <option value="other">Other</option>
+          <option value="unclassified">Not classified</option>
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={wholesalerId}
+          onChange={(e) => setWholesalerId(e.target.value)}
+          aria-label="Supplier"
+        >
+          <option value="">All suppliers</option>
+          {suppliers.map((s) => (
+            <option key={s.wholesaler_id} value={s.wholesaler_id}>
+              {s.wholesaler_name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          aria-label="Fulfilment status"
+        >
+          <option value="">All statuses</option>
+          {["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={paymentStatus}
+          onChange={(e) => setPaymentStatus(e.target.value)}
+          aria-label="Payment status"
+        >
+          <option value="">All payment statuses</option>
+          {["unpaid", "paid", "refunded", "failed"].map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <ReportTable
+        columns={columns}
+        rows={pager.rows}
+        rowKey={(r) => r.id}
+        loading={pager.loading}
+        error={pager.error}
+        onRetry={pager.retry}
+        emptyMessage="No purchases match this range and these filters."
+      />
+
+      {(pager.rows.length > 0 || pager.canGoBack) && (
+        <nav aria-label="Purchase pages" className="flex items-center justify-between">
           <Button
             variant="outline"
             size="sm"
