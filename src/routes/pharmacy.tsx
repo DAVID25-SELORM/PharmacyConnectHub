@@ -50,9 +50,13 @@ import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
 import {
   allItemsClassified,
+  purchaseCategoryBadgeClass,
   purchaseCategoryChoiceDescriptions,
+  purchaseCategoryLabel,
+  purchaseCategoryLabels,
   resolveItemCategory,
   type ItemPurchaseCategory,
+  type PurchaseCategory,
   type PurchaseCategoryChoice,
 } from "@/lib/purchase-category";
 import { SavedCartsMenu } from "@/components/pharmacy/SavedCartsMenu";
@@ -158,6 +162,9 @@ type OrderRow = {
   order_items: { product_name: string; quantity: number; unit_price_ghs: number }[];
   item_count?: number;
   unit_count?: number;
+  purchase_category?: PurchaseCategory | null;
+  procurement_id?: string | null;
+  procurement_reference?: string | null;
 };
 
 type OrderHistoryQuery = {
@@ -166,6 +173,11 @@ type OrderHistoryQuery = {
   status: string;
   payment: string;
   sort: string;
+  range: string;
+  from?: string;
+  to?: string;
+  wholesalerId: string;
+  purchaseCategory: string;
 };
 
 function PharmacyDashboardContent() {
@@ -298,6 +310,9 @@ function PharmacyDashboardContent() {
         status: "all",
         payment: "all",
         sort: "newest",
+        range: "all",
+        wholesalerId: "all",
+        purchaseCategory: "all",
       },
     ) => {
       if (!businessId) return;
@@ -308,6 +323,11 @@ function PharmacyDashboardContent() {
         p_status: query.status === "all" ? null : query.status,
         p_payment_status: query.payment === "all" ? null : query.payment,
         p_sort: query.sort,
+        p_range: query.range === "all" ? null : query.range,
+        p_from: query.range === "custom" ? query.from : null,
+        p_to: query.range === "custom" ? query.to : null,
+        p_wholesaler_id: query.wholesalerId === "all" ? null : query.wholesalerId,
+        p_purchase_category: query.purchaseCategory === "all" ? null : query.purchaseCategory,
       });
       if (error) {
         toast.error("We couldn't load your orders. Please try again.");
@@ -866,6 +886,7 @@ function PharmacyDashboardContent() {
               totalCount={totalOrderCount}
               loadOrders={loadOrders}
               loadOrderDetail={loadOrderDetail}
+              wholesalers={approvedWholesalers}
               onReorder={canOrder ? reorderFromOrder : undefined}
               onRequestReturn={
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
@@ -1516,6 +1537,7 @@ function OrdersView({
   totalCount,
   loadOrders,
   loadOrderDetail,
+  wholesalers,
   onReorder,
   onRequestReturn,
 }: {
@@ -1525,12 +1547,18 @@ function OrdersView({
   totalCount: number;
   loadOrders: (query?: OrderHistoryQuery) => Promise<void>;
   loadOrderDetail: (id: string, expectedItemCount?: number) => Promise<OrderRow | null>;
+  wholesalers: WholesalerSummary[];
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [payment, setPayment] = useState("all");
   const [sort, setSort] = useState("newest");
+  const [range, setRange] = useState("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [wholesalerId, setWholesalerId] = useState("all");
+  const [purchaseCategory, setPurchaseCategory] = useState("all");
   const [page, setPage] = useState(1);
   const pageSize = 20;
   const counts = useMemo(
@@ -1544,12 +1572,44 @@ function OrdersView({
     }),
     [orders],
   );
-  const hasFilters = query.trim() !== "" || status !== "all" || payment !== "all";
+  const hasFilters =
+    query.trim() !== "" ||
+    status !== "all" ||
+    payment !== "all" ||
+    range !== "all" ||
+    wholesalerId !== "all" ||
+    purchaseCategory !== "all";
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const pageOrders = orders;
+  const customRangeReady = range !== "custom" || (customFrom !== "" && customTo !== "");
   useEffect(() => {
-    void loadOrders({ page, search: query, status, payment, sort });
-  }, [loadOrders, page, payment, query, sort, status]);
+    if (!customRangeReady) return;
+    void loadOrders({
+      page,
+      search: query,
+      status,
+      payment,
+      sort,
+      range,
+      from: customFrom ? new Date(customFrom).toISOString() : undefined,
+      to: customTo ? new Date(`${customTo}T23:59:59.999`).toISOString() : undefined,
+      wholesalerId,
+      purchaseCategory,
+    });
+  }, [
+    loadOrders,
+    page,
+    payment,
+    query,
+    sort,
+    status,
+    range,
+    customFrom,
+    customTo,
+    customRangeReady,
+    wholesalerId,
+    purchaseCategory,
+  ]);
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
@@ -1562,8 +1622,8 @@ function OrdersView({
         <SummaryCard label="In Transit" value={counts.transit} />
         <SummaryCard label="Delivered" value={counts.delivered} />
       </div>
-      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="space-y-3 rounded-xl border border-border bg-card p-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search orders"
@@ -1572,58 +1632,147 @@ function OrdersView({
               setQuery(e.target.value);
               setPage(1);
             }}
-            placeholder="Search orders..."
+            placeholder="Search orders, suppliers, products, procurement ref…"
             className="pl-9"
           />
         </div>
-        <Select
-          value={status}
-          onValueChange={(value) => {
-            setStatus(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="sm:w-40">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="packed">Packed</SelectItem>
-            <SelectItem value="dispatched">Dispatched</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={payment}
-          onValueChange={(value) => {
-            setPayment(value);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="sm:w-40">
-            <SelectValue placeholder="Payment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All payments</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-            <SelectItem value="unpaid">Awaiting payment</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-            <SelectItem value="refunded">Refunded</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={sort} onValueChange={setSort}>
-          <SelectTrigger className="sm:w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest first</SelectItem>
-            <SelectItem value="oldest">Oldest first</SelectItem>
-            <SelectItem value="highest">Highest amount</SelectItem>
-            <SelectItem value="lowest">Lowest amount</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap gap-3">
+          <Select
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="packed">Packed</SelectItem>
+              <SelectItem value="dispatched">Dispatched</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={payment}
+            onValueChange={(value) => {
+              setPayment(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All payments</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="unpaid">Awaiting payment</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="refunded">Refunded</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={purchaseCategory}
+            onValueChange={(value) => {
+              setPurchaseCategory(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Purchase category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="nhis">{purchaseCategoryLabels.nhis}</SelectItem>
+              <SelectItem value="cash_private">{purchaseCategoryLabels.cash_private}</SelectItem>
+              <SelectItem value="mixed">{purchaseCategoryLabels.mixed}</SelectItem>
+              <SelectItem value="other">{purchaseCategoryLabels.other}</SelectItem>
+              <SelectItem value="unclassified">Not classified</SelectItem>
+            </SelectContent>
+          </Select>
+          {wholesalers.length > 0 && (
+            <Select
+              value={wholesalerId}
+              onValueChange={(value) => {
+                setWholesalerId(value);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Supplier" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All suppliers</SelectItem>
+                {wholesalers.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select
+            value={range}
+            onValueChange={(value) => {
+              setRange(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Date range" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="this_week">This week</SelectItem>
+              <SelectItem value="this_month">This month</SelectItem>
+              <SelectItem value="last_month">Last month</SelectItem>
+              <SelectItem value="custom">Custom range</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="highest">Highest amount</SelectItem>
+              <SelectItem value="lowest">Lowest amount</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {range === "custom" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              aria-label="Custom range start"
+              type="date"
+              value={customFrom}
+              onChange={(e) => {
+                setCustomFrom(e.target.value);
+                setPage(1);
+              }}
+              className="w-40"
+            />
+            <span className="text-sm text-muted-foreground">to</span>
+            <Input
+              aria-label="Custom range end"
+              type="date"
+              value={customTo}
+              onChange={(e) => {
+                setCustomTo(e.target.value);
+                setPage(1);
+              }}
+              className="w-40"
+            />
+            {!customRangeReady && (
+              <span className="text-xs text-muted-foreground">Choose both dates.</span>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => (
@@ -1656,6 +1805,11 @@ function OrdersView({
                 setQuery("");
                 setStatus("all");
                 setPayment("all");
+                setRange("all");
+                setCustomFrom("");
+                setCustomTo("");
+                setWholesalerId("all");
+                setPurchaseCategory("all");
                 setPage(1);
               }}
             >
@@ -1675,11 +1829,24 @@ function OrdersView({
                   <span className="font-display text-lg font-bold">{o.order_number}</span>
                   <StatusBadge status={o.status} />
                   <PaymentBadge method={o.payment_method} status={o.payment_status} />
+                  {o.purchase_category && (
+                    <Badge className={purchaseCategoryBadgeClass(o.purchase_category)}>
+                      {purchaseCategoryLabel(o.purchase_category)}
+                    </Badge>
+                  )}
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   From{" "}
                   <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span> ·{" "}
                   {new Date(o.created_at).toLocaleDateString()} · {timeAgo(o.created_at)}
+                  {o.procurement_reference && (
+                    <>
+                      {" · "}
+                      <span title="Part of a multi-supplier purchase">
+                        {o.procurement_reference}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="text-right">
