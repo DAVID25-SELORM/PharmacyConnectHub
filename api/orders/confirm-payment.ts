@@ -135,7 +135,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: staffAccessErr.message });
     }
 
-    canManage = Boolean(staffAccess && staffAccess.role !== "assistant");
+    canManage = Boolean(
+      staffAccess && staffAccess.role !== "assistant" && staffAccess.role !== "warehouse",
+    );
   }
 
   if (!canManage) {

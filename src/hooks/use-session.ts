@@ -3,7 +3,13 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole = "admin" | "pharmacy" | "wholesaler";
-export type BusinessStaffRole = "owner" | "manager" | "cashier" | "assistant";
+export type BusinessStaffRole =
+  | "owner"
+  | "manager"
+  | "cashier"
+  | "assistant"
+  | "warehouse"
+  | "finance";
 
 export type Business = {
   id: string;
@@ -140,7 +146,9 @@ function sortBusinesses(left: Business, right: Business) {
     owner: 0,
     manager: 1,
     cashier: 2,
-    assistant: 3,
+    warehouse: 3,
+    finance: 4,
+    assistant: 5,
   };
 
   const leftRole = roleOrder[left.staff_role] ?? 99;

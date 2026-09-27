@@ -296,6 +296,11 @@ function WholesalerDashboardContent() {
 
   const canManageProducts = business.staff_role === "owner" || business.staff_role === "manager";
   const canProcessOrders = business.staff_role !== "assistant";
+  // Warehouse staff handle fulfilment (status/delivery/picking) but never payment. Finance staff
+  // handle payment/receipts but never fulfilment status. Everyone else with process access (owner/
+  // manager/cashier) keeps doing both, unchanged.
+  const canUpdateStatus = business.staff_role !== "assistant" && business.staff_role !== "finance";
+  const canConfirmPayment = business.staff_role !== "assistant" && business.staff_role !== "warehouse";
   const pending = orders.filter((o) => o.status === "pending").length;
   const revenue = orders
     .filter((o) => o.status === "delivered")
@@ -366,7 +371,7 @@ function WholesalerDashboardContent() {
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
             {canManageProducts && <TabsTrigger value="insights">Stock insights</TabsTrigger>}
-            {canProcessOrders && <TabsTrigger value="batches">Batches</TabsTrigger>}
+            {canUpdateStatus && <TabsTrigger value="batches">Batches</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="returns">Returns</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
@@ -377,7 +382,8 @@ function WholesalerDashboardContent() {
               orders={orders}
               updateStatus={updateOrderStatus}
               cancelOrder={cancelOrder}
-              canManageOrders={canProcessOrders}
+              canUpdateStatus={canUpdateStatus}
+              canConfirmPayment={canConfirmPayment}
               confirmPaymentReceived={confirmPaymentReceived}
               confirmingPaymentOrderId={confirmingPaymentOrderId}
               sendReceiptEmail={sendReceiptEmail}
@@ -394,8 +400,8 @@ function WholesalerDashboardContent() {
             />
           </TabsContent>
           {canManageProducts && <TabsContent value="insights"><InventoryInsights businessId={business.id} /></TabsContent>}
-          {canProcessOrders && <TabsContent value="batches"><BatchesPanel businessId={business.id} canManage={canManageProducts} products={products.map((p) => ({ id: p.id, name: p.name }))} /></TabsContent>}
-          {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canProcessOrders} canManage={canManageProducts} /></TabsContent>}
+          {canUpdateStatus && <TabsContent value="batches"><BatchesPanel businessId={business.id} canManage={canManageProducts} products={products.map((p) => ({ id: p.id, name: p.name }))} /></TabsContent>}
+          {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canUpdateStatus} canManage={canManageProducts} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
           {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><ProductDiscountsCard wholesalerId={business.id} products={products.map((p) => ({ id: p.id, name: p.name }))} /><CreditTermsCard wholesalerId={business.id} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}
         </Tabs>
@@ -408,7 +414,8 @@ function OrdersInbox({
   orders,
   updateStatus,
   cancelOrder,
-  canManageOrders,
+  canUpdateStatus,
+  canConfirmPayment,
   confirmPaymentReceived,
   confirmingPaymentOrderId,
   sendReceiptEmail,
@@ -418,7 +425,8 @@ function OrdersInbox({
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
   cancelOrder: (id: string, reason: string) => Promise<void>;
-  canManageOrders: boolean;
+  canUpdateStatus: boolean;
+  canConfirmPayment: boolean;
   confirmPaymentReceived: (id: string) => Promise<void>;
   confirmingPaymentOrderId: string | null;
   sendReceiptEmail: (id: string) => Promise<void>;
@@ -569,7 +577,7 @@ function OrdersInbox({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-              {canManageOrders && next && <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
+              {canUpdateStatus && next && <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
               {o.status === "pending" || o.status === "accepted" || o.status === "packed" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
               <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
             </div>
@@ -579,9 +587,9 @@ function OrdersInbox({
 
             <ReceiptStatusPanel order={o} />
 
-            <DeliveryPanel orderId={o.id} status={o.status} side="wholesaler" canEdit={canManageOrders} />
+            <DeliveryPanel orderId={o.id} status={o.status} side="wholesaler" canEdit={canUpdateStatus} />
 
-            {canManageOrders && o.status !== "pending" && o.status !== "cancelled" && <PickPanel orderId={o.id} status={o.status} canEdit={canManageOrders} />}
+            {canUpdateStatus && o.status !== "pending" && o.status !== "cancelled" && <PickPanel orderId={o.id} status={o.status} canEdit={canUpdateStatus} />}
 
             <OrderPrintActions
               wholesaler
@@ -605,18 +613,18 @@ function OrdersInbox({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              {canManageOrders && (o.status === "pending" || o.status === "accepted") && (
+              {canUpdateStatus && (o.status === "pending" || o.status === "accepted") && (
                 <CancelOrderDialog
                   orderNumber={o.order_number}
                   onConfirm={(reason) => cancelOrder(o.id, reason)}
                 />
               )}
-              {canManageOrders && next && (
+              {canUpdateStatus && next && (
                 <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>
                   {nextLabel[o.status]}
                 </Button>
               )}
-              {canManageOrders && o.status === "delivered" && o.payment_status !== "paid" && (
+              {canConfirmPayment && o.status === "delivered" && o.payment_status !== "paid" && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -632,7 +640,7 @@ function OrdersInbox({
                   )}
                 </Button>
               )}
-              {canManageOrders && o.status === "delivered" && o.payment_status === "paid" && (
+              {canConfirmPayment && o.status === "delivered" && o.payment_status === "paid" && (
                 <Button
                   variant="outline"
                   size="sm"

@@ -62,6 +62,8 @@ const roleLabels: Record<BusinessStaffRole, string> = {
   manager: "Manager",
   cashier: "Cashier",
   assistant: "Assistant",
+  warehouse: "Warehouse",
+  finance: "Finance",
 };
 
 const roleColors: Record<BusinessStaffRole, string> = {
@@ -69,6 +71,8 @@ const roleColors: Record<BusinessStaffRole, string> = {
   manager: "bg-blue-100 text-blue-800",
   cashier: "bg-green-100 text-green-800",
   assistant: "bg-gray-100 text-gray-800",
+  warehouse: "bg-amber-100 text-amber-800",
+  finance: "bg-teal-100 text-teal-800",
 };
 
 const statusLabels: Record<StaffStatus, string> = {
@@ -186,6 +190,21 @@ function StaffManagementContent() {
     ? (inviteTargets.find((target) => target.value === inviteTarget) ?? null)
     : null;
   const invitingToPlatform = selectedInviteTarget?.kind === "platform";
+  const selectedInviteBusinessType =
+    selectedInviteTarget?.kind === "business"
+      ? (businesses.find((workspace) => workspace.id === selectedInviteTarget.businessId)?.type ?? null)
+      : null;
+
+  useEffect(() => {
+    // Warehouse/finance only make sense for a wholesaler workspace; drop the selection if the
+    // invite target changes to a pharmacy (or platform) so we never submit an invalid role.
+    if (
+      selectedInviteBusinessType !== "wholesaler" &&
+      (inviteRole === "warehouse" || inviteRole === "finance")
+    ) {
+      setInviteRole("assistant");
+    }
+  }, [selectedInviteBusinessType, inviteRole]);
 
   useEffect(() => {
     if (loading) return;
@@ -701,6 +720,12 @@ function StaffManagementContent() {
                           <SelectContent>
                             <SelectItem value="manager">Manager</SelectItem>
                             <SelectItem value="cashier">Cashier</SelectItem>
+                            {business?.type === "wholesaler" && (
+                              <>
+                                <SelectItem value="warehouse">Warehouse</SelectItem>
+                                <SelectItem value="finance">Finance</SelectItem>
+                              </>
+                            )}
                             <SelectItem value="assistant">Assistant</SelectItem>
                           </SelectContent>
                         </Select>
@@ -842,6 +867,12 @@ function StaffManagementContent() {
                     <SelectContent>
                       <SelectItem value="manager">Manager - full business access</SelectItem>
                       <SelectItem value="cashier">Cashier - process orders</SelectItem>
+                      {selectedInviteBusinessType === "wholesaler" && (
+                        <>
+                          <SelectItem value="warehouse">Warehouse - fulfil &amp; pick orders</SelectItem>
+                          <SelectItem value="finance">Finance - confirm payments &amp; receipts</SelectItem>
+                        </>
+                      )}
                       <SelectItem value="assistant">Assistant - view only</SelectItem>
                     </SelectContent>
                   </Select>

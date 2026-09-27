@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { BusinessStaffRole } from "@/hooks/use-session";
 
-export type ManageableStaffRole = "manager" | "cashier" | "assistant";
+export type ManageableStaffRole = "manager" | "cashier" | "assistant" | "warehouse" | "finance";
 export type StaffStatus = "active" | "inactive" | "pending";
 
 export type StaffMember = {
@@ -58,7 +58,9 @@ function sortStaffMembers(left: StaffMember, right: StaffMember) {
     owner: 0,
     manager: 1,
     cashier: 2,
-    assistant: 3,
+    warehouse: 3,
+    finance: 4,
+    assistant: 5,
   };
 
   const leftRole = roleOrder[left.role] ?? 99;

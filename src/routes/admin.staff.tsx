@@ -167,6 +167,19 @@ function PlatformStaffManagement() {
   const selectedInviteTarget =
     inviteTargets.find((target) => target.value === inviteTarget) ?? inviteTargets[0];
   const invitingToBusiness = selectedInviteTarget?.kind === "business";
+  const selectedInviteBusinessType =
+    selectedInviteTarget?.kind === "business"
+      ? (businesses.find((workspace) => workspace.id === selectedInviteTarget.businessId)?.type ?? null)
+      : null;
+
+  useEffect(() => {
+    if (
+      selectedInviteBusinessType !== "wholesaler" &&
+      (inviteRole === "warehouse" || inviteRole === "finance")
+    ) {
+      setInviteRole("assistant");
+    }
+  }, [selectedInviteBusinessType, inviteRole]);
   const canManageTeam = roles.includes("admin");
   const showPrivateTeamGuidance = shouldShowPrivateTeamGuidance(user?.email);
   const viewerIsPlatformOwner = useMemo(() => {
@@ -767,6 +780,12 @@ function PlatformStaffManagement() {
                     <SelectContent>
                       <SelectItem value="manager">Manager - full business access</SelectItem>
                       <SelectItem value="cashier">Cashier - process orders</SelectItem>
+                      {selectedInviteBusinessType === "wholesaler" && (
+                        <>
+                          <SelectItem value="warehouse">Warehouse - fulfil &amp; pick orders</SelectItem>
+                          <SelectItem value="finance">Finance - confirm payments &amp; receipts</SelectItem>
+                        </>
+                      )}
                       <SelectItem value="assistant">Assistant - view only</SelectItem>
                     </SelectContent>
                   </Select>

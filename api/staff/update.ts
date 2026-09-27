@@ -1,10 +1,17 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-type StaffRole = "owner" | "manager" | "cashier" | "assistant";
+type StaffRole = "owner" | "manager" | "cashier" | "assistant" | "warehouse" | "finance";
 type StaffStatus = "active" | "inactive" | "pending";
 
-const validRoles = new Set<StaffRole>(["owner", "manager", "cashier", "assistant"]);
+const validRoles = new Set<StaffRole>([
+  "owner",
+  "manager",
+  "cashier",
+  "assistant",
+  "warehouse",
+  "finance",
+]);
 const validStatuses = new Set<StaffStatus>(["active", "inactive", "pending"]);
 
 function normalizeOptionalText(value: unknown) {
@@ -81,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const [{ data: business, error: businessErr }, { data: adminRole, error: adminRoleErr }] =
     await Promise.all([
-      admin.from("businesses").select("id, owner_id").eq("id", businessId).maybeSingle(),
+      admin.from("businesses").select("id, owner_id, type").eq("id", businessId).maybeSingle(),
       admin
         .from("user_roles")
         .select("role")
@@ -123,6 +130,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const nextRole = (typeof role === "string" ? role : staffRow.role) as StaffRole;
   const nextStatus = (typeof status === "string" ? status : staffRow.status) as StaffStatus;
   const isOwnerRecord = staffRow.user_id === business.owner_id;
+
+  if ((nextRole === "warehouse" || nextRole === "finance") && business.type !== "wholesaler") {
+    return res
+      .status(400)
+      .json({ error: "The warehouse and finance roles are only available for wholesaler businesses" });
+  }
 
   if (isOwnerRecord && nextRole !== "owner") {
     return res.status(400).json({ error: "The business owner must keep the owner role" });

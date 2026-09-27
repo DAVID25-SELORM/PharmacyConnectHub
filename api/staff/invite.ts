@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!businessId || !email || !role) {
     return res.status(400).json({ error: "businessId, email, and role are required" });
   }
-  if (!["manager", "cashier", "assistant"].includes(role)) {
+  if (!["manager", "cashier", "assistant", "warehouse", "finance"].includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
   }
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -95,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const [{ data: biz }, { data: adminRole }] = await Promise.all([
     admin
       .from("businesses")
-      .select("id, owner_id, verification_status")
+      .select("id, owner_id, verification_status, type")
       .eq("id", businessId)
       .single(),
     admin
@@ -115,6 +115,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res
       .status(403)
       .json({ error: "Your business must be verified before you can invite staff" });
+  }
+
+  if ((role === "warehouse" || role === "finance") && biz.type !== "wholesaler") {
+    return res
+      .status(400)
+      .json({ error: "The warehouse and finance roles are only available for wholesaler businesses" });
   }
 
   // 5. Look up existing user by email via RPC (avoids loading all users)
