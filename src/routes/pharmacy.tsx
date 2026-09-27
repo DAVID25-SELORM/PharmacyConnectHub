@@ -48,6 +48,13 @@ import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
+import {
+  allItemsClassified,
+  purchaseCategoryChoiceDescriptions,
+  resolveItemCategory,
+  type ItemPurchaseCategory,
+  type PurchaseCategoryChoice,
+} from "@/lib/purchase-category";
 import { SavedCartsMenu } from "@/components/pharmacy/SavedCartsMenu";
 import { useSavedCarts, type SavedCartsApi } from "@/hooks/use-saved-carts";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -553,7 +560,10 @@ function PharmacyDashboardContent() {
     );
   };
 
-  const placeOrder = async (creditWholesalerIds: string[] = []) => {
+  const placeOrder = async (
+    creditWholesalerIds: string[] = [],
+    itemCategories: Record<string, ItemPurchaseCategory> = {},
+  ) => {
     if (!business) return false;
     if (business.staff_role === "assistant") {
       toast.error("Your role is view-only and cannot place orders.");
@@ -574,14 +584,29 @@ function PharmacyDashboardContent() {
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
+          category: itemCategories[item.productId],
         })),
         creditWholesalerIds,
       });
 
+      let procurementNote = "";
+      if (result.orderCount > 1) {
+        // Multiple wholesalers were involved: surface the shared procurement reference so the
+        // pharmacy can see these orders are one purchasing action, not unrelated ones.
+        const { data: procurement } = await (supabase as any)
+          .from("procurements")
+          .select("reference")
+          .eq("pharmacy_id", business.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (procurement?.reference) procurementNote = ` · ${procurement.reference}`;
+      }
       toast.success(
-        creditWholesalerIds.length > 0
+        (creditWholesalerIds.length > 0
           ? `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (some on approved credit)`
-          : `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`,
+          : `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`) +
+          procurementNote,
       );
       setCart([]);
       void loadOrders();
@@ -886,7 +911,10 @@ function CartSheet({
   creditTerms: Record<string, CreditTerms>;
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
-  placeOrder: (creditWholesalerIds?: string[]) => Promise<boolean>;
+  placeOrder: (
+    creditWholesalerIds?: string[],
+    itemCategories?: Record<string, ItemPurchaseCategory>,
+  ) => Promise<boolean>;
   placing: boolean;
   canPlaceOrders: boolean;
   savedCarts: SavedCartsApi;
@@ -894,6 +922,8 @@ function CartSheet({
 }) {
   const [open, setOpen] = useState(false);
   const [creditSelected, setCreditSelected] = useState<Record<string, boolean>>({});
+  const [purchaseCategoryChoice, setPurchaseCategoryChoice] = useState<PurchaseCategoryChoice | "">("");
+  const [itemCategories, setItemCategories] = useState<Record<string, ItemPurchaseCategory>>({});
   const items = cart
     .map((c) => ({ p: productMap[c.productId], qty: c.quantity }))
     .filter((x) => x.p);
@@ -951,6 +981,32 @@ function CartSheet({
             onResume={onResumeSavedCart}
           />
         </div>
+        {items.length > 0 && (
+          <div className="space-y-1.5 rounded-xl border border-border p-3">
+            <label htmlFor="purchase-category-choice" className="text-sm font-medium">
+              How will this purchase be classified?
+            </label>
+            <Select
+              value={purchaseCategoryChoice}
+              onValueChange={(value) => setPurchaseCategoryChoice(value as PurchaseCategoryChoice)}
+            >
+              <SelectTrigger id="purchase-category-choice">
+                <SelectValue placeholder="Not classified" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="nhis">NHIS</SelectItem>
+                <SelectItem value="cash_private">Cash / Private</SelectItem>
+                <SelectItem value="mixed">Mixed</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            {purchaseCategoryChoice && (
+              <p className="text-xs text-muted-foreground">
+                {purchaseCategoryChoiceDescriptions[purchaseCategoryChoice]}
+              </p>
+            )}
+          </div>
+        )}
         {items.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
@@ -972,45 +1028,67 @@ function CartSheet({
                     {group.map((it) => (
                       <div
                         key={it.p!.id}
-                        className="flex items-center gap-3 rounded-xl border border-border p-3"
+                        className="space-y-2 rounded-xl border border-border p-3"
                       >
-                        <div
-                          className="h-12 w-12 shrink-0 rounded-lg"
-                          style={{
-                            background: `linear-gradient(135deg, oklch(0.85 0.08 ${it.p!.image_hue ?? 200}), oklch(0.7 0.13 ${it.p!.image_hue ?? 200}))`,
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">{it.p!.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {formatGHS(it.p!.price_ghs)} · {it.p!.pack_size ?? "—"}
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-12 w-12 shrink-0 rounded-lg"
+                            style={{
+                              background: `linear-gradient(135deg, oklch(0.85 0.08 ${it.p!.image_hue ?? 200}), oklch(0.7 0.13 ${it.p!.image_hue ?? 200}))`,
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{it.p!.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatGHS(it.p!.price_ghs)} · {it.p!.pack_size ?? "—"}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateQty(it.p!.id, it.qty - 1)}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => updateQty(it.p!.id, it.qty - 1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="w-6 text-center text-sm font-medium">{it.qty}</span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => updateQty(it.p!.id, it.qty + 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <button
+                            onClick={() => updateQty(it.p!.id, 0)}
+                            className="text-muted-foreground hover:text-destructive"
                           >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <span className="w-6 text-center text-sm font-medium">{it.qty}</span>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateQty(it.p!.id, it.qty + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => updateQty(it.p!.id, 0)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {purchaseCategoryChoice === "mixed" && (
+                          <Select
+                            value={itemCategories[it.p!.id] ?? ""}
+                            onValueChange={(value) =>
+                              setItemCategories((current) => ({
+                                ...current,
+                                [it.p!.id]: value as ItemPurchaseCategory,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="h-8 text-xs" aria-label={`Category for ${it.p!.name}`}>
+                              <SelectValue placeholder="Choose a category…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="nhis">NHIS</SelectItem>
+                              <SelectItem value="cash_private">Cash / Private</SelectItem>
+                              <SelectItem value="other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1103,20 +1181,41 @@ function CartSheet({
                     to place orders.
                   </div>
                 )}
+                {purchaseCategoryChoice === "mixed" &&
+                  !allItemsClassified(purchaseCategoryChoice, itemCategories, items.map((it) => it.p!.id)) && (
+                    <p role="alert" className="text-xs font-medium text-destructive">
+                      Choose a category for every item before placing a mixed order.
+                    </p>
+                  )}
                 <Button
                   variant="hero"
                   size="lg"
                   className="w-full"
-                  disabled={placing || !canPlaceOrders || belowMinimum.length > 0}
+                  disabled={
+                    placing ||
+                    !canPlaceOrders ||
+                    belowMinimum.length > 0 ||
+                    !allItemsClassified(purchaseCategoryChoice, itemCategories, items.map((it) => it.p!.id))
+                  }
                   onClick={async () => {
                     const creditWholesalerIds = Object.keys(grouped).filter(
                       (wid) =>
                         creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total),
                     );
-                    const placed = await placeOrder(creditWholesalerIds);
+                    const resolvedCategories = Object.fromEntries(
+                      items
+                        .map((it) => [
+                          it.p!.id,
+                          resolveItemCategory(purchaseCategoryChoice, itemCategories, it.p!.id),
+                        ])
+                        .filter(([, category]) => Boolean(category)),
+                    ) as Record<string, ItemPurchaseCategory>;
+                    const placed = await placeOrder(creditWholesalerIds, resolvedCategories);
                     if (placed) {
                       setOpen(false);
                       setCreditSelected({});
+                      setPurchaseCategoryChoice("");
+                      setItemCategories({});
                     }
                   }}
                 >

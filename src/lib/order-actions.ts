@@ -1,10 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { ItemPurchaseCategory } from "@/lib/purchase-category";
 
 type CreateMarketplaceOrdersInput = {
   pharmacyId: string;
   items: Array<{
     productId: string;
     quantity: number;
+    /** Omitted = unclassified (matches every historical order). */
+    category?: ItemPurchaseCategory;
   }>;
   /** Wholesaler ids for which the pharmacy wants to buy on its approved credit line. */
   creditWholesalerIds?: string[];

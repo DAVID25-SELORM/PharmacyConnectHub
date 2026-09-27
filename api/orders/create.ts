@@ -1,9 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
+const VALID_ITEM_CATEGORIES = new Set(["nhis", "cash_private", "other"]);
+
 type RequestItem = {
   productId: string;
   quantity: number;
+  category?: string;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -53,6 +56,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     )
   ) {
     return res.status(400).json({ error: "Each item needs a valid productId and quantity" });
+  }
+
+  if (items.some((item) => item.category !== undefined && !VALID_ITEM_CATEGORIES.has(item.category))) {
+    return res.status(400).json({ error: "Invalid purchase category" });
   }
 
   const { data, error } = await admin.rpc("create_marketplace_orders", {
