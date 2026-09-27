@@ -47,6 +47,7 @@ import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
+import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -160,6 +161,7 @@ function PharmacyDashboardContent() {
   const [discounts, setDiscounts] = useState<Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>>({});
   const [terms, setTerms] = useState<Record<string, OrderTerms>>({});
   const [productRules, setProductRules] = useState<ProductRule[]>([]);
+  const [creditTerms, setCreditTerms] = useState<Record<string, CreditTerms>>({});
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [totalOrderCount, setTotalOrderCount] = useState(0);
   const [placing, setPlacing] = useState(false);
@@ -237,6 +239,11 @@ function PharmacyDashboardContent() {
       .rpc("list_my_product_discounts", { p_pharmacy_id: businessId })
       .then(({ data }: { data: ProductRule[] | null }) => {
         if (!cancelled) setProductRules(Array.isArray(data) ? data : []);
+      });
+    void (supabase as any)
+      .rpc("get_my_credit_terms", { p_pharmacy_id: businessId })
+      .then(({ data }: { data: CreditTerms[] | null }) => {
+        if (!cancelled) setCreditTerms(Object.fromEntries((Array.isArray(data) ? data : []).map((row) => [row.wholesaler_id, row])));
       });
     return () => {
       cancelled = true;
@@ -465,7 +472,7 @@ function PharmacyDashboardContent() {
     );
   };
 
-  const placeOrder = async () => {
+  const placeOrder = async (creditWholesalerIds: string[] = []) => {
     if (!business) return false;
     if (business.staff_role === "assistant") {
       toast.error("Your role is view-only and cannot place orders.");
@@ -487,10 +494,13 @@ function PharmacyDashboardContent() {
           productId: item.productId,
           quantity: item.quantity,
         })),
+        creditWholesalerIds,
       });
 
       toast.success(
-        `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`,
+        creditWholesalerIds.length > 0
+          ? `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (some on approved credit)`
+          : `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`,
       );
       setCart([]);
       void loadOrders();
@@ -563,6 +573,7 @@ function PharmacyDashboardContent() {
             discounts={discounts}
             terms={terms}
             productRules={productRules}
+            creditTerms={creditTerms}
             productMap={productMap}
             updateQty={updateQty}
             placeOrder={placeOrder}
@@ -688,6 +699,7 @@ function CartSheet({
   discounts,
   terms,
   productRules,
+  creditTerms,
   productMap,
   updateQty,
   placeOrder,
@@ -700,13 +712,15 @@ function CartSheet({
   discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
   terms: Record<string, OrderTerms>;
   productRules: ProductRule[];
+  creditTerms: Record<string, CreditTerms>;
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
-  placeOrder: () => Promise<boolean>;
+  placeOrder: (creditWholesalerIds?: string[]) => Promise<boolean>;
   placing: boolean;
   canPlaceOrders: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [creditSelected, setCreditSelected] = useState<Record<string, boolean>>({});
   const items = cart
     .map((c) => ({ p: productMap[c.productId], qty: c.quantity }))
     .filter((x) => x.p);
@@ -839,6 +853,35 @@ function CartSheet({
                         Add {formatGHS(estimates[wid].freeDeliveryRemaining!)} more for free delivery.
                       </div>
                     )}
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+                      <span className="text-muted-foreground">Payment</span>
+                      {creditTerms[wid] ? (
+                        <label className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(creditSelected[wid])}
+                            disabled={!canUseCredit(creditTerms[wid], estimates[wid].total)}
+                            onChange={(event) =>
+                              setCreditSelected((current) => ({ ...current, [wid]: event.target.checked }))
+                            }
+                          />
+                          Use approved credit
+                        </label>
+                      ) : (
+                        <span className="font-medium">Cash on delivery</span>
+                      )}
+                    </div>
+                    {creditTerms[wid] && creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total) && (
+                      <div className="text-muted-foreground">
+                        Due in {creditTerms[wid].payment_terms_days} days · {formatGHS(creditTerms[wid].available_ghs)} available
+                      </div>
+                    )}
+                    {creditTerms[wid] && creditSelected[wid] && !canUseCredit(creditTerms[wid], estimates[wid].total) && (
+                      <div className="text-warning">
+                        Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is left; this order will be pay on
+                        delivery.
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -853,10 +896,6 @@ function CartSheet({
                   <span className="text-muted-foreground">Estimated total</span>
                   <span className="font-semibold">{formatGHS(cartTotal || subtotal)}</span>
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Payment</span>
-                  <span className="font-medium">Cash on delivery</span>
-                </div>
                 {!canPlaceOrders && (
                   <div className="text-xs text-muted-foreground">
                     Your access is view-only. Ask the business owner for cashier or manager access
@@ -869,9 +908,13 @@ function CartSheet({
                   className="w-full"
                   disabled={placing || !canPlaceOrders || belowMinimum.length > 0}
                   onClick={async () => {
-                    const placed = await placeOrder();
+                    const creditWholesalerIds = Object.keys(grouped).filter(
+                      (wid) => creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total),
+                    );
+                    const placed = await placeOrder(creditWholesalerIds);
                     if (placed) {
                       setOpen(false);
+                      setCreditSelected({});
                     }
                   }}
                 >

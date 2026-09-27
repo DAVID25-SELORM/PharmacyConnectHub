@@ -35,6 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const pharmacyId = typeof req.body?.pharmacyId === "string" ? req.body.pharmacyId : "";
   const items = Array.isArray(req.body?.items) ? (req.body.items as RequestItem[]) : [];
+  const creditWholesalerIds = Array.isArray(req.body?.creditWholesalerIds)
+    ? (req.body.creditWholesalerIds as unknown[]).filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
 
   if (!pharmacyId || items.length === 0) {
     return res.status(400).json({ error: "pharmacyId and at least one item are required" });
@@ -56,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     _caller_id: caller.id,
     _items: items,
     _pharmacy_id: pharmacyId,
+    _credit_wholesaler_ids: creditWholesalerIds,
   });
 
   if (error) {

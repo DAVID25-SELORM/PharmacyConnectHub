@@ -6,6 +6,8 @@ type CreateMarketplaceOrdersInput = {
     productId: string;
     quantity: number;
   }>;
+  /** Wholesaler ids for which the pharmacy wants to buy on its approved credit line. */
+  creditWholesalerIds?: string[];
 };
 
 type CreateMarketplaceOrdersResult = {
