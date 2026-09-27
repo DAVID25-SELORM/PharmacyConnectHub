@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ReorderItem, ReorderList, ReorderListsApi } from "@/hooks/use-reorder-lists";
 import { formatGHS } from "@/lib/format";
+import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import {
   groupOffersByMaster,
   resolveLine,
@@ -122,12 +123,14 @@ function ListCard({
   list,
   offersByMaster,
   discounts,
+  productRules,
   canEdit,
   canOrder,
   api,
   onAddLines,
 }: {
   list: ReorderList;
+  productRules?: ProductRule[];
   offersByMaster: Map<string, CatalogueOffer[]>;
   discounts: DiscountMap;
   canEdit: boolean;
@@ -149,9 +152,10 @@ function ListCard({
           },
           offersByMaster,
           discounts,
+          makePriceOf(discounts, productRules),
         ),
       ),
-    [list.items, offersByMaster, discounts],
+    [list.items, offersByMaster, discounts, productRules],
   );
   const summary = summarizeResolved(resolved);
 
@@ -253,11 +257,13 @@ export function ReorderListsView({
   api,
   products,
   discounts,
+  productRules,
   canEdit,
   canOrder,
   onAddLines,
 }: {
   api: ReorderListsApi;
+  productRules?: ProductRule[];
   products: Array<CatalogueOffer & { master_product_id: string }>;
   discounts: DiscountMap;
   canEdit: boolean;
@@ -326,6 +332,7 @@ export function ReorderListsView({
             list={list}
             offersByMaster={offersByMaster}
             discounts={discounts}
+            productRules={productRules}
             canEdit={canEdit}
             canOrder={canOrder}
             api={api}

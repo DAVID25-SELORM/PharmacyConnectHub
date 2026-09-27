@@ -46,6 +46,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
+import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { AddToListMenu } from "@/components/pharmacy/AddToListMenu";
 import { ReorderListsView } from "@/components/pharmacy/ReorderListsView";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -57,7 +58,6 @@ import { useReorderLists, type ReorderListsApi } from "@/hooks/use-reorder-lists
 import {
   groupOffersByMaster,
   mergeIntoCart,
-  netPrice,
   resolveLine,
   type CatalogueOffer,
   type ResolvedLine,
@@ -151,10 +151,6 @@ type OrderRow = {
 
 type OrderHistoryQuery = { page: number; search: string; status: string; payment: string; sort: string };
 
-function customerPrice(product: Product, discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>) {
-  return netPrice(product, discounts[product.wholesaler_id]);
-}
-
 function PharmacyDashboardContent() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, roles } = useSession();
@@ -163,6 +159,7 @@ function PharmacyDashboardContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [discounts, setDiscounts] = useState<Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>>({});
   const [terms, setTerms] = useState<Record<string, OrderTerms>>({});
+  const [productRules, setProductRules] = useState<ProductRule[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [totalOrderCount, setTotalOrderCount] = useState(0);
   const [placing, setPlacing] = useState(false);
@@ -232,6 +229,19 @@ function PharmacyDashboardContent() {
       );
     });
   }, [loading, user]);
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    void (supabase as any)
+      .rpc("list_my_product_discounts", { p_pharmacy_id: businessId })
+      .then(({ data }: { data: ProductRule[] | null }) => {
+        if (!cancelled) setProductRules(Array.isArray(data) ? data : []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
 
   const loadOrders = useCallback(async (query: OrderHistoryQuery = { page: 1, search: "", status: "all", payment: "all", sort: "newest" }) => {
     if (!businessId) return;
@@ -349,6 +359,7 @@ function PharmacyDashboardContent() {
         },
         offersByMaster,
         discounts,
+        makePriceOf(discounts, productRules),
       ),
     );
     setReviewLines({ title: `Reorder ${orderLabel}`, lines });
@@ -551,6 +562,7 @@ function PharmacyDashboardContent() {
             subtotal={subtotal}
             discounts={discounts}
             terms={terms}
+            productRules={productRules}
             productMap={productMap}
             updateQty={updateQty}
             placeOrder={placeOrder}
@@ -627,6 +639,7 @@ function PharmacyDashboardContent() {
               canEditLists={canEditLists}
               reorderLists={reorderLists}
               terms={terms}
+              productRules={productRules}
             />
           </TabsContent>
           <TabsContent value="lists">
@@ -634,6 +647,7 @@ function PharmacyDashboardContent() {
               api={reorderLists}
               products={products as unknown as Array<CatalogueOffer>}
               discounts={discounts}
+              productRules={productRules}
               canEdit={canEditLists}
               canOrder={canOrder}
               onAddLines={addLinesToCart}
@@ -673,6 +687,7 @@ function CartSheet({
   subtotal,
   discounts,
   terms,
+  productRules,
   productMap,
   updateQty,
   placeOrder,
@@ -684,6 +699,7 @@ function CartSheet({
   subtotal: number;
   discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
   terms: Record<string, OrderTerms>;
+  productRules: ProductRule[];
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
   placeOrder: () => Promise<boolean>;
@@ -705,9 +721,10 @@ function CartSheet({
     Object.entries(grouped).map(([wid, group]) => [
       wid,
       estimateGroup(
-        group.map((it) => ({ price_ghs: it.p!.price_ghs, quantity: it.qty })),
+        group.map((it) => ({ price_ghs: it.p!.price_ghs, quantity: it.qty, product_id: it.p!.id })),
         discounts[wid],
         terms[wid],
+        productRules,
       ),
     ]),
   );
@@ -878,6 +895,7 @@ function CatalogView({
   canEditLists,
   reorderLists,
   terms,
+  productRules,
 }: {
   products: Product[];
   discounts: Record<string, { discount_type: string; discount_percent?: number; discount_amount?: number; minimum_order_value: number }>;
@@ -887,6 +905,7 @@ function CatalogView({
   canEditLists: boolean;
   reorderLists: ReorderListsApi;
   terms: Record<string, OrderTerms>;
+  productRules: ProductRule[];
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string>("all");
@@ -1106,7 +1125,7 @@ function CatalogView({
                   <summary className="cursor-pointer text-sm font-medium text-primary">
                     Compare suppliers - from{" "}
                     {formatGHS(
-                      Math.min(...offers.map((offer) => customerPrice(offer, discounts))),
+                      Math.min(...offers.map((offer) => makePriceOf(discounts, productRules)(offer, 1))),
                     )}
                   </summary>
                   <SupplierComparison
@@ -1115,6 +1134,7 @@ function CatalogView({
                     canOrder={canOrder}
                     addToCart={addToCart}
                     terms={terms}
+                    productRules={productRules}
                   />
                 </details>
               </Card>

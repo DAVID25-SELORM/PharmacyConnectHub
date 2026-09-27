@@ -44,15 +44,17 @@ export function minimumQuantity(offer: Pick<Offer, "minimum_order_quantity">): n
 }
 
 /** Highlights for the comparison table. Only in-stock offers can be "best". */
-export function comparisonHighlights(offers: Offer[], discounts: DiscountMap) {
+export type PriceOf = (offer: Offer, quantity: number) => number;
+
+export function comparisonHighlights(offers: Offer[], discounts: DiscountMap, priceOf?: PriceOf) {
+  const unit = (offer: Offer) => (priceOf ? priceOf(offer, 1) : netPrice(offer, discounts[offer.wholesaler_id]));
   const inStock = offers.filter((offer) => offer.stock > 0);
   let cheapest: Offer | null = null;
   let fastest: Offer | null = null;
 
   for (const offer of inStock) {
-    const price = netPrice(offer, discounts[offer.wholesaler_id]);
-    if (!cheapest || price < netPrice(cheapest, discounts[cheapest.wholesaler_id]))
-      cheapest = offer;
+    const price = unit(offer);
+    if (!cheapest || price < unit(cheapest)) cheapest = offer;
     const lead = offer.lead_time_days;
     if (lead !== null && lead !== undefined) {
       if (!fastest || lead < (fastest.lead_time_days ?? Infinity)) fastest = offer;
@@ -69,8 +71,14 @@ export function comparisonHighlights(offers: Offer[], discounts: DiscountMap) {
 
 export type CompareSort = "net-price" | "fastest" | "supplier";
 
-export function sortOffers(offers: Offer[], discounts: DiscountMap, sort: CompareSort): Offer[] {
-  const price = (offer: Offer) => netPrice(offer, discounts[offer.wholesaler_id]);
+export function sortOffers(
+  offers: Offer[],
+  discounts: DiscountMap,
+  sort: CompareSort,
+  priceOf?: PriceOf,
+): Offer[] {
+  const price = (offer: Offer) =>
+    priceOf ? priceOf(offer, 1) : netPrice(offer, discounts[offer.wholesaler_id]);
   const name = (offer: Offer) => offer.wholesaler?.name ?? "";
   return [...offers].sort((a, b) => {
     // Out-of-stock offers always sink to the bottom.
@@ -115,7 +123,10 @@ export function resolveLine(
   wanted: WantedLine,
   offersByMaster: Map<string, Offer[]>,
   discounts: DiscountMap,
+  priceOf?: PriceOf,
 ): ResolvedLine {
+  const unitFor = (offer: Offer, quantity: number) =>
+    priceOf ? priceOf(offer, quantity) : netPrice(offer, discounts[offer.wholesaler_id]);
   const unavailable = (note: string): ResolvedLine => ({
     wanted,
     status: "unavailable",
@@ -148,7 +159,7 @@ export function resolveLine(
     preferred ??
     [...supplied].sort(
       (a, b) =>
-        netPrice(a, discounts[a.wholesaler_id]) - netPrice(b, discounts[b.wholesaler_id]) ||
+        unitFor(a, Math.max(1, Math.floor(wanted.quantity))) - unitFor(b, Math.max(1, Math.floor(wanted.quantity))) ||
         (a.wholesaler?.name ?? "").localeCompare(b.wholesaler?.name ?? ""),
     )[0];
 
@@ -178,7 +189,7 @@ export function resolveLine(
     quantity,
     note: notes.length > 0 ? notes.join(" ") : null,
     switchedSupplier,
-    unitPrice: netPrice(chosen, discounts[chosen.wholesaler_id]),
+    unitPrice: unitFor(chosen, quantity),
   };
 }
 

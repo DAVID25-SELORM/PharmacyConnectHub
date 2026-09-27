@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatGHS } from "@/lib/format";
 import { describeTerms, type OrderTerms } from "@/lib/order-terms";
+import { makePriceOf, volumeTierTexts, type ProductRule } from "@/lib/product-discounts";
 import {
   comparisonHighlights,
   discountApplies,
@@ -28,16 +29,25 @@ export function SupplierComparison({
   canOrder,
   addToCart,
   terms,
+  productRules,
 }: {
   offers: CatalogueOffer[];
   discounts: DiscountMap;
   canOrder: boolean;
   addToCart: (offerId: string) => void;
   terms?: Record<string, OrderTerms>;
+  productRules?: ProductRule[];
 }) {
   const [sort, setSort] = useState<CompareSort>("net-price");
-  const highlights = useMemo(() => comparisonHighlights(offers, discounts), [offers, discounts]);
-  const sorted = useMemo(() => sortOffers(offers, discounts, sort), [offers, discounts, sort]);
+  const priceOf = useMemo(() => makePriceOf(discounts, productRules), [discounts, productRules]);
+  const highlights = useMemo(
+    () => comparisonHighlights(offers, discounts, priceOf),
+    [offers, discounts, priceOf],
+  );
+  const sorted = useMemo(
+    () => sortOffers(offers, discounts, sort, priceOf),
+    [offers, discounts, sort, priceOf],
+  );
 
   return (
     <div className="mt-3">
@@ -87,7 +97,7 @@ export function SupplierComparison({
           <tbody>
             {sorted.map((offer) => {
               const discount = discounts[offer.wholesaler_id];
-              const net = netPrice(offer, discount);
+              const net = priceOf(offer, 1);
               const list = Number(offer.price_ghs);
               const inStock = offer.stock > 0;
               return (
@@ -111,11 +121,16 @@ export function SupplierComparison({
                   <td className="p-2 text-right tabular-nums">{formatGHS(list)}</td>
                   <td className="p-2 text-right tabular-nums">
                     <div className="font-semibold">{formatGHS(net)}</div>
-                    {discountApplies(discount) && net < list && (
+                    {net < list && (
                       <div className="text-xs font-normal text-success">
                         Your discount: −{formatGHS(list - net)}
                       </div>
                     )}
+                    {volumeTierTexts(productRules, offer.id).map((text) => (
+                      <div key={text} className="text-xs font-normal text-success">
+                        {text}
+                      </div>
+                    ))}
                     {discount && !discountApplies(discount) && (
                       <div className="text-xs font-normal text-muted-foreground">
                         Discount on orders of {formatGHS(discount.minimum_order_value)}+

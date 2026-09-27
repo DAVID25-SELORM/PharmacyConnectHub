@@ -1,3 +1,4 @@
+import { bestRule, ruleUnitPrice, type ProductRule } from "@/lib/product-discounts";
 import type { Discount } from "@/lib/reorder";
 
 export type OrderTerms = {
@@ -7,7 +8,7 @@ export type OrderTerms = {
   free_delivery_threshold_ghs: number | null;
 };
 
-export type CartGroupLine = { price_ghs: number | string; quantity: number };
+export type CartGroupLine = { price_ghs: number | string; quantity: number; product_id?: string };
 
 export type GroupEstimate = {
   gross: number;
@@ -20,6 +21,8 @@ export type GroupEstimate = {
   /** How much more goods value earns free delivery (null when no fee or no threshold). */
   freeDeliveryRemaining: number | null;
   minimumMet: boolean;
+  /** Lines priced by a product-specific rule instead of the general discount. */
+  productRuleLines: number;
 };
 
 const cents = (value: number) => Math.round(value * 100) / 100;
@@ -34,19 +37,36 @@ export function estimateGroup(
   lines: CartGroupLine[],
   discount: Discount | undefined,
   terms: OrderTerms | undefined,
+  rules?: ProductRule[],
 ): GroupEstimate {
   const gross = cents(lines.reduce((sum, line) => sum + Number(line.price_ghs) * line.quantity, 0));
 
+  // A product-specific rule replaces the general discount on its line.
   let discountAmount = 0;
+  let productRuleLines = 0;
+  const general: CartGroupLine[] = [];
+  for (const line of lines) {
+    const rule = line.product_id ? bestRule(rules, line.product_id, line.quantity) : undefined;
+    if (rule) {
+      productRuleLines += 1;
+      const unit = Number(line.price_ghs);
+      discountAmount += cents((unit - ruleUnitPrice(unit, rule)) * line.quantity);
+    } else {
+      general.push(line);
+    }
+  }
+
+  // The general discount's own minimum is tested on the whole cart; it is shared over the other lines.
   if (discount && gross >= Number(discount.minimum_order_value ?? 0)) {
+    const generalBase = general.reduce((sum, line) => sum + Number(line.price_ghs) * line.quantity, 0);
     if (discount.discount_type === "percentage" && discount.discount_percent) {
-      discountAmount = lines.reduce((sum, line) => {
+      discountAmount += general.reduce((sum, line) => {
         const unit = Number(line.price_ghs);
         const net = cents(unit * (1 - Number(discount.discount_percent) / 100));
         return sum + cents((unit - net) * line.quantity);
       }, 0);
-    } else if (discount.discount_amount) {
-      discountAmount = Math.min(Number(discount.discount_amount), gross);
+    } else if (discount.discount_amount && generalBase > 0) {
+      discountAmount += Math.min(Number(discount.discount_amount), generalBase);
     }
   }
   discountAmount = cents(discountAmount);
@@ -69,6 +89,7 @@ export function estimateGroup(
     freeDeliveryRemaining:
       fee > 0 && freeFrom !== null && !feeWaived ? cents(Number(freeFrom) - goods) : null,
     minimumMet: minimum <= goods,
+    productRuleLines,
   };
 }
 
