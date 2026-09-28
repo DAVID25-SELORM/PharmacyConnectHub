@@ -850,7 +850,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "pharmacy" | "wholesaler";
       business_type: "pharmacy" | "wholesaler";
-      order_status: "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
+      order_status: "pending" | "accepted" | "picking" | "packed" | "ready_for_dispatch" | "dispatched" | "delivered" | "cancelled";
       payment_method: "cod" | "paystack";
       payment_status: "unpaid" | "paid" | "refunded" | "failed";
       platform_staff_role: "owner" | "admin";
@@ -984,7 +984,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "pharmacy", "wholesaler"],
       business_type: ["pharmacy", "wholesaler"],
-      order_status: ["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"],
+      order_status: ["pending", "accepted", "picking", "packed", "ready_for_dispatch", "dispatched", "delivered", "cancelled"],
       payment_method: ["cod", "paystack"],
       payment_status: ["unpaid", "paid", "refunded", "failed"],
       platform_staff_role: ["owner", "admin"],

@@ -10,7 +10,13 @@ export type Delivery = {
 
 /** Delivery details can be added until the order is delivered; proof once it is out for delivery. */
 export function canRecordDispatch(status: string) {
-  return status === "accepted" || status === "packed" || status === "dispatched";
+  return (
+    status === "accepted" ||
+    status === "picking" ||
+    status === "packed" ||
+    status === "ready_for_dispatch" ||
+    status === "dispatched"
+  );
 }
 
 export function canRecordProof(status: string) {

@@ -10,13 +10,29 @@ import {
 describe("delivery helpers", () => {
   it("allows dispatch details until delivery and proof once dispatched", () => {
     expect(
-      ["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"].map(
-        canRecordDispatch,
-      ),
-    ).toEqual([false, true, true, true, false, false]);
+      [
+        "pending",
+        "accepted",
+        "picking",
+        "packed",
+        "ready_for_dispatch",
+        "dispatched",
+        "delivered",
+        "cancelled",
+      ].map(canRecordDispatch),
+    ).toEqual([false, true, true, true, true, true, false, false]);
     expect(
-      ["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"].map(canRecordProof),
-    ).toEqual([false, false, false, true, true, false]);
+      [
+        "pending",
+        "accepted",
+        "picking",
+        "packed",
+        "ready_for_dispatch",
+        "dispatched",
+        "delivered",
+        "cancelled",
+      ].map(canRecordProof),
+    ).toEqual([false, false, false, false, false, true, true, false]);
   });
 
   it("detects what has been recorded", () => {

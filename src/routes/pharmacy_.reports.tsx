@@ -352,9 +352,9 @@ function OrdersTab({
           onChange={(e) => setStatus(e.target.value)}
         >
           <option value="">All statuses</option>
-          {["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"].map((s) => (
+          {["pending", "accepted", "picking", "packed", "ready_for_dispatch", "dispatched", "delivered", "cancelled"].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {s.replace(/_/g, " ")}
             </option>
           ))}
         </select>
@@ -606,9 +606,9 @@ function PurchasesTab({
           aria-label="Fulfilment status"
         >
           <option value="">All statuses</option>
-          {["pending", "accepted", "packed", "dispatched", "delivered", "cancelled"].map((s) => (
+          {["pending", "accepted", "picking", "packed", "ready_for_dispatch", "dispatched", "delivered", "cancelled"].map((s) => (
             <option key={s} value={s}>
-              {s}
+              {s.replace(/_/g, " ")}
             </option>
           ))}
         </select>

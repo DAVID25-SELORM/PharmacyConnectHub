@@ -48,7 +48,9 @@ export function PickPanel({
   if (!hasAnyBatch) return null;
 
   const allAllocated = lines.every((line) => line.allocated || line.quantity_needed === 0);
-  const editable = canEdit && (status === "accepted" || status === "packed");
+  const editable =
+    canEdit &&
+    (status === "accepted" || status === "picking" || status === "packed" || status === "ready_for_dispatch");
 
   return (
     <section className="mt-4 rounded-xl border border-border p-3 text-sm" aria-label="Batches">

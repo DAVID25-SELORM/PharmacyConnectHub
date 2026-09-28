@@ -143,14 +143,16 @@ type WholesalerSummary = {
 type OrderRow = {
   id: string;
   order_number: string;
-  status: "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
+  status: "pending" | "accepted" | "picking" | "packed" | "ready_for_dispatch" | "dispatched" | "delivered" | "cancelled";
   total_ghs: number;
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
   paystack_reference: string | null;
   accepted_at: string | null;
+  picking_started_at: string | null;
   packed_at: string | null;
+  ready_for_dispatch_at: string | null;
   dispatched_at: string | null;
   delivered_at: string | null;
   cancelled_at: string | null;
@@ -346,7 +348,9 @@ function PharmacyDashboardContent() {
             ...row,
             paystack_reference: null,
             accepted_at: null,
+            picking_started_at: null,
             packed_at: null,
+            ready_for_dispatch_at: null,
             dispatched_at: null,
             delivered_at: null,
             cancelled_at: null,

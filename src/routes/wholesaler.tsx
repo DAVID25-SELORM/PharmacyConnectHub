@@ -106,7 +106,9 @@ type OrderRow = {
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
   accepted_at: string | null;
+  picking_started_at: string | null;
   packed_at: string | null;
+  ready_for_dispatch_at: string | null;
   dispatched_at: string | null;
   delivered_at: string | null;
   paid_at: string | null;
@@ -177,7 +179,7 @@ function WholesalerDashboardContent() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,packed_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
@@ -450,16 +452,20 @@ function OrdersInbox({
   const pageSize = 20;
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
-    accepted: "packed",
-    packed: "dispatched",
+    accepted: "picking",
+    picking: "packed",
+    packed: "ready_for_dispatch",
+    ready_for_dispatch: "dispatched",
     dispatched: "delivered",
     delivered: null,
     cancelled: null,
   };
   const nextLabel: Record<OrderStatus, string> = {
     pending: "Accept order",
-    accepted: "Mark packed",
-    packed: "Mark dispatched",
+    accepted: "Start picking",
+    picking: "Mark packed",
+    packed: "Ready for dispatch",
+    ready_for_dispatch: "Mark dispatched",
     dispatched: "Mark delivered",
     delivered: "Completed",
     cancelled: "Cancelled",
@@ -469,7 +475,9 @@ function OrdersInbox({
     all: orders.length,
     pending: orders.filter((o) => o.status === "pending").length,
     accepted: orders.filter((o) => o.status === "accepted").length,
+    picking: orders.filter((o) => o.status === "picking").length,
     packed: orders.filter((o) => o.status === "packed").length,
+    ready_for_dispatch: orders.filter((o) => o.status === "ready_for_dispatch").length,
     dispatched: orders.filter((o) => o.status === "dispatched").length,
     delivered: orders.filter((o) => o.status === "delivered").length,
     cancelled: orders.filter((o) => o.status === "cancelled").length,
@@ -526,9 +534,9 @@ function OrdersInbox({
         </Select>
       </div>
       <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Order status">
-        {(["all", "pending", "accepted", "packed", "dispatched", "delivered", "cancelled"] as const).map((status) => (
+        {(["all", "pending", "accepted", "picking", "packed", "ready_for_dispatch", "dispatched", "delivered", "cancelled"] as const).map((status) => (
           <Button key={status} type="button" size="sm" variant={statusFilter === status ? "secondary" : "ghost"} onClick={() => { setStatusFilter(status); setPage(1); }}>
-            {status === "all" ? "All" : status[0].toUpperCase() + status.slice(1)} ({counts[status]})
+            {status === "all" ? "All" : status.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")} ({counts[status]})
           </Button>
         ))}
         <Button
@@ -585,7 +593,7 @@ function OrdersInbox({
 
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
               {canUpdateStatus && next && <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
-              {o.status === "pending" || o.status === "accepted" || o.status === "packed" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
+              {o.status === "pending" || o.status === "accepted" || o.status === "picking" || o.status === "packed" || o.status === "ready_for_dispatch" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
               <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
             </div>
 

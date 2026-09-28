@@ -2,7 +2,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Clock,
   CheckCircle2,
+  PackageSearch,
   PackageCheck,
+  ClipboardCheck,
   Truck,
   XCircle,
   Banknote,
@@ -13,7 +15,9 @@ import { timeAgo } from "@/lib/format";
 export type OrderStatus =
   | "pending"
   | "accepted"
+  | "picking"
   | "packed"
+  | "ready_for_dispatch"
   | "dispatched"
   | "delivered"
   | "cancelled";
@@ -24,7 +28,9 @@ export type OrderTimelineData = {
   status: OrderStatus;
   created_at: string;
   accepted_at: string | null;
+  picking_started_at: string | null;
   packed_at: string | null;
+  ready_for_dispatch_at: string | null;
   dispatched_at: string | null;
   delivered_at: string | null;
   cancelled_at: string | null;
@@ -43,10 +49,20 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
       cls: "bg-primary/15 text-primary border-primary/30",
       label: "Accepted",
     },
+    picking: {
+      icon: PackageSearch,
+      cls: "bg-primary/15 text-primary border-primary/30",
+      label: "Picking",
+    },
     packed: {
       icon: PackageCheck,
       cls: "bg-primary/15 text-primary border-primary/30",
       label: "Packed",
+    },
+    ready_for_dispatch: {
+      icon: ClipboardCheck,
+      cls: "bg-primary/15 text-primary border-primary/30",
+      label: "Ready for dispatch",
     },
     dispatched: {
       icon: Truck,
@@ -121,7 +137,9 @@ export function OrderTimeline({ o }: { o: OrderTimelineData }) {
   const steps: { key: string; label: string; at: string | null; icon: typeof Clock }[] = [
     { key: "placed", label: "Placed", at: o.created_at, icon: Clock },
     { key: "accepted", label: "Accepted", at: o.accepted_at, icon: CheckCircle2 },
+    { key: "picking", label: "Picking", at: o.picking_started_at, icon: PackageSearch },
     { key: "packed", label: "Packed", at: o.packed_at, icon: PackageCheck },
+    { key: "ready_for_dispatch", label: "Ready for dispatch", at: o.ready_for_dispatch_at, icon: ClipboardCheck },
     { key: "dispatched", label: "Dispatched", at: o.dispatched_at, icon: Truck },
     { key: "delivered", label: "Delivered", at: o.delivered_at, icon: CheckCircle2 },
   ];
