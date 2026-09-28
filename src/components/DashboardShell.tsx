@@ -9,12 +9,15 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  Pill,
   ShieldAlert,
   ShieldCheck,
   Users,
+  Warehouse,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import logo from "@/assets/logo.jpg";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -186,6 +189,16 @@ export function DashboardHeader({
 }) {
   const navigate = useNavigate();
   const { business, businesses, setActiveBusiness } = useSession();
+  // A small, always-visible (including on phones) signal for which kind of account this is - a
+  // real user was once confused after being given a wholesaler account when expecting a pharmacy
+  // one. The existing `subtitle` text can't carry this on its own: it's reused for unrelated page
+  // titles ("Reports", "Activity log", a business's own name, ...) on most routes, and the wordmark
+  // block it lives in is hidden entirely below the sm breakpoint.
+  const accountBadge = business
+    ? business.type === "wholesaler"
+      ? { label: "Wholesaler", Icon: Warehouse, className: "border-violet-200 bg-violet-100 text-violet-800" }
+      : { label: "Pharmacy", Icon: Pill, className: "border-blue-200 bg-blue-100 text-blue-800" }
+    : null;
   const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
   const reportsRoute =
     business?.type === "wholesaler" ? "/wholesaler/reports" : "/pharmacy/reports";
@@ -231,6 +244,15 @@ export function DashboardHeader({
                 <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
               </div>
             </Link>
+            {accountBadge && (
+              <Badge
+                variant="outline"
+                className={`shrink-0 gap-1 whitespace-nowrap ${accountBadge.className}`}
+              >
+                <accountBadge.Icon className="h-3 w-3" aria-hidden="true" />
+                {accountBadge.label}
+              </Badge>
+            )}
           </div>
 
           {canSwitchWorkspaces && (
@@ -241,7 +263,8 @@ export function DashboardHeader({
               <SelectContent>
                 {businesses.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.name} · {workspace.type} · {workspace.staff_role}
+                    {workspace.name} · {workspace.type === "wholesaler" ? "Wholesaler" : "Pharmacy"} ·{" "}
+                    {workspace.staff_role}
                   </SelectItem>
                 ))}
               </SelectContent>
