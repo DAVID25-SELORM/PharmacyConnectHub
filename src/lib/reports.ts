@@ -90,6 +90,81 @@ export function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-export function reportFilename(prefix: string) {
-  return `drugxone-${prefix}-${new Date().toISOString().slice(0, 10)}.csv`;
+export function reportFilename(prefix: string, ext: "csv" | "xlsx" = "csv") {
+  return `drugxone-${prefix}-${new Date().toISOString().slice(0, 10)}.${ext}`;
+}
+
+// ---------------------------------------------------------------------------
+// XLSX export — same headers/rows shape as the CSV path, reusing the "xlsx" package
+// already bundled for product import (src/lib/product-import.ts), lazy-loaded the same way
+// so it stays in its own code-split chunk and never loads on a page that doesn't export.
+// ---------------------------------------------------------------------------
+
+type XlsxModule = typeof import("xlsx");
+let xlsxModulePromise: Promise<XlsxModule> | null = null;
+function loadXlsx() {
+  xlsxModulePromise ??= import("xlsx");
+  return xlsxModulePromise;
+}
+
+export type ReportExportSheet = {
+  name: string;
+  headers: string[];
+  rows: Array<Array<string | number>>;
+};
+
+export async function downloadXlsx(filename: string, sheets: ReportExportSheet[]) {
+  const XLSX = await loadXlsx();
+  const workbook = XLSX.utils.book_new();
+  for (const sheet of sheets) {
+    const worksheet = XLSX.utils.aoa_to_sheet([sheet.headers, ...sheet.rows]);
+    // Excel sheet names are capped at 31 characters.
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name.slice(0, 31));
+  }
+  XLSX.writeFile(workbook, filename);
+}
+
+/** What a report tab's exportRef hands back: the same data the CSV and XLSX exports both
+ * render from. `filenamePrefix` excludes the extension — reportFilename() adds it per format.
+ * Most tabs export a single table (`headers`/`rows`); a tab combining several tables (e.g. two
+ * side-by-side breakdowns) uses `sheets` instead — CSV then downloads one file per sheet (it has
+ * no multi-table format of its own), XLSX puts them together as separate sheets in one workbook.
+ * A tab returns null when there's nothing to export yet (e.g. data still loading). */
+export type ReportExportPayload =
+  | { filenamePrefix: string; headers: string[]; rows: Array<Array<string | number>> }
+  | { filenamePrefix: string; sheets: ReportExportSheet[] }
+  | null;
+
+export function reportExportSheets(payload: NonNullable<ReportExportPayload>): ReportExportSheet[] {
+  return "sheets" in payload
+    ? payload.sheets
+    : [{ name: "Report", headers: payload.headers, rows: payload.rows }];
+}
+
+/** Pure planning step for the CSV path: one {filename, csv} per sheet. A single-sheet payload
+ * keeps the plain filenamePrefix; a multi-sheet one suffixes each file with its sheet name, since
+ * CSV has no multi-table format of its own to fall back on. */
+export function reportCsvExports(
+  payload: NonNullable<ReportExportPayload>,
+): Array<{ filename: string; csv: string }> {
+  const sheets = reportExportSheets(payload);
+  return sheets.map((sheet) => {
+    const suffix = sheets.length > 1 ? `-${sheet.name.toLowerCase().replace(/\s+/g, "-")}` : "";
+    return {
+      filename: reportFilename(`${payload.filenamePrefix}${suffix}`, "csv"),
+      csv: rowsToCsv(sheet.headers, sheet.rows),
+    };
+  });
+}
+
+/** Shared "export" button handler for every Reports page: takes whatever the active tab's
+ * exportRef currently returns and renders it as the requested format. A no-op when there's
+ * nothing to export yet. */
+export function exportReportPayload(payload: ReportExportPayload, ext: "csv" | "xlsx") {
+  if (!payload) return;
+  if (ext === "xlsx") {
+    void downloadXlsx(reportFilename(payload.filenamePrefix, "xlsx"), reportExportSheets(payload));
+    return;
+  }
+  for (const { filename, csv } of reportCsvExports(payload)) downloadCsv(filename, csv);
 }

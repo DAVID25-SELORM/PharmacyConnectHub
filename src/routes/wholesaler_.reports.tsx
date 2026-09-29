@@ -23,13 +23,12 @@ import { useReportRange } from "@/hooks/use-report-range";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  downloadCsv,
+  exportReportPayload,
   formatGHSCell,
   formatReportDate,
   formatReportDateTime,
   rangeToRpcArgs,
-  reportFilename,
-  rowsToCsv,
+  type ReportExportPayload,
   type ReportRangeState,
 } from "@/lib/reports";
 
@@ -99,13 +98,13 @@ type InventoryRow = {
   active: boolean;
 };
 
-type ExportRef = React.MutableRefObject<() => void>;
+type ExportRef = React.MutableRefObject<() => ReportExportPayload>;
 
 function WholesalerReportsPage() {
   const { business } = useSession();
   const { draft, setDraft, applied, apply, reset } = useReportRange();
   const [tab, setTab] = useState("overview");
-  const exportRef = useRef<() => void>(() => undefined);
+  const exportRef = useRef<() => ReportExportPayload>(() => null);
 
   if (!business) return null;
 
@@ -120,7 +119,8 @@ function WholesalerReportsPage() {
           onDraftChange={setDraft}
           onApply={apply}
           onReset={reset}
-          onExportCsv={() => exportRef.current()}
+          onExportCsv={() => exportReportPayload(exportRef.current(), "csv")}
+          onExportXlsx={() => exportReportPayload(exportRef.current(), "xlsx")}
         />
 
         <Tabs value={tab} onValueChange={setTab} className="mt-6">
@@ -179,22 +179,20 @@ function OverviewTab({
 
   useEffect(() => {
     exportRef.current = () => {
-      if (!data) return;
-      downloadCsv(
-        reportFilename("wholesaler-overview"),
-        rowsToCsv(
-          ["Metric", "Value"],
-          [
-            ["Total sales (GHS)", data.kpis.total_sales_ghs],
-            ["Total orders", data.kpis.total_orders],
-            ["Customers", data.kpis.customers],
-            ["Units sold", data.kpis.units_sold],
-            ["Discounts given (GHS)", data.kpis.discounts_given_ghs],
-            ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
-            ["Pending orders", data.kpis.pending_orders],
-          ],
-        ),
-      );
+      if (!data) return null;
+      return {
+        filenamePrefix: "wholesaler-overview",
+        headers: ["Metric", "Value"],
+        rows: [
+          ["Total sales (GHS)", data.kpis.total_sales_ghs],
+          ["Total orders", data.kpis.total_orders],
+          ["Customers", data.kpis.customers],
+          ["Units sold", data.kpis.units_sold],
+          ["Discounts given (GHS)", data.kpis.discounts_given_ghs],
+          ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
+          ["Pending orders", data.kpis.pending_orders],
+        ],
+      };
     };
   }, [data, exportRef]);
 
@@ -288,34 +286,31 @@ function SalesTab({
   );
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("wholesaler-sales"),
-        rowsToCsv(
-          [
-            "Order",
-            "Date",
-            "Pharmacy",
-            "Items",
-            "Gross GHS",
-            "Discount GHS",
-            "Net GHS",
-            "Status",
-            "Payment status",
-          ],
-          pager.rows.map((r) => [
-            r.order_number,
-            r.created_at,
-            r.pharmacy_name,
-            r.item_count,
-            r.gross_ghs,
-            r.discount_amount_ghs,
-            r.net_ghs,
-            r.status,
-            r.payment_status,
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "wholesaler-sales",
+      headers: [
+        "Order",
+        "Date",
+        "Pharmacy",
+        "Items",
+        "Gross GHS",
+        "Discount GHS",
+        "Net GHS",
+        "Status",
+        "Payment status",
+      ],
+      rows: pager.rows.map((r) => [
+        r.order_number,
+        r.created_at,
+        r.pharmacy_name,
+        r.item_count,
+        r.gross_ghs,
+        r.discount_amount_ghs,
+        r.net_ghs,
+        r.status,
+        r.payment_status,
+      ]),
+    });
   }, [pager.rows, exportRef]);
 
   const columns: ReportColumn<SaleRow>[] = [
@@ -446,28 +441,25 @@ function CustomersTab({
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("wholesaler-customers"),
-        rowsToCsv(
-          [
-            "Pharmacy",
-            "Orders",
-            "Revenue GHS",
-            "Avg Order GHS",
-            "Discount Given GHS",
-            "Last Order",
-          ],
-          rows.map((r) => [
-            r.pharmacy_name,
-            r.orders,
-            r.revenue_ghs,
-            r.avg_order_value_ghs,
-            r.discount_given_ghs,
-            r.last_order_at ?? "",
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "wholesaler-customers",
+      headers: [
+        "Pharmacy",
+        "Orders",
+        "Revenue GHS",
+        "Avg Order GHS",
+        "Discount Given GHS",
+        "Last Order",
+      ],
+      rows: rows.map((r) => [
+        r.pharmacy_name,
+        r.orders,
+        r.revenue_ghs,
+        r.avg_order_value_ghs,
+        r.discount_given_ghs,
+        r.last_order_at ?? "",
+      ]),
+    });
   }, [rows, exportRef]);
 
   const columns: ReportColumn<CustomerRow>[] = [
@@ -539,21 +531,18 @@ function ProductsTab({
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("wholesaler-products"),
-        rowsToCsv(
-          ["Product", "Units Sold", "Orders", "Revenue GHS", "Customers", "Stock Remaining"],
-          rows.map((r) => [
-            r.product_name,
-            r.units_sold,
-            r.orders,
-            r.revenue_ghs,
-            r.customers,
-            r.stock_remaining ?? "",
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "wholesaler-products",
+      headers: ["Product", "Units Sold", "Orders", "Revenue GHS", "Customers", "Stock Remaining"],
+      rows: rows.map((r) => [
+        r.product_name,
+        r.units_sold,
+        r.orders,
+        r.revenue_ghs,
+        r.customers,
+        r.stock_remaining ?? "",
+      ]),
+    });
   }, [rows, exportRef]);
 
   const columns: ReportColumn<ProductRow>[] = [
@@ -628,21 +617,18 @@ function InventoryTab({ businessId, exportRef }: { businessId: string; exportRef
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("inventory"),
-        rowsToCsv(
-          ["Product", "Category", "Stock", "Price GHS", "Stock Value GHS", "Active"],
-          rows.map((r) => [
-            r.product_name,
-            r.category ?? "",
-            r.stock,
-            r.price_ghs,
-            r.stock_value_ghs,
-            r.active ? "Yes" : "No",
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "inventory",
+      headers: ["Product", "Category", "Stock", "Price GHS", "Stock Value GHS", "Active"],
+      rows: rows.map((r) => [
+        r.product_name,
+        r.category ?? "",
+        r.stock,
+        r.price_ghs,
+        r.stock_value_ghs,
+        r.active ? "Yes" : "No",
+      ]),
+    });
   }, [rows, exportRef]);
 
   const totalValue = rows.reduce((sum, r) => sum + Number(r.stock_value_ghs), 0);

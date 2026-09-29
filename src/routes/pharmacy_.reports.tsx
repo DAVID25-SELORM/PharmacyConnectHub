@@ -14,13 +14,12 @@ import { useReportRange } from "@/hooks/use-report-range";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  downloadCsv,
+  exportReportPayload,
   formatGHSCell,
   formatReportDate,
   formatReportDateTime,
   rangeToRpcArgs,
-  reportFilename,
-  rowsToCsv,
+  type ReportExportPayload,
   type ReportRangeState,
 } from "@/lib/reports";
 import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-category";
@@ -100,13 +99,13 @@ type PurchaseSummary = {
   line_count: number;
 };
 
-type ExportRef = React.MutableRefObject<() => void>;
+type ExportRef = React.MutableRefObject<() => ReportExportPayload>;
 
 function PharmacyReportsPage() {
   const { business } = useSession();
   const { draft, setDraft, applied, apply, reset } = useReportRange();
   const [tab, setTab] = useState("overview");
-  const exportRef = useRef<() => void>(() => undefined);
+  const exportRef = useRef<() => ReportExportPayload>(() => null);
 
   if (!business) return null;
 
@@ -121,7 +120,8 @@ function PharmacyReportsPage() {
           onDraftChange={setDraft}
           onApply={apply}
           onReset={reset}
-          onExportCsv={() => exportRef.current()}
+          onExportCsv={() => exportReportPayload(exportRef.current(), "csv")}
+          onExportXlsx={() => exportReportPayload(exportRef.current(), "xlsx")}
         />
 
         <Tabs value={tab} onValueChange={setTab} className="mt-6">
@@ -176,21 +176,19 @@ function OverviewTab({
 
   useEffect(() => {
     exportRef.current = () => {
-      if (!data) return;
-      downloadCsv(
-        reportFilename("pharmacy-overview"),
-        rowsToCsv(
-          ["Metric", "Value"],
-          [
-            ["Total purchases (GHS)", data.kpis.total_purchases_ghs],
-            ["Total orders", data.kpis.total_orders],
-            ["Delivered orders", data.kpis.delivered_orders],
-            ["Outstanding orders", data.kpis.outstanding_orders],
-            ["Total discounts (GHS)", data.kpis.total_discount_ghs],
-            ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
-          ],
-        ),
-      );
+      if (!data) return null;
+      return {
+        filenamePrefix: "pharmacy-overview",
+        headers: ["Metric", "Value"],
+        rows: [
+          ["Total purchases (GHS)", data.kpis.total_purchases_ghs],
+          ["Total orders", data.kpis.total_orders],
+          ["Delivered orders", data.kpis.delivered_orders],
+          ["Outstanding orders", data.kpis.outstanding_orders],
+          ["Total discounts (GHS)", data.kpis.total_discount_ghs],
+          ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
+        ],
+      };
     };
   }, [data, exportRef]);
 
@@ -277,36 +275,33 @@ function OrdersTab({
   );
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("pharmacy-orders"),
-        rowsToCsv(
-          [
-            "Order",
-            "Date",
-            "Supplier",
-            "Items",
-            "Subtotal GHS",
-            "Discount GHS",
-            "Total GHS",
-            "Status",
-            "Payment status",
-            "Payment method",
-          ],
-          pager.rows.map((r) => [
-            r.order_number,
-            r.created_at,
-            r.wholesaler_name,
-            r.item_count,
-            r.subtotal_ghs,
-            r.discount_amount_ghs,
-            r.total_ghs,
-            r.status,
-            r.payment_status,
-            r.payment_method,
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "pharmacy-orders",
+      headers: [
+        "Order",
+        "Date",
+        "Supplier",
+        "Items",
+        "Subtotal GHS",
+        "Discount GHS",
+        "Total GHS",
+        "Status",
+        "Payment status",
+        "Payment method",
+      ],
+      rows: pager.rows.map((r) => [
+        r.order_number,
+        r.created_at,
+        r.wholesaler_name,
+        r.item_count,
+        r.subtotal_ghs,
+        r.discount_amount_ghs,
+        r.total_ghs,
+        r.status,
+        r.payment_status,
+        r.payment_method,
+      ]),
+    });
   }, [pager.rows, exportRef]);
 
   const columns: ReportColumn<OrderRow>[] = [
@@ -489,40 +484,37 @@ function PurchasesTab({
   );
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("pharmacy-purchases"),
-        rowsToCsv(
-          [
-            "Date",
-            "Procurement ref",
-            "Order ref",
-            "Supplier",
-            "Product",
-            "Quantity",
-            "Unit price GHS",
-            "Line total GHS",
-            "Category",
-            "Status",
-            "Payment status",
-            "Receipt sent",
-          ],
-          pager.rows.map((r) => [
-            r.created_at,
-            r.procurement_reference ?? "",
-            r.order_number,
-            r.wholesaler_name,
-            r.product_name,
-            r.quantity,
-            r.unit_price_ghs,
-            r.line_total_ghs,
-            purchaseCategoryLabel(r.purchase_category),
-            r.status,
-            r.payment_status,
-            r.receipt_sent_at ?? "",
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "pharmacy-purchases",
+      headers: [
+        "Date",
+        "Procurement ref",
+        "Order ref",
+        "Supplier",
+        "Product",
+        "Quantity",
+        "Unit price GHS",
+        "Line total GHS",
+        "Category",
+        "Status",
+        "Payment status",
+        "Receipt sent",
+      ],
+      rows: pager.rows.map((r) => [
+        r.created_at,
+        r.procurement_reference ?? "",
+        r.order_number,
+        r.wholesaler_name,
+        r.product_name,
+        r.quantity,
+        r.unit_price_ghs,
+        r.line_total_ghs,
+        purchaseCategoryLabel(r.purchase_category),
+        r.status,
+        r.payment_status,
+        r.receipt_sent_at ?? "",
+      ]),
+    });
   }, [pager.rows, exportRef]);
 
   const kpis: ReportKpi[] = [
@@ -699,21 +691,18 @@ function SuppliersTab({
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("supplier-spend"),
-        rowsToCsv(
-          ["Supplier", "Orders", "Spend GHS", "Avg Order GHS", "Discounts GHS", "Last Order"],
-          rows.map((r) => [
-            r.wholesaler_name,
-            r.orders,
-            r.spend_ghs,
-            r.avg_order_value_ghs,
-            r.discount_ghs,
-            r.last_order_at ?? "",
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "supplier-spend",
+      headers: ["Supplier", "Orders", "Spend GHS", "Avg Order GHS", "Discounts GHS", "Last Order"],
+      rows: rows.map((r) => [
+        r.wholesaler_name,
+        r.orders,
+        r.spend_ghs,
+        r.avg_order_value_ghs,
+        r.discount_ghs,
+        r.last_order_at ?? "",
+      ]),
+    });
   }, [rows, exportRef]);
 
   const columns: ReportColumn<SupplierRow>[] = [

@@ -1,4 +1,4 @@
-import { Download, Printer, RotateCcw } from "lucide-react";
+import { Download, FileSpreadsheet, Printer, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +20,7 @@ export function ReportsHeader({
   onApply,
   onReset,
   onExportCsv,
+  onExportXlsx,
   exporting = false,
   exportDisabled = false,
 }: {
@@ -30,6 +31,7 @@ export function ReportsHeader({
   onApply: () => void;
   onReset: () => void;
   onExportCsv: () => void;
+  onExportXlsx: () => void;
   exporting?: boolean;
   exportDisabled?: boolean;
 }) {
@@ -115,6 +117,16 @@ export function ReportsHeader({
           >
             <Download className="mr-1 h-4 w-4" aria-hidden="true" />
             {exporting ? "Exporting..." : "Export CSV"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onExportXlsx}
+            disabled={exporting || exportDisabled}
+          >
+            <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" />
+            {exporting ? "Exporting..." : "Export XLSX"}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
             <Printer className="mr-1 h-4 w-4" aria-hidden="true" />

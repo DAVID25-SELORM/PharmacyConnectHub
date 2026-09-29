@@ -13,12 +13,11 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useReportRange } from "@/hooks/use-report-range";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  downloadCsv,
+  exportReportPayload,
   formatGHSCell,
   formatReportDate,
   rangeToRpcArgs,
-  reportFilename,
-  rowsToCsv,
+  type ReportExportPayload,
 } from "@/lib/reports";
 
 export const Route = createFileRoute("/admin/reports")({
@@ -96,7 +95,7 @@ type Payments = {
 function AdminReportsPage() {
   const { draft, setDraft, applied, apply, reset } = useReportRange();
   const [tab, setTab] = useState("overview");
-  const exportRef = useRef<() => void>(() => undefined);
+  const exportRef = useRef<() => ReportExportPayload>(() => null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,7 +109,8 @@ function AdminReportsPage() {
           onDraftChange={setDraft}
           onApply={apply}
           onReset={reset}
-          onExportCsv={() => exportRef.current()}
+          onExportCsv={() => exportReportPayload(exportRef.current(), "csv")}
+          onExportXlsx={() => exportReportPayload(exportRef.current(), "xlsx")}
         />
 
         <Tabs value={tab} onValueChange={setTab} className="mt-6">
@@ -139,7 +139,7 @@ function AdminReportsPage() {
   );
 }
 
-type ExportRef = React.MutableRefObject<() => void>;
+type ExportRef = React.MutableRefObject<() => ReportExportPayload>;
 
 function OverviewTab({
   range,
@@ -165,23 +165,21 @@ function OverviewTab({
 
   useEffect(() => {
     exportRef.current = () => {
-      if (!data) return;
-      downloadCsv(
-        reportFilename("platform-overview"),
-        rowsToCsv(
-          ["Metric", "Value"],
-          [
-            ["GMV (GHS)", data.kpis.gmv_ghs],
-            ["Total orders", data.kpis.orders_total],
-            ["Completed orders", data.kpis.completed_orders],
-            ["Cancelled orders", data.kpis.cancelled_orders],
-            ["Active pharmacies", data.active_pharmacies],
-            ["Active wholesalers", data.active_wholesalers],
-            ["Pending businesses", data.pending_businesses],
-            ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
-          ],
-        ),
-      );
+      if (!data) return null;
+      return {
+        filenamePrefix: "platform-overview",
+        headers: ["Metric", "Value"],
+        rows: [
+          ["GMV (GHS)", data.kpis.gmv_ghs],
+          ["Total orders", data.kpis.orders_total],
+          ["Completed orders", data.kpis.completed_orders],
+          ["Cancelled orders", data.kpis.cancelled_orders],
+          ["Active pharmacies", data.active_pharmacies],
+          ["Active wholesalers", data.active_wholesalers],
+          ["Pending businesses", data.pending_businesses],
+          ["Avg order value (GHS)", data.kpis.avg_order_value_ghs],
+        ],
+      };
     };
   }, [data, exportRef]);
 
@@ -280,21 +278,18 @@ function SalesTab({
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () =>
-      downloadCsv(
-        reportFilename("marketplace-sales"),
-        rowsToCsv(
-          ["Date", "Orders", "Gross GHS", "Discount GHS", "Net GHS", "Avg Order Value GHS"],
-          rows.map((r) => [
-            r.bucket,
-            r.orders,
-            r.gross_ghs,
-            r.discount_ghs,
-            r.net_ghs,
-            r.avg_order_value_ghs,
-          ]),
-        ),
-      );
+    exportRef.current = () => ({
+      filenamePrefix: "marketplace-sales",
+      headers: ["Date", "Orders", "Gross GHS", "Discount GHS", "Net GHS", "Avg Order Value GHS"],
+      rows: rows.map((r) => [
+        r.bucket,
+        r.orders,
+        r.gross_ghs,
+        r.discount_ghs,
+        r.net_ghs,
+        r.avg_order_value_ghs,
+      ]),
+    });
   }, [rows, exportRef]);
 
   const columns: ReportColumn<SalesRow>[] = [
@@ -408,41 +403,51 @@ function BusinessesTab({
   useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    exportRef.current = () => {
-      const wCsv = rowsToCsv(
-        [
-          "Wholesaler",
-          "Orders",
-          "Sales GHS",
-          "Avg Order GHS",
-          "Customers",
-          "Items Sold",
-          "Cancelled",
-        ],
-        wholesalers.map((r) => [
-          r.wholesaler_name,
-          r.orders,
-          r.sales_ghs,
-          r.avg_order_value_ghs,
-          r.customers,
-          r.items_sold,
-          r.cancelled_orders,
-        ]),
-      );
-      downloadCsv(reportFilename("wholesaler-performance"), wCsv);
-      const pCsv = rowsToCsv(
-        ["Pharmacy", "Orders", "Purchases GHS", "Suppliers Used", "Avg Basket GHS", "Last Order"],
-        pharmacies.map((r) => [
-          r.pharmacy_name,
-          r.orders,
-          r.purchases_ghs,
-          r.suppliers_used,
-          r.avg_basket_ghs,
-          r.last_order_at ?? "",
-        ]),
-      );
-      downloadCsv(reportFilename("pharmacy-activity"), pCsv);
-    };
+    exportRef.current = () => ({
+      filenamePrefix: "marketplace-businesses",
+      sheets: [
+        {
+          name: "Wholesalers",
+          headers: [
+            "Wholesaler",
+            "Orders",
+            "Sales GHS",
+            "Avg Order GHS",
+            "Customers",
+            "Items Sold",
+            "Cancelled",
+          ],
+          rows: wholesalers.map((r) => [
+            r.wholesaler_name,
+            r.orders,
+            r.sales_ghs,
+            r.avg_order_value_ghs,
+            r.customers,
+            r.items_sold,
+            r.cancelled_orders,
+          ]),
+        },
+        {
+          name: "Pharmacies",
+          headers: [
+            "Pharmacy",
+            "Orders",
+            "Purchases GHS",
+            "Suppliers Used",
+            "Avg Basket GHS",
+            "Last Order",
+          ],
+          rows: pharmacies.map((r) => [
+            r.pharmacy_name,
+            r.orders,
+            r.purchases_ghs,
+            r.suppliers_used,
+            r.avg_basket_ghs,
+            r.last_order_at ?? "",
+          ]),
+        },
+      ],
+    });
   }, [wholesalers, pharmacies, exportRef]);
 
   const wholesalerColumns: ReportColumn<WholesalerRow>[] = [
@@ -566,22 +571,20 @@ function PaymentsTab({
 
   useEffect(() => {
     exportRef.current = () => {
-      if (!data) return;
-      downloadCsv(
-        reportFilename("payments"),
-        rowsToCsv(
-          ["Date", "Order", "Pharmacy", "Wholesaler", "Method", "Amount GHS", "Status"],
-          data.rows.map((r) => [
-            r.created_at,
-            r.order_number,
-            r.pharmacy_name,
-            r.wholesaler_name,
-            r.payment_method,
-            r.total_ghs,
-            r.payment_status,
-          ]),
-        ),
-      );
+      if (!data) return null;
+      return {
+        filenamePrefix: "payments",
+        headers: ["Date", "Order", "Pharmacy", "Wholesaler", "Method", "Amount GHS", "Status"],
+        rows: data.rows.map((r) => [
+          r.created_at,
+          r.order_number,
+          r.pharmacy_name,
+          r.wholesaler_name,
+          r.payment_method,
+          r.total_ghs,
+          r.payment_status,
+        ]),
+      };
     };
   }, [data, exportRef]);
 
