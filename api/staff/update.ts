@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-type StaffRole = "owner" | "manager" | "cashier" | "assistant" | "warehouse" | "finance";
+type StaffRole =
+  | "owner"
+  | "manager"
+  | "cashier"
+  | "assistant"
+  | "warehouse"
+  | "finance"
+  | "accountant";
 type StaffStatus = "active" | "inactive" | "pending";
 
 const validRoles = new Set<StaffRole>([
@@ -11,6 +18,7 @@ const validRoles = new Set<StaffRole>([
   "assistant",
   "warehouse",
   "finance",
+  "accountant",
 ]);
 const validStatuses = new Set<StaffStatus>(["active", "inactive", "pending"]);
 

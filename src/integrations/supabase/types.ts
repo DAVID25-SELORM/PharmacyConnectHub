@@ -854,7 +854,7 @@ export type Database = {
       payment_method: "cod" | "paystack";
       payment_status: "unpaid" | "paid" | "refunded" | "failed";
       platform_staff_role: "owner" | "admin";
-      staff_role: "owner" | "manager" | "cashier" | "assistant";
+      staff_role: "owner" | "manager" | "cashier" | "assistant" | "warehouse" | "finance" | "accountant";
       staff_status: "active" | "inactive" | "pending";
       verification_status: "pending" | "approved" | "rejected";
     };
@@ -988,7 +988,7 @@ export const Constants = {
       payment_method: ["cod", "paystack"],
       payment_status: ["unpaid", "paid", "refunded", "failed"],
       platform_staff_role: ["owner", "admin"],
-      staff_role: ["owner", "manager", "cashier", "assistant"],
+      staff_role: ["owner", "manager", "cashier", "assistant", "warehouse", "finance", "accountant"],
       staff_status: ["active", "inactive", "pending"],
       verification_status: ["pending", "approved", "rejected"],
     },

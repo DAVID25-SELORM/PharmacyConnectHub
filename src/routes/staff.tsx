@@ -64,6 +64,7 @@ const roleLabels: Record<BusinessStaffRole, string> = {
   assistant: "Assistant",
   warehouse: "Warehouse",
   finance: "Finance",
+  accountant: "Accountant",
 };
 
 const roleColors: Record<BusinessStaffRole, string> = {
@@ -73,6 +74,7 @@ const roleColors: Record<BusinessStaffRole, string> = {
   assistant: "bg-gray-100 text-gray-800",
   warehouse: "bg-amber-100 text-amber-800",
   finance: "bg-teal-100 text-teal-800",
+  accountant: "bg-indigo-100 text-indigo-800",
 };
 
 const statusLabels: Record<StaffStatus, string> = {
@@ -726,6 +728,7 @@ function StaffManagementContent() {
                                 <SelectItem value="finance">Finance</SelectItem>
                               </>
                             )}
+                            <SelectItem value="accountant">Accountant</SelectItem>
                             <SelectItem value="assistant">Assistant</SelectItem>
                           </SelectContent>
                         </Select>
@@ -873,6 +876,7 @@ function StaffManagementContent() {
                           <SelectItem value="finance">Finance - confirm payments &amp; receipts</SelectItem>
                         </>
                       )}
+                      <SelectItem value="accountant">Accountant - financial records &amp; reports</SelectItem>
                       <SelectItem value="assistant">Assistant - view only</SelectItem>
                     </SelectContent>
                   </Select>

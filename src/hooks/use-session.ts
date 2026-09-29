@@ -9,7 +9,8 @@ export type BusinessStaffRole =
   | "cashier"
   | "assistant"
   | "warehouse"
-  | "finance";
+  | "finance"
+  | "accountant";
 
 export type Business = {
   id: string;
@@ -148,7 +149,8 @@ function sortBusinesses(left: Business, right: Business) {
     cashier: 2,
     warehouse: 3,
     finance: 4,
-    assistant: 5,
+    accountant: 5,
+    assistant: 6,
   };
 
   const leftRole = roleOrder[left.staff_role] ?? 99;

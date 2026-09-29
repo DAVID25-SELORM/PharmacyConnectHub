@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!businessId || !email || !role) {
     return res.status(400).json({ error: "businessId, email, and role are required" });
   }
-  if (!["manager", "cashier", "assistant", "warehouse", "finance"].includes(role)) {
+  if (!["manager", "cashier", "assistant", "warehouse", "finance", "accountant"].includes(role)) {
     return res.status(400).json({ error: "Invalid role" });
   }
   const normalizedEmail = String(email).trim().toLowerCase();
