@@ -52,6 +52,7 @@ BEGIN
   PERFORM zz.check('pharmacy_report_overview: unrelated user denied', zz.run_as(u_nb, format('SELECT public.pharmacy_report_overview(%L)', good)) LIKE 'ERR: You do not have access%');
   PERFORM zz.check('pharmacy_report_orders: unrelated user denied', zz.run_as(u_nb, format('SELECT * FROM public.pharmacy_report_orders(%L)', good)) LIKE 'ERR: You do not have access%');
   PERFORM zz.check('pharmacy_report_supplier_spend: unrelated user denied', zz.run_as(u_nb, format('SELECT * FROM public.pharmacy_report_supplier_spend(%L)', good)) LIKE 'ERR: You do not have access%');
+  PERFORM zz.check('pharmacy_report_products: unrelated user denied', zz.run_as(u_nb, format('SELECT * FROM public.pharmacy_report_products(%L)', good)) LIKE 'ERR: You do not have access%');
   PERFORM zz.check('wholesaler_report_overview: unrelated user denied', zz.run_as(u_nb, format('SELECT public.wholesaler_report_overview(%L)', alpha)) LIKE 'ERR: You do not have access%');
   PERFORM zz.check('wholesaler_report_sales: unrelated user denied', zz.run_as(u_nb, format('SELECT * FROM public.wholesaler_report_sales(%L)', alpha)) LIKE 'ERR: You do not have access%');
   PERFORM zz.check('wholesaler_report_customers: unrelated user denied', zz.run_as(u_nb, format('SELECT * FROM public.wholesaler_report_customers(%L)', alpha)) LIKE 'ERR: You do not have access%');

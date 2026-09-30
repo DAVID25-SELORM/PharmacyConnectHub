@@ -70,6 +70,17 @@ type SupplierRow = {
   last_order_at: string | null;
 };
 
+type ProductRow = {
+  product_id: string;
+  product_name: string;
+  units_purchased: number;
+  orders: number;
+  spend_ghs: number;
+  suppliers: number;
+  avg_unit_price_ghs: number;
+  last_purchased_at: string | null;
+};
+
 type PurchaseLineRow = {
   id: string;
   created_at: string;
@@ -129,6 +140,7 @@ function PharmacyReportsPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="orders">Orders &amp; Payments</TabsTrigger>
             <TabsTrigger value="purchases">Purchases (NHIS &amp; Cash)</TabsTrigger>
+            <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           </TabsList>
 
@@ -140,6 +152,9 @@ function PharmacyReportsPage() {
           </TabsContent>
           <TabsContent value="purchases">
             <PurchasesTab businessId={business.id} range={applied} exportRef={exportRef} />
+          </TabsContent>
+          <TabsContent value="products">
+            <ProductsTab businessId={business.id} range={applied} exportRef={exportRef} />
           </TabsContent>
           <TabsContent value="suppliers">
             <SuppliersTab businessId={business.id} range={applied} exportRef={exportRef} />
@@ -654,6 +669,154 @@ function PurchasesTab({
           </Button>
         </nav>
       )}
+    </div>
+  );
+}
+
+/**
+ * Buyer-side product analytics: which products this pharmacy buys most, and how much it spends
+ * on each. Counts every order regardless of status (matches the wholesaler-side Products tab's
+ * own convention of a "what do we buy" report rather than a fulfilment report).
+ */
+function ProductsTab({
+  businessId,
+  range,
+  exportRef,
+}: {
+  businessId: string;
+  range: ReportRangeState;
+  exportRef: ExportRef;
+}) {
+  const [wholesalerId, setWholesalerId] = useState("");
+  const [purchaseCategory, setPurchaseCategory] = useState("");
+  const [suppliers, setSuppliers] = useState<SupplierRow[]>([]);
+  const [rows, setRows] = useState<ProductRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const key = `${businessId}|${range.range}|${range.from}|${range.to}|${wholesalerId}|${purchaseCategory}`;
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .rpc("pharmacy_report_supplier_spend", { p_business_id: businessId, ...rangeToRpcArgs(range) })
+      .then(({ data }: { data: SupplierRow[] | null }) => setSuppliers(data ?? []));
+  }, [businessId, range.range, range.from, range.to]);
+
+  const load = () => {
+    setLoading(true);
+    setError(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .rpc("pharmacy_report_products", {
+        p_business_id: businessId,
+        ...rangeToRpcArgs(range),
+        p_wholesaler_id: wholesalerId || null,
+        p_purchase_category: purchaseCategory || null,
+      })
+      .then(({ data, error: rpcError }: { data: ProductRow[]; error: unknown }) => {
+        if (rpcError) return setError(true);
+        setRows(data ?? []);
+        setLoading(false);
+      });
+  };
+
+  useEffect(load, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    exportRef.current = () => ({
+      filenamePrefix: "pharmacy-products",
+      headers: [
+        "Product",
+        "Units Purchased",
+        "Orders",
+        "Spend GHS",
+        "Suppliers",
+        "Avg Unit Price GHS",
+        "Last Purchased",
+      ],
+      rows: rows.map((r) => [
+        r.product_name,
+        r.units_purchased,
+        r.orders,
+        r.spend_ghs,
+        r.suppliers,
+        r.avg_unit_price_ghs,
+        r.last_purchased_at ?? "",
+      ]),
+    });
+  }, [rows, exportRef]);
+
+  const columns: ReportColumn<ProductRow>[] = [
+    { key: "name", header: "Product", render: (r) => r.product_name },
+    { key: "units", header: "Units Purchased", align: "right", render: (r) => r.units_purchased },
+    {
+      key: "orders",
+      header: "Orders",
+      align: "right",
+      hideOnMobile: true,
+      render: (r) => r.orders,
+    },
+    { key: "spend", header: "Spend", align: "right", render: (r) => formatGHSCell(r.spend_ghs) },
+    {
+      key: "suppliers",
+      header: "Suppliers",
+      align: "right",
+      hideOnMobile: true,
+      render: (r) => r.suppliers,
+    },
+    {
+      key: "avg",
+      header: "Avg Unit Price",
+      align: "right",
+      hideOnMobile: true,
+      render: (r) => formatGHSCell(r.avg_unit_price_ghs),
+    },
+    {
+      key: "last",
+      header: "Last Purchased",
+      render: (r) => formatReportDateTime(r.last_purchased_at),
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={purchaseCategory}
+          onChange={(e) => setPurchaseCategory(e.target.value)}
+          aria-label="Purchase category"
+        >
+          <option value="">All categories</option>
+          <option value="nhis">NHIS</option>
+          <option value="cash_private">Cash / Private</option>
+          <option value="other">Other</option>
+          <option value="unclassified">Not classified</option>
+        </select>
+        <select
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+          value={wholesalerId}
+          onChange={(e) => setWholesalerId(e.target.value)}
+          aria-label="Supplier"
+        >
+          <option value="">All suppliers</option>
+          {suppliers.map((s) => (
+            <option key={s.wholesaler_id} value={s.wholesaler_id}>
+              {s.wholesaler_name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <ReportTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.product_id}
+        loading={loading}
+        error={error}
+        onRetry={load}
+        emptyMessage="No products purchased in this range yet."
+      />
     </div>
   );
 }

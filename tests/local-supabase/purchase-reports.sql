@@ -167,6 +167,63 @@ BEGIN
   r := zz.val_as(u_po, format(
     'SELECT (public.pharmacy_report_purchases_summary(%L, ''all'', NULL, NULL, %L)).total_value_ghs::text', good, other_w));
   PERFORM zz.check('summary scoped to Other Wholesale only matches ground truth', r::numeric = v_other_total, format('%s vs %s', r, v_other_total));
+
+  ------------------------------------------------------------------
+  -- pharmacy_report_products: buyer-side product analytics, grouped across every order regardless
+  -- of status (matches wholesaler_report_products' own convention). Same access control as every
+  -- other pharmacy_report_* RPC.
+  ------------------------------------------------------------------
+  r := zz.val_as(u_px, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'')', good));
+  PERFORM zz.check('pharmacy_report_products: a different pharmacy is denied', r LIKE 'ERR: You do not have access%', r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'')', good));
+  PERFORM zz.check('pharmacy_report_products: 3 distinct products purchased', r = '3', r);
+
+  r := zz.val_as(u_po, format(
+    $q$SELECT (units_purchased = 4 AND orders = 2 AND suppliers = 1)::text FROM public.pharmacy_report_products(%L, 'all') WHERE product_name = 'PR Metformin'$q$, good));
+  PERFORM zz.check('pharmacy_report_products: Metformin units=4 (2+2) across 2 orders, 1 supplier', r = 'true', r);
+
+  r := zz.val_as(u_po, format(
+    $q$SELECT (units_purchased = 2 AND orders = 2 AND suppliers = 1)::text FROM public.pharmacy_report_products(%L, 'all') WHERE product_name = 'PR Vitamin C'$q$, good));
+  PERFORM zz.check('pharmacy_report_products: Vitamin C units=2 (1+1) across 2 orders, 1 supplier', r = 'true', r);
+
+  r := zz.val_as(u_po, format(
+    $q$SELECT (units_purchased = 1 AND orders = 1 AND suppliers = 1)::text FROM public.pharmacy_report_products(%L, 'all') WHERE product_name = 'PR Amlodipine'$q$, good));
+  PERFORM zz.check('pharmacy_report_products: Amlodipine units=1 across 1 order, 1 supplier', r = 'true', r);
+
+  r := zz.val_as(u_po, format(
+    $q$SELECT spend_ghs::text FROM public.pharmacy_report_products(%L, 'all') WHERE product_name = 'PR Metformin'$q$, good));
+  PERFORM zz.check('pharmacy_report_products: Metformin spend matches ground truth (post-discount)',
+    r::numeric = (SELECT COALESCE(SUM(round(oi.unit_price_ghs * oi.quantity, 2)), 0)
+                  FROM public.order_items oi JOIN public.orders o ON o.id = oi.order_id
+                  WHERE o.pharmacy_id = good AND oi.product_name = 'PR Metformin'),
+    r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'', NULL, NULL, NULL, ''nhis'')', good));
+  PERFORM zz.check('pharmacy_report_products: NHIS filter isolates Metformin only (1 product)', r = '1', r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'', NULL, NULL, NULL, ''cash_private'')', good));
+  PERFORM zz.check('pharmacy_report_products: Cash filter isolates Vitamin C only (1 product)', r = '1', r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'', NULL, NULL, NULL, ''unclassified'')', good));
+  PERFORM zz.check('pharmacy_report_products: unclassified filter isolates Amlodipine only (1 product)', r = '1', r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'', NULL, NULL, NULL, ''mixed'')', good));
+  PERFORM zz.check('pharmacy_report_products: mixed is not a valid product-level filter value', r LIKE 'ERR: Invalid purchase category filter%', r);
+
+  r := zz.val_as(u_po, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'', NULL, NULL, %L)', good, other_w));
+  PERFORM zz.check('pharmacy_report_products: supplier filter isolates Amlodipine only (Other Wholesale)', r = '1', r);
+
+  r := zz.val_as(u_pm, format(
+    'SELECT count(*)::text FROM public.pharmacy_report_products(%L, ''all'')', good));
+  PERFORM zz.check('pharmacy_report_products: active manager can also read it', r = '3', r);
 END $$;
 
 SELECT count(*) FILTER (WHERE ok) AS pass, count(*) FILTER (WHERE NOT ok) AS fail FROM zz.results;
