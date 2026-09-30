@@ -43,10 +43,14 @@ DECLARE
   u_wo UUID := (SELECT id FROM zz.u WHERE k='w_owner');
   u_po UUID := (SELECT id FROM zz.u WHERE k='ph_owner');
   o_id UUID;
+  other_o_id UUID;
   r TEXT;
 BEGIN
   INSERT INTO public.orders(pharmacy_id, wholesaler_id, status, total_ghs, subtotal_ghs, discount_amount_ghs, payment_status, payment_method)
     VALUES (good, alpha, 'accepted', 25, 25, 0, 'unpaid', 'cod') RETURNING id INTO o_id;
+  -- An order entirely between the OTHER wholesaler/pharmacy pair, for the cross-tenant check.
+  INSERT INTO public.orders(pharmacy_id, wholesaler_id, status, total_ghs, subtotal_ghs, discount_amount_ghs, payment_status, payment_method)
+    VALUES (other_ph, other_wh, 'accepted', 25, 25, 0, 'unpaid', 'cod') RETURNING id INTO other_o_id;
 
   ------------------------------------------------------------------
   -- 1. The role is assignable on both business types (no business-type-restriction trigger
@@ -62,14 +66,19 @@ BEGIN
     public.get_staff_role(u_pac, good) = 'accountant');
 
   ------------------------------------------------------------------
-  -- 2. can_act_for_business: accountant is in the read (default) tier, not process or manage.
+  -- 2. can_act_for_business tiers, probed indirectly through real tier-gated RPCs -- the function
+  --    itself is REVOKE ALL'd from authenticated (deliberately, only callable from inside other
+  --    SECURITY DEFINER functions), so a direct SELECT of it as accountant always fails with
+  --    "permission denied for function can_act_for_business" regardless of tier; that's a
+  --    property of every role, not a signal about accountant specifically, and calling it that
+  --    way here would just test the lockdown, not the tier membership.
   ------------------------------------------------------------------
-  r := zz.val_as(u_wac, format('SELECT public.can_act_for_business(%L, ''read'')::text', alpha));
-  PERFORM zz.check('accountant passes the read tier', r = 'true', r);
-  r := zz.val_as(u_wac, format('SELECT public.can_act_for_business(%L, ''process'')::text', alpha));
-  PERFORM zz.check('accountant does NOT pass the process tier', r = 'false', r);
-  r := zz.val_as(u_wac, format('SELECT public.can_act_for_business(%L, ''manage'')::text', alpha));
-  PERFORM zz.check('accountant does NOT pass the manage tier', r = 'false', r);
+  r := zz.val_as(u_wac, format('SELECT (public.get_order_delivery(%L) IS NOT NULL)::text', o_id));
+  PERFORM zz.check('accountant passes the read tier (via get_order_delivery)', r = 'true', r);
+  r := zz.val_as(u_wac, format('SELECT public.record_order_dispatch_details(%L, ''Test Driver'', NULL, NULL, NULL)::text', o_id));
+  PERFORM zz.check('accountant does NOT pass the process tier (record_order_dispatch_details)', r LIKE 'ERR%', r);
+  r := zz.val_as(u_wac, format('SELECT public.record_credit_adjustment(%L, %L, NULL, ''adjustment'', ''debit'', 1, ''probe'')::text', alpha, good));
+  PERFORM zz.check('accountant does NOT pass the manage tier (record_credit_adjustment)', r LIKE 'ERR%', r);
 
   ------------------------------------------------------------------
   -- 3. Orders visibility: role-agnostic is_business_staff SELECT policies already cover
@@ -98,20 +107,23 @@ BEGIN
 
   ------------------------------------------------------------------
   -- 6. Cross-tenant isolation: an accountant on one business cannot read another business's
-  --    orders, same as every other staff role.
+  --    orders, same as every other staff role. Uses a fresh order actually owned by the other
+  --    wholesaler/pharmacy (get_order_delivery checks both sides of the SPECIFIC order, so probing
+  --    it with an unrelated business id proves nothing -- it must be an order that business
+  --    genuinely can't reach).
   ------------------------------------------------------------------
-  r := zz.val_as(u_wac, format('SELECT can_act_for_business(%L, ''read'')::text', other_wh));
-  PERFORM zz.check('Alpha''s accountant has no access to a different wholesaler', r = 'false', r);
-  r := zz.val_as(u_pac, format('SELECT can_act_for_business(%L, ''read'')::text', other_ph));
-  PERFORM zz.check('Good Pharmacy''s accountant has no access to a different pharmacy', r = 'false', r);
+  r := zz.val_as(u_wac, format('SELECT (public.get_order_delivery(%L) IS NOT NULL)::text', other_o_id));
+  PERFORM zz.check('Alpha''s accountant has no access to a different wholesaler''s order', r LIKE 'ERR%', r);
+  r := zz.val_as(u_pac, format('SELECT (public.get_order_delivery(%L) IS NOT NULL)::text', other_o_id));
+  PERFORM zz.check('Good Pharmacy''s accountant has no access to a different pharmacy''s order', r LIKE 'ERR%', r);
 
   ------------------------------------------------------------------
   -- 7. Regression: owner still passes every tier; unrelated roles are unaffected by this change.
   ------------------------------------------------------------------
-  r := zz.val_as(u_wo, format('SELECT public.can_act_for_business(%L, ''manage'')::text', alpha));
-  PERFORM zz.check('regression: wholesaler owner still passes manage tier', r = 'true', r);
-  r := zz.val_as(u_po, format('SELECT public.can_act_for_business(%L, ''read'')::text', good));
-  PERFORM zz.check('regression: pharmacy owner still passes read tier', r = 'true', r);
+  r := zz.val_as(u_wo, format('SELECT public.record_credit_adjustment(%L, %L, NULL, ''adjustment'', ''debit'', 1, ''owner probe'')::text', alpha, good));
+  PERFORM zz.check('regression: wholesaler owner still passes the manage tier', r NOT LIKE 'ERR%', r);
+  r := zz.val_as(u_po, format('SELECT (public.get_order_delivery(%L) IS NOT NULL)::text', o_id));
+  PERFORM zz.check('regression: pharmacy owner still passes the read tier', r = 'true', r);
 END $$;
 
 SELECT count(*) FILTER (WHERE ok) AS pass, count(*) FILTER (WHERE NOT ok) AS fail FROM zz.results;
