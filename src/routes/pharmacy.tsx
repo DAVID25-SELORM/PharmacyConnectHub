@@ -68,6 +68,7 @@ import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { RequestReturnDialog } from "@/components/returns/RequestReturnDialog";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { PharmacyStatements } from "@/components/statements/PharmacyStatements";
+import { CreditPayablesPanel } from "@/components/pharmacy/CreditPayablesPanel";
 import { ReorderReviewDialog } from "@/components/pharmacy/ReorderReviewDialog";
 import { useReorderLists, type ReorderListsApi } from "@/hooks/use-reorder-lists";
 import {
@@ -836,7 +837,7 @@ function PharmacyDashboardContent() {
               typeof window !== "undefined"
                 ? new URLSearchParams(window.location.search).get("tab")
                 : null;
-            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements"
+            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements" || tab === "credit"
               ? tab
               : "catalog";
           })()}
@@ -851,6 +852,7 @@ function PharmacyDashboardContent() {
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="returns">Returns</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
+            <TabsTrigger value="credit">Credit</TabsTrigger>
           </TabsList>
 
           <TabsContent value="catalog">
@@ -888,6 +890,9 @@ function PharmacyDashboardContent() {
           </TabsContent>
           <TabsContent value="statements">
             <PharmacyStatements pharmacyId={business.id} wholesalers={approvedWholesalers} />
+          </TabsContent>
+          <TabsContent value="credit">
+            <CreditPayablesPanel pharmacyId={business.id} />
           </TabsContent>
           <TabsContent value="orders">
             <OrdersView

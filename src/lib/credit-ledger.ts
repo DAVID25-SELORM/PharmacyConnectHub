@@ -26,6 +26,57 @@ export type CreditInvoice = {
   status: CreditInvoiceStatus;
 };
 
+export type CreditAging = {
+  current: number;
+  days_1_30: number;
+  days_31_60: number;
+  days_61_90: number;
+  days_90_plus: number;
+};
+
+export type WholesalerArSummary = {
+  total_credit_sales_ghs: number;
+  total_outstanding_ghs: number;
+  due_within_7_days_ghs: number;
+  due_within_30_days_ghs: number;
+  overdue_ghs: number;
+  collected_this_month_ghs: number;
+  invoice_count: number;
+  outstanding_invoice_count: number;
+  aging: CreditAging;
+  outstanding_by_pharmacy: Array<{
+    pharmacy_id: string;
+    pharmacy_name: string;
+    outstanding_ghs: number;
+    invoice_count: number;
+  }>;
+};
+
+export type PharmacyApSummary = {
+  total_supplier_debt_ghs: number;
+  due_this_week_ghs: number;
+  due_this_month_ghs: number;
+  overdue_ghs: number;
+  paid_this_month_ghs: number;
+  invoice_count: number;
+  outstanding_invoice_count: number;
+  aging: CreditAging;
+  outstanding_by_wholesaler: Array<{
+    wholesaler_id: string;
+    wholesaler_name: string;
+    outstanding_ghs: number;
+    invoice_count: number;
+  }>;
+};
+
+export const AGING_BUCKET_LABELS: Array<{ key: keyof CreditAging; label: string }> = [
+  { key: "current", label: "Current" },
+  { key: "days_1_30", label: "1-30 days" },
+  { key: "days_31_60", label: "31-60 days" },
+  { key: "days_61_90", label: "61-90 days" },
+  { key: "days_90_plus", label: "90+ days" },
+];
+
 export const CREDIT_INVOICE_STATUS_LABELS: Record<CreditInvoiceStatus, string> = {
   not_due: "Not due",
   partially_paid: "Partially paid",

@@ -18,6 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { formatReportDate, formatReportDateTime } from "@/lib/reports";
+import { ReportKpis, type ReportKpi } from "@/components/reports/ReportKpis";
+import { CreditAgingBar } from "@/components/credit/CreditAgingBar";
 import {
   CREDIT_INVOICE_STATUS_LABELS,
   CREDIT_INVOICE_STATUS_STYLES,
@@ -27,6 +29,7 @@ import {
   validatePaymentHeader,
   type CreditInvoice,
   type CreditInvoiceStatus,
+  type WholesalerArSummary,
 } from "@/lib/credit-ledger";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,6 +60,73 @@ function StatusBadge({ status }: { status: CreditInvoiceStatus }) {
     <Badge variant="secondary" className={`border ${CREDIT_INVOICE_STATUS_STYLES[status]}`}>
       {CREDIT_INVOICE_STATUS_LABELS[status]}
     </Badge>
+  );
+}
+
+/** Accounts Receivable summary: KPIs, aging buckets, outstanding by pharmacy. */
+function ArSummaryCard({ wholesalerId }: { wholesalerId: string }) {
+  const [summary, setSummary] = useState<WholesalerArSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void rpc("wholesaler_ar_summary", { p_wholesaler_id: wholesalerId }).then(
+      ({ data }: { data: WholesalerArSummary | null }) => {
+        if (cancelled) return;
+        setSummary(data ?? null);
+        setLoading(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [wholesalerId]);
+
+  const kpis: ReportKpi[] = [
+    { label: "Total Outstanding", value: summary ? formatGHS(summary.total_outstanding_ghs) : "—" },
+    { label: "Due Within 7 Days", value: summary ? formatGHS(summary.due_within_7_days_ghs) : "—" },
+    { label: "Due Within 30 Days", value: summary ? formatGHS(summary.due_within_30_days_ghs) : "—" },
+    { label: "Overdue", value: summary ? formatGHS(summary.overdue_ghs) : "—" },
+    { label: "Collected This Month", value: summary ? formatGHS(summary.collected_this_month_ghs) : "—" },
+  ];
+
+  return (
+    <Card className="p-5">
+      <h2 className="font-display text-xl font-bold">Accounts receivable</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        What you're owed across every pharmacy you extend credit to.
+      </p>
+      <div className="mt-4">
+        <ReportKpis items={kpis} loading={loading} />
+      </div>
+      {!loading && summary && (
+        <>
+          <div className="mt-5">
+            <h3 className="text-sm font-medium text-muted-foreground">Aging</h3>
+            <div className="mt-2">
+              <CreditAgingBar aging={summary.aging} />
+            </div>
+          </div>
+          {summary.outstanding_by_pharmacy.length > 0 && (
+            <div className="mt-5">
+              <h3 className="text-sm font-medium text-muted-foreground">Outstanding by pharmacy</h3>
+              <ul className="mt-2 divide-y divide-border rounded-xl border border-border text-sm">
+                {summary.outstanding_by_pharmacy.map((row) => (
+                  <li key={row.pharmacy_id} className="flex items-center justify-between gap-3 p-3">
+                    <span>{row.pharmacy_name}</span>
+                    <span className="text-muted-foreground">
+                      {formatGHS(row.outstanding_ghs)} · {row.invoice_count} invoice
+                      {row.invoice_count === 1 ? "" : "s"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -143,7 +213,9 @@ export function CreditPaymentsPanel({
   };
 
   return (
-    <Card className="p-5">
+    <div className="space-y-6">
+      <ArSummaryCard wholesalerId={wholesalerId} />
+      <Card className="p-5">
       <div className="flex items-center gap-2">
         <Receipt className="h-5 w-5 text-primary" aria-hidden="true" />
         <h2 className="font-display text-xl font-bold">Credit invoices</h2>
@@ -295,7 +367,8 @@ export function CreditPaymentsPanel({
           onConfirm={(reason) => void setDispute(false, reason)}
         />
       )}
-    </Card>
+      </Card>
+    </div>
   );
 }
 
