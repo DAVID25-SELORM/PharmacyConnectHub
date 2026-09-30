@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { z } from "zod";
 import logo from "@/assets/logo.jpg";
 import { supabase } from "@/integrations/supabase/client";
 import { GH_REGIONS } from "@/lib/format";
-import { formatGhanaPhone, isValidGhanaPhone, normalizeGhanaPhone } from "@/lib/ghana-phone";
+import { formatGhanaPhone } from "@/lib/ghana-phone";
+import { getSignupSchema, type SignupForm } from "@/lib/signup-validation";
 import { buildSignupPayload } from "@/lib/signup-payload";
 import { getAppUrl } from "@/lib/site-url";
 
@@ -33,39 +33,6 @@ export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
-const schema = z.object({
-  ownerFullName: z.string().trim().min(2, "Owner name is required").max(100),
-  ownerPhone: z
-    .string()
-    .trim()
-    .min(7, "Owner phone is required")
-    .max(20)
-    .refine(isValidGhanaPhone, "Enter a valid Ghana phone number"),
-  businessName: z.string().trim().min(2, "Business name is required").max(150),
-  licenseNumber: z.string().trim().min(3, "License # is required").max(50),
-  businessPhone: z
-    .string()
-    .trim()
-    .min(7, "Business phone is required")
-    .max(20)
-    .refine(isValidGhanaPhone, "Enter a valid Ghana phone number"),
-  businessEmail: z.string().trim().email("Enter a valid public business email").max(255),
-  city: z.string().trim().min(2, "City is required").max(60),
-  region: z.string().min(2, "Region is required"),
-  gpsAddress: z.string().trim().max(160),
-  locationDescription: z.string().trim().max(240),
-  workingHours: z.string().trim().max(120),
-  ownerEmail: z.string().trim().email("Enter a valid owner email").max(255),
-  password: z.string().min(8, "At least 8 characters").max(100),
-  ownerIsSuperintendent: z.boolean(),
-  superintendentName: z.string().trim().max(100),
-  superintendentPhone: z.string().trim().max(20),
-  superintendentEmail: z.string().trim().max(255),
-});
-
-const emailSchema = z.string().trim().email("Enter a valid email address");
-
-type SignupForm = z.infer<typeof schema>;
 type TextField = keyof SignupForm;
 
 function SignupPage() {
@@ -121,24 +88,14 @@ function SignupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const parsed = schema.safeParse(form);
+    const parsed = getSignupSchema(role).safeParse(form);
     if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Check the form");
-      return;
-    }
-
-    if (role === "pharmacy" && superintendentDetails.name.trim().length < 2) {
-      toast.error("Superintendent pharmacist name is required");
-      return;
-    }
-
-    if (role === "pharmacy" && !isValidGhanaPhone(superintendentDetails.phone)) {
-      toast.error("Enter a valid superintendent pharmacist phone number");
-      return;
-    }
-
-    if (role === "pharmacy" && !emailSchema.safeParse(superintendentDetails.email).success) {
-      toast.error("Enter a valid superintendent pharmacist email address");
+      const issue = parsed.error.issues[0];
+      const field = String(issue?.path[0] ?? "");
+      const input = document.getElementById(field === "licenseNumber" ? "license" : field);
+      const label = document.querySelector(`label[for="${input?.id}"]`)?.textContent;
+      toast.error(label ? `${label}: ${issue?.message}` : (issue?.message ?? "Check the form"));
+      input?.focus();
       return;
     }
 
@@ -146,7 +103,7 @@ function SignupPage() {
 
     try {
       const redirectUrl = getAppUrl("/dashboard");
-      const signupPayload = buildSignupPayload(form, role);
+      const signupPayload = buildSignupPayload(parsed.data, role);
 
       const { data, error } = await supabase.auth.signUp({
         email: signupPayload.email,
@@ -177,7 +134,9 @@ function SignupPage() {
       // and email-confirmed signups land in the same workspace shape.
       // If session exists Supabase skipped email confirmation - go straight to dashboard
       if (data.session) {
-        toast.success("Account created! Complete your business verification to start using the DrugXOne marketplace.");
+        toast.success(
+          "Account created! Complete your business verification to start using the DrugXOne marketplace.",
+        );
         navigate({ to: "/dashboard" });
       } else {
         // Email confirmation is enabled - prompt the user to check inbox
