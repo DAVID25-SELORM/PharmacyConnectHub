@@ -248,6 +248,22 @@ BEGIN
   r := zz.val_as((SELECT id FROM zz.u WHERE k='w_other'), format(
     'SELECT public.record_credit_adjustment(%L, %L, %L, ''adjustment'', ''debit'', 5, ''test'')::text', alpha, good, o1));
   PERFORM zz.check('an unrelated wholesaler cannot record an adjustment for Alpha''s credit line', r LIKE 'ERR%', r);
+
+  ------------------------------------------------------------------
+  -- 14. list_credit_invoices: the browsable list the payment-recording UI is built on. By this
+  --     point o1/o3/o4 are paid, o2 is written off, and the checkout-hook order (step 12) is the
+  --     only one still outstanding -- 5 credit invoices total for this wholesaler/pharmacy pair.
+  ------------------------------------------------------------------
+  r := zz.val_as(u_wo, format('SELECT count(*)::text FROM public.list_credit_invoices(%L, NULL, NULL)', alpha));
+  PERFORM zz.check('list_credit_invoices(wholesaler, all statuses) returns every credit invoice', r = '5', r);
+  r := zz.val_as(u_wo, format('SELECT count(*)::text FROM public.list_credit_invoices(%L, NULL, ''outstanding'')', alpha));
+  PERFORM zz.check('list_credit_invoices(wholesaler, outstanding) returns only the unsettled one', r = '1', r);
+  r := zz.val_as(u_po, format('SELECT count(*)::text FROM public.list_credit_invoices(NULL, %L, NULL)', good));
+  PERFORM zz.check('the pharmacy can list its own credit invoices from the other side', r = '5', r);
+  r := zz.val_as((SELECT id FROM zz.u WHERE k='w_other'), format('SELECT count(*)::text FROM public.list_credit_invoices(%L, NULL, NULL)', alpha));
+  PERFORM zz.check('an unrelated wholesaler cannot list Alpha''s credit invoices', r LIKE 'ERR%', r);
+  r := zz.val_as(u_wo, 'SELECT count(*)::text FROM public.list_credit_invoices(NULL, NULL, NULL)');
+  PERFORM zz.check('list_credit_invoices requires at least one business id', r LIKE 'ERR%', r);
 END $$;
 
 SELECT count(*) FILTER (WHERE ok) AS pass, count(*) FILTER (WHERE NOT ok) AS fail FROM zz.results;

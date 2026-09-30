@@ -63,6 +63,7 @@ import { announceNotificationsChanged } from "@/lib/notifications";
 import { OrderTermsCard } from "@/components/wholesaler/OrderTermsCard";
 import { ProductDiscountsCard } from "@/components/wholesaler/ProductDiscountsCard";
 import { CreditTermsCard } from "@/components/wholesaler/CreditTermsCard";
+import { CreditPaymentsPanel } from "@/components/wholesaler/CreditPaymentsPanel";
 import { BatchesPanel } from "@/components/batches/BatchesPanel";
 import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
@@ -310,6 +311,14 @@ function WholesalerDashboardContent() {
   // manager/cashier) keeps doing both, unchanged.
   const canUpdateStatus = business.staff_role !== "assistant" && business.staff_role !== "finance";
   const canConfirmPayment = business.staff_role !== "assistant" && business.staff_role !== "warehouse";
+  // Matches record_credit_payment's own permission check exactly (owner/manager/finance/
+  // accountant) -- cashier/warehouse/assistant never see the tab that would let them try.
+  const canRecordCreditPayment =
+    business.staff_role === "owner" ||
+    business.staff_role === "manager" ||
+    business.staff_role === "finance" ||
+    business.staff_role === "accountant";
+  const canDisputeCreditInvoice = canRecordCreditPayment && business.staff_role !== "finance";
   const pending = orders.filter((o) => o.status === "pending").length;
   const revenue = orders
     .filter((o) => o.status === "delivered")
@@ -383,6 +392,7 @@ function WholesalerDashboardContent() {
             {canUpdateStatus && <TabsTrigger value="batches">Batches</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="returns">Returns</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
+            {canRecordCreditPayment && <TabsTrigger value="credit">Credit</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -412,6 +422,15 @@ function WholesalerDashboardContent() {
           {canUpdateStatus && <TabsContent value="batches"><BatchesPanel businessId={business.id} canManage={canManageProducts} products={products.map((p) => ({ id: p.id, name: p.name }))} /></TabsContent>}
           {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canUpdateStatus} canManage={canManageProducts} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
+          {canRecordCreditPayment && (
+            <TabsContent value="credit">
+              <CreditPaymentsPanel
+                wholesalerId={business.id}
+                canManage={canManageProducts}
+                canDispute={canDisputeCreditInvoice}
+              />
+            </TabsContent>
+          )}
           {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><ProductDiscountsCard wholesalerId={business.id} products={products.map((p) => ({ id: p.id, name: p.name }))} /><CreditTermsCard wholesalerId={business.id} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}
         </Tabs>
       </main>
