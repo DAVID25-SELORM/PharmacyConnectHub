@@ -12,6 +12,7 @@ import {
   Package,
   PackageSearch,
   Pill,
+  ScrollText,
   ShieldAlert,
   ShieldCheck,
   Users,
@@ -205,7 +206,12 @@ export function DashboardHeader({
   const reportsRoute =
     business?.type === "wholesaler" ? "/wholesaler/reports" : "/pharmacy/reports";
   const rfqsRoute = business?.type === "wholesaler" ? "/wholesaler/rfqs" : "/pharmacy/rfqs";
+  const auditRoute = business?.type === "wholesaler" ? "/wholesaler/audit" : "/pharmacy/audit";
   const showInventoryLink = business?.type === "pharmacy";
+  const showAuditLink =
+    business?.staff_role === "owner" ||
+    business?.staff_role === "manager" ||
+    business?.staff_role === "accountant";
   const workspaceLabel = business?.type === "wholesaler" ? "Workspace" : "Browse";
   // The switcher stays available without the full nav so a user stuck on a pending
   // workspace's onboarding page can still switch to an approved one.
@@ -319,6 +325,15 @@ export function DashboardHeader({
                 >
                   <PackageSearch className="h-4 w-4 inline mr-2" />
                   Inventory
+                </Link>
+              )}
+              {showAuditLink && (
+                <Link
+                  to={auditRoute}
+                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+                >
+                  <ScrollText className="h-4 w-4 inline mr-2" />
+                  Audit log
                 </Link>
               )}
               {isAdmin && (

@@ -25,9 +25,11 @@ import { Route as AddBusinessRouteImport } from './routes/add-business'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WholesalerRfqsRouteImport } from './routes/wholesaler_.rfqs'
 import { Route as WholesalerReportsRouteImport } from './routes/wholesaler_.reports'
+import { Route as WholesalerAuditRouteImport } from './routes/wholesaler_.audit'
 import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
 import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
 import { Route as PharmacyInventoryRouteImport } from './routes/pharmacy_.inventory'
+import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
@@ -113,6 +115,11 @@ const WholesalerReportsRoute = WholesalerReportsRouteImport.update({
   path: '/wholesaler/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WholesalerAuditRoute = WholesalerAuditRouteImport.update({
+  id: '/wholesaler_/audit',
+  path: '/wholesaler/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PharmacyRfqsRoute = PharmacyRfqsRouteImport.update({
   id: '/pharmacy_/rfqs',
   path: '/pharmacy/rfqs',
@@ -126,6 +133,11 @@ const PharmacyReportsRoute = PharmacyReportsRouteImport.update({
 const PharmacyInventoryRoute = PharmacyInventoryRouteImport.update({
   id: '/pharmacy_/inventory',
   path: '/pharmacy/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PharmacyAuditRoute = PharmacyAuditRouteImport.update({
+  id: '/pharmacy_/audit',
+  path: '/pharmacy/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminVerificationRoute = AdminVerificationRouteImport.update({
@@ -168,9 +180,11 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
+  '/wholesaler/audit': typeof WholesalerAuditRoute
   '/wholesaler/reports': typeof WholesalerReportsRoute
   '/wholesaler/rfqs': typeof WholesalerRfqsRoute
 }
@@ -193,9 +207,11 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
+  '/wholesaler/audit': typeof WholesalerAuditRoute
   '/wholesaler/reports': typeof WholesalerReportsRoute
   '/wholesaler/rfqs': typeof WholesalerRfqsRoute
 }
@@ -219,9 +235,11 @@ export interface FileRoutesById {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pharmacy_/audit': typeof PharmacyAuditRoute
   '/pharmacy_/inventory': typeof PharmacyInventoryRoute
   '/pharmacy_/reports': typeof PharmacyReportsRoute
   '/pharmacy_/rfqs': typeof PharmacyRfqsRoute
+  '/wholesaler_/audit': typeof WholesalerAuditRoute
   '/wholesaler_/reports': typeof WholesalerReportsRoute
   '/wholesaler_/rfqs': typeof WholesalerRfqsRoute
 }
@@ -246,9 +264,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pharmacy/audit'
     | '/pharmacy/inventory'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
+    | '/wholesaler/audit'
     | '/wholesaler/reports'
     | '/wholesaler/rfqs'
   fileRoutesByTo: FileRoutesByTo
@@ -271,9 +291,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pharmacy/audit'
     | '/pharmacy/inventory'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
+    | '/wholesaler/audit'
     | '/wholesaler/reports'
     | '/wholesaler/rfqs'
   id:
@@ -296,9 +318,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pharmacy_/audit'
     | '/pharmacy_/inventory'
     | '/pharmacy_/reports'
     | '/pharmacy_/rfqs'
+    | '/wholesaler_/audit'
     | '/wholesaler_/reports'
     | '/wholesaler_/rfqs'
   fileRoutesById: FileRoutesById
@@ -318,9 +342,11 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
   WholesalerRoute: typeof WholesalerRoute
+  PharmacyAuditRoute: typeof PharmacyAuditRoute
   PharmacyInventoryRoute: typeof PharmacyInventoryRoute
   PharmacyReportsRoute: typeof PharmacyReportsRoute
   PharmacyRfqsRoute: typeof PharmacyRfqsRoute
+  WholesalerAuditRoute: typeof WholesalerAuditRoute
   WholesalerReportsRoute: typeof WholesalerReportsRoute
   WholesalerRfqsRoute: typeof WholesalerRfqsRoute
 }
@@ -439,6 +465,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WholesalerReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wholesaler_/audit': {
+      id: '/wholesaler_/audit'
+      path: '/wholesaler/audit'
+      fullPath: '/wholesaler/audit'
+      preLoaderRoute: typeof WholesalerAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pharmacy_/rfqs': {
       id: '/pharmacy_/rfqs'
       path: '/pharmacy/rfqs'
@@ -458,6 +491,13 @@ declare module '@tanstack/react-router' {
       path: '/pharmacy/inventory'
       fullPath: '/pharmacy/inventory'
       preLoaderRoute: typeof PharmacyInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pharmacy_/audit': {
+      id: '/pharmacy_/audit'
+      path: '/pharmacy/audit'
+      fullPath: '/pharmacy/audit'
+      preLoaderRoute: typeof PharmacyAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/verification': {
@@ -522,9 +562,11 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
   WholesalerRoute: WholesalerRoute,
+  PharmacyAuditRoute: PharmacyAuditRoute,
   PharmacyInventoryRoute: PharmacyInventoryRoute,
   PharmacyReportsRoute: PharmacyReportsRoute,
   PharmacyRfqsRoute: PharmacyRfqsRoute,
+  WholesalerAuditRoute: WholesalerAuditRoute,
   WholesalerReportsRoute: WholesalerReportsRoute,
   WholesalerRfqsRoute: WholesalerRfqsRoute,
 }
