@@ -1,3 +1,4 @@
+import { reviewBusinessEvidence, type EvidenceDocument } from "@/lib/review-business-evidence";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, Search } from "lucide-react";
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/admin/verification")({
 });
 
 const PAGE_SIZE = 25;
-type DocRow = { id: string; doc_type: string; storage_path: string; uploaded_at: string };
+type DocRow = EvidenceDocument;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rpc = (name: string, args: Record<string, unknown>) => (supabase as any).rpc(name, args);
@@ -51,12 +52,17 @@ function ReviewDialog({
   onDone: () => void;
 }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [docsReady, setDocsReady] = useState(false);
+  const [docsError, setDocsError] = useState(false);
+  const [docsRevision, setDocsRevision] = useState(0);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setReason("");
     setDocs([]);
+    setDocsReady(false);
+    setDocsError(false);
     if (!row) return;
     let cancelled = false;
     void supabase
@@ -64,13 +70,16 @@ function ReviewDialog({
       .select("*")
       .eq("business_id", row.business_id)
       .order("uploaded_at", { ascending: false })
-      .then(({ data }) => {
-        if (!cancelled) setDocs((data as DocRow[]) ?? []);
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        setDocs((data as unknown as DocRow[]) ?? []);
+        setDocsReady(!error);
+        setDocsError(Boolean(error));
       });
     return () => {
       cancelled = true;
     };
-  }, [row]);
+  }, [row, docsRevision]);
 
   const openDoc = async (path: string) => {
     const { data, error } = await supabase.storage.from("licenses").createSignedUrl(path, 300);
@@ -88,14 +97,11 @@ function ReviewDialog({
     )
       return;
     setBusy(true);
-    const { error } = await supabase
-      .from("businesses")
-      .update({
-        verification_status: "approved",
-        verified_at: new Date().toISOString(),
-        rejection_reason: null,
-      })
-      .eq("id", row.business_id);
+    const { error } = await reviewBusinessEvidence(
+      row.business_id,
+      "approved",
+      docsReady ? docs : null,
+    );
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success(`${row.business_name} approved`);
@@ -107,10 +113,12 @@ function ReviewDialog({
     if (!row) return;
     if (!reason.trim()) return toast.error("Tell the owner what needs correcting.");
     setBusy(true);
-    const { error } = await supabase
-      .from("businesses")
-      .update({ verification_status: "rejected", rejection_reason: reason.trim() })
-      .eq("id", row.business_id);
+    const { error } = await reviewBusinessEvidence(
+      row.business_id,
+      "rejected",
+      docsReady ? docs : null,
+      reason.trim(),
+    );
     setBusy(false);
     if (error) return toast.error(error.message);
     toast.success(`Correction requested from ${row.business_name}`);
@@ -135,8 +143,23 @@ function ReviewDialog({
             <div className="text-sm">
               <div className="font-medium">
                 Documents: {row.docs_uploaded} of {row.docs_required} required
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => {
+                    setDocsReady(false);
+                    setDocsRevision((value) => value + 1);
+                  }}
+                >
+                  Reload documents
+                </Button>
               </div>
-              {docs.length === 0 ? (
+              {docsError ? (
+                <p role="alert">Could not load documents. Reload before reviewing.</p>
+              ) : !docsReady ? (
+                <p role="status">Loading documents...</p>
+              ) : docs.length === 0 ? (
                 <p className="mt-1 text-muted-foreground">No documents uploaded.</p>
               ) : (
                 <ul className="mt-2 divide-y divide-border rounded-xl border border-border">
@@ -183,10 +206,14 @@ function ReviewDialog({
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-          <Button variant="outline" disabled={busy} onClick={() => void requestCorrection()}>
+          <Button
+            variant="outline"
+            disabled={busy || !docsReady}
+            onClick={() => void requestCorrection()}
+          >
             Request correction
           </Button>
-          <Button variant="hero" disabled={busy} onClick={() => void approve()}>
+          <Button variant="hero" disabled={busy || !docsReady} onClick={() => void approve()}>
             Approve
           </Button>
         </DialogFooter>

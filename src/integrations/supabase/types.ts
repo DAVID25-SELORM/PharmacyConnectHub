@@ -713,6 +713,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      review_business_evidence: {
+        Args: {
+          _business_id: string;
+          _status: "approved" | "rejected";
+          _versions: string[];
+          _reason: string | null;
+        };
+        Returns: undefined;
+      };
       add_business_staff_by_email: {
         Args: {
           _business_id: string;

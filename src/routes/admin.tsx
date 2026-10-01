@@ -1,3 +1,4 @@
+import { reviewBusinessEvidence, type EvidenceDocument } from "@/lib/review-business-evidence";
 import { Outlet, createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
@@ -74,12 +75,7 @@ type Biz = {
   owner_id: string;
 };
 
-type DocRow = {
-  id: string;
-  doc_type: string;
-  storage_path: string;
-  uploaded_at: string;
-};
+type DocRow = EvidenceDocument;
 
 type PrivateContact = {
   business_id: string;
@@ -281,7 +277,6 @@ function AdminPanel() {
       setPrivateContactsByBusinessId({});
       setIncompleteVerificationRecords([]);
     }
-
   };
 
   // KPIs come from database aggregates, not from a client-side sample.
@@ -405,7 +400,9 @@ function AdminPanel() {
             <KpiCard
               label="Wholesalers"
               value={summary ? String(summary.wholesalers.total) : "—"}
-              helper={summary ? summary.wholesalers.approved + " approved" : "Registered wholesalers"}
+              helper={
+                summary ? summary.wholesalers.approved + " approved" : "Registered wholesalers"
+              }
               icon={<Building2 className="h-4 w-4 text-accent" />}
               loading={!summary && !summaryError}
             />
@@ -504,7 +501,13 @@ function AdminPanel() {
                     <div className="text-xs text-muted-foreground">{item.helper}</div>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <Link to={item.label === "Incomplete verification records" ? "/admin" : "/admin/verification"}>
+                    <Link
+                      to={
+                        item.label === "Incomplete verification records"
+                          ? "/admin"
+                          : "/admin/verification"
+                      }
+                    >
                       Review
                     </Link>
                   </Button>
@@ -718,6 +721,9 @@ function BusinessCard({
   reload: () => Promise<void>;
 }) {
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [docsReady, setDocsReady] = useState(false);
+  const [docsError, setDocsError] = useState(false);
+  const [docsRevision, setDocsRevision] = useState(0);
   const [privateContact, setPrivateContact] = useState<PrivateContact | null>(
     initialPrivateContact,
   );
@@ -730,6 +736,8 @@ function BusinessCard({
 
   useEffect(() => {
     let cancelled = false;
+    setDocsReady(false);
+    setDocsError(false);
 
     void supabase
       .from("license_documents")
@@ -741,13 +749,15 @@ function BusinessCard({
           return;
         }
 
-        setDocs((docsResult.data as DocRow[]) ?? []);
+        setDocs((docsResult.data as unknown as DocRow[]) ?? []);
+        setDocsReady(!docsResult.error);
+        setDocsError(Boolean(docsResult.error));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [biz.id]);
+  }, [biz.id, docsRevision]);
 
   useEffect(() => {
     setPrivateContact(initialPrivateContact);
@@ -770,14 +780,7 @@ function BusinessCard({
   const approve = async () => {
     setBusy(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({
-        verification_status: "approved",
-        verified_at: new Date().toISOString(),
-        rejection_reason: null,
-      })
-      .eq("id", biz.id);
+    const { error } = await reviewBusinessEvidence(biz.id, "approved", docsReady ? docs : null);
 
     setBusy(false);
 
@@ -800,10 +803,12 @@ function BusinessCard({
 
     setBusy(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({ verification_status: "rejected", rejection_reason: reason })
-      .eq("id", biz.id);
+    const { error } = await reviewBusinessEvidence(
+      biz.id,
+      "rejected",
+      docsReady ? docs : null,
+      reason,
+    );
 
     setBusy(false);
 
@@ -1046,7 +1051,7 @@ function BusinessCard({
               >
                 <ShieldX className="h-4 w-4" /> Reject
               </Button>
-              <Button variant="hero" size="sm" onClick={approve} disabled={busy}>
+              <Button variant="hero" size="sm" onClick={approve} disabled={busy || !docsReady}>
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -1064,7 +1069,7 @@ function BusinessCard({
           )}
 
           {biz.verification_status === "rejected" && (
-            <Button variant="hero" size="sm" onClick={approve} disabled={busy}>
+            <Button variant="hero" size="sm" onClick={approve} disabled={busy || !docsReady}>
               Re-approve
             </Button>
           )}
@@ -1073,7 +1078,22 @@ function BusinessCard({
 
       <div className="mt-4 border-t border-border pt-4">
         <div className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Documents</div>
-        {docs.length === 0 ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            setDocsReady(false);
+            setDocsRevision((value) => value + 1);
+          }}
+        >
+          Reload documents
+        </Button>
+        {docsError ? (
+          <p role="alert">Could not load documents. Reload before reviewing.</p>
+        ) : !docsReady ? (
+          <p role="status">Loading documents...</p>
+        ) : docs.length === 0 ? (
           <div className="text-sm italic text-muted-foreground">No documents uploaded yet.</div>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -1114,7 +1134,7 @@ function BusinessCard({
             <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
               Cancel
             </Button>
-            <Button variant="hero" onClick={reject} disabled={busy}>
+            <Button variant="hero" onClick={reject} disabled={busy || !docsReady}>
               Confirm reject
             </Button>
           </DialogFooter>
@@ -1231,7 +1251,11 @@ function BusinessCard({
               <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Documents
               </div>
-              {docs.length === 0 ? (
+              {docsError ? (
+                <p role="alert">Could not load documents. Reload before reviewing.</p>
+              ) : !docsReady ? (
+                <p role="status">Loading documents...</p>
+              ) : docs.length === 0 ? (
                 <div className="text-sm italic text-muted-foreground">No documents uploaded.</div>
               ) : (
                 <div className="flex flex-wrap gap-2">
