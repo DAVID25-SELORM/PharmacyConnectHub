@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductImportText } from "./product-import";
+import { parsePharmacyInventoryImportText, parseProductImportText } from "./product-import";
 
 describe("safe inventory import parsing", () => {
   it("rejects extra cells rather than shifting inventory columns", () => {
@@ -45,5 +45,37 @@ describe("safe inventory import parsing", () => {
     );
     expect(result.products).toHaveLength(2);
     expect(result.products[0].price_ghs).toBe(1200.5);
+  });
+});
+
+describe("pharmacy inventory import parsing", () => {
+  it("accepts a row with no cost column at all, unlike the wholesaler parser", () => {
+    const result = parsePharmacyInventoryImportText("name,stock\nParacetamol 500mg,25");
+    expect(result.invalidRows).toEqual([]);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ name: "Paracetamol 500mg", stock: 25, unitCostGhs: null });
+  });
+  it("maps reorder level aliases", () => {
+    const result = parsePharmacyInventoryImportText(
+      "name,stock,reorder level\nParacetamol 500mg,25,10",
+    );
+    expect(result.items[0].reorderLevel).toBe(10);
+  });
+  it("maps cost aliases", () => {
+    const result = parsePharmacyInventoryImportText("name,unit cost\nParacetamol 500mg,4.50");
+    expect(result.items[0].unitCostGhs).toBe(4.5);
+  });
+  it("preserves omitted stock as null (leave unchanged), distinct from explicit zero", () => {
+    const result = parsePharmacyInventoryImportText("name,stock\nDrug A,\nDrug B,0");
+    expect(result.items.map((row) => row.stock)).toEqual([null, 0]);
+  });
+  it("rejects a blank name", () => {
+    expect(parsePharmacyInventoryImportText("name,stock\n,10").invalidRows).toEqual([2]);
+  });
+  it("rejects an unsafe stock value", () => {
+    expect(parsePharmacyInventoryImportText("name,stock\nDrug A,-5").invalidRows).toEqual([2]);
+  });
+  it("rejects a negative cost", () => {
+    expect(parsePharmacyInventoryImportText("name,unit cost\nDrug A,-5").invalidRows).toEqual([2]);
   });
 });

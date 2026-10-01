@@ -383,28 +383,141 @@ function hashHue(value: string) {
   return hash || 200;
 }
 
-export async function parseProductImportFile(file: File): Promise<ProductImportResult> {
+async function extractImportRows(file: File): Promise<{ rows: RawImportRow[]; sourceLabel: string }> {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
 
   if (extension === "pdf") {
-    const rows = await rowsFromPdf(await file.arrayBuffer());
-    return buildImportedProducts(rows, "PDF");
+    return { rows: await rowsFromPdf(await file.arrayBuffer()), sourceLabel: "PDF" };
   }
 
   if (["xls", "xlsx"].includes(extension)) {
-    const rows = await rowsFromWorksheet(await file.arrayBuffer());
-    return buildImportedProducts(rows, extension.toUpperCase());
+    return { rows: await rowsFromWorksheet(await file.arrayBuffer()), sourceLabel: extension.toUpperCase() };
   }
 
   if (["csv", "tsv", "txt"].includes(extension)) {
-    const rows = parseDelimitedText(await file.text());
-    return buildImportedProducts(rows, extension.toUpperCase());
+    return { rows: parseDelimitedText(await file.text()), sourceLabel: extension.toUpperCase() };
   }
 
   throw new Error("Unsupported file type. Use CSV, TSV, TXT, XLSX, XLS, or PDF.");
 }
 
+export async function parseProductImportFile(file: File): Promise<ProductImportResult> {
+  const { rows, sourceLabel } = await extractImportRows(file);
+  return buildImportedProducts(rows, sourceLabel);
+}
+
 export function parseProductImportText(text: string): ProductImportResult {
   const rows = parseDelimitedText(text);
   return buildImportedProducts(rows, "pasted table");
+}
+
+// ---------------------------------------------------------------------------
+// Pharmacy inventory import: reuses the same file/PDF/CSV extraction above, but with its own
+// field aliases and relaxed validation -- a pharmacy stock count has no mandatory selling price,
+// unlike a wholesaler catalog upload where price_ghs is required on every row.
+// ---------------------------------------------------------------------------
+type InventoryImportField = "name" | "brand" | "category" | "form" | "pack_size" | "unit_cost_ghs" | "stock" | "reorder_level";
+
+const inventoryFieldAliases: Record<InventoryImportField, string[]> = {
+  name: ["name", "product", "product name", "medicine", "item", "drug"],
+  brand: ["brand", "manufacturer", "company", "label"],
+  category: ["category", "group", "class", "therapeutic group"],
+  form: ["form", "dosage form", "type"],
+  pack_size: ["pack", "pack size", "packsize", "size", "packaging"],
+  unit_cost_ghs: ["cost", "unit cost", "cost price", "cost_ghs", "price", "price_ghs"],
+  stock: ["stock", "qty", "quantity", "available", "inventory", "units", "on hand", "stock on hand"],
+  reorder_level: ["reorder level", "reorder point", "reorder_level", "min stock", "minimum stock", "low stock threshold"],
+};
+
+function findInventoryImportField(header: string): InventoryImportField | null {
+  const normalized = normalizeToken(header);
+  for (const [field, aliases] of Object.entries(inventoryFieldAliases) as Array<[InventoryImportField, string[]]>) {
+    if (aliases.some((alias) => normalizeToken(alias) === normalized)) {
+      return field;
+    }
+  }
+
+  return null;
+}
+
+export type ImportedInventoryItemDraft = {
+  name: string;
+  brand: string | null;
+  category: string | null;
+  form: string | null;
+  pack_size: string | null;
+  unitCostGhs: number | null;
+  stock: number | null;
+  reorderLevel: number | null;
+  source_row: number;
+};
+
+export type InventoryImportResult = {
+  invalidRows: number[];
+  items: ImportedInventoryItemDraft[];
+  sourceLabel: string;
+  warnings: string[];
+};
+
+function buildImportedInventoryItems(rawRows: RawImportRow[], sourceLabel: string): InventoryImportResult {
+  if (rawRows.length > 5000) throw new Error("Import at most 5,000 items at a time.");
+  const invalidRows: number[] = [];
+  const items: ImportedInventoryItemDraft[] = [];
+  const warnings: string[] = [];
+
+  rawRows.forEach((rawRow, index) => {
+    const mappedRow = Object.fromEntries(
+      Object.entries(rawRow).flatMap(([header, value]) => {
+        const field = findInventoryImportField(header);
+        return field ? [[field, value]] : [];
+      }),
+    ) as Partial<Record<InventoryImportField, string>>;
+
+    const name = mappedRow.name?.trim() ?? "";
+    const isEmptyRow = Object.values(mappedRow).every((value) => !(value ?? "").trim());
+    if (isEmptyRow) {
+      return;
+    }
+
+    const stockText = mappedRow.stock?.trim() ?? "";
+    const stock = stockText ? parseNumericValue(stockText, NaN) : null;
+    const costText = mappedRow.unit_cost_ghs?.trim() ?? "";
+    const unitCostGhs = costText ? parseNumericValue(costText, NaN) : null;
+    const reorderText = mappedRow.reorder_level?.trim() ?? "";
+    const reorderLevel = reorderText ? parseNumericValue(reorderText, NaN) : null;
+
+    if (
+      !name ||
+      (stock !== null && (!Number.isSafeInteger(stock) || stock < 0 || stock > 2147483647)) ||
+      (unitCostGhs !== null && (!Number.isFinite(unitCostGhs) || unitCostGhs < 0 || unitCostGhs > 99999999.99)) ||
+      (reorderLevel !== null && (!Number.isSafeInteger(reorderLevel) || reorderLevel < 0))
+    ) {
+      invalidRows.push(index + 2);
+      return;
+    }
+
+    items.push({
+      name,
+      brand: mappedRow.brand?.trim() || null,
+      category: mappedRow.category?.trim() || null,
+      form: mappedRow.form?.trim() || null,
+      pack_size: mappedRow.pack_size?.trim() || null,
+      unitCostGhs,
+      stock,
+      reorderLevel,
+      source_row: index + 2,
+    });
+  });
+
+  return { invalidRows, items, sourceLabel, warnings };
+}
+
+export async function parsePharmacyInventoryImportFile(file: File): Promise<InventoryImportResult> {
+  const { rows, sourceLabel } = await extractImportRows(file);
+  return buildImportedInventoryItems(rows, sourceLabel);
+}
+
+export function parsePharmacyInventoryImportText(text: string): InventoryImportResult {
+  const rows = parseDelimitedText(text);
+  return buildImportedInventoryItems(rows, "pasted table");
 }

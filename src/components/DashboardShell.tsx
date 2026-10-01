@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  PackageSearch,
   Pill,
   ShieldAlert,
   ShieldCheck,
@@ -204,6 +205,7 @@ export function DashboardHeader({
   const reportsRoute =
     business?.type === "wholesaler" ? "/wholesaler/reports" : "/pharmacy/reports";
   const rfqsRoute = business?.type === "wholesaler" ? "/wholesaler/rfqs" : "/pharmacy/rfqs";
+  const showInventoryLink = business?.type === "pharmacy";
   const workspaceLabel = business?.type === "wholesaler" ? "Workspace" : "Browse";
   // The switcher stays available without the full nav so a user stuck on a pending
   // workspace's onboarding page can still switch to an approved one.
@@ -310,6 +312,15 @@ export function DashboardHeader({
                 <FileQuestion className="h-4 w-4 inline mr-2" />
                 RFQs
               </Link>
+              {showInventoryLink && (
+                <Link
+                  to="/pharmacy/inventory"
+                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+                >
+                  <PackageSearch className="h-4 w-4 inline mr-2" />
+                  Inventory
+                </Link>
+              )}
               {isAdmin && (
                 <Link
                   to="/admin"
