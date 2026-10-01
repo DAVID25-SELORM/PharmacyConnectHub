@@ -9,20 +9,20 @@
 --
 -- Deliberately additive and backward compatible: business_id is nullable, every existing caller of
 -- write_audit_log keeps working unchanged (the new parameter is optional and defaults to NULL), and
--- historical rows are left as NULL except the one case that can be safely backfilled for free (see
--- below). This migration does NOT retrofit every pre-existing write_audit_log call site in the
+-- historical rows are left untouched: production audit history is immutable.
+-- This migration does NOT retrofit every pre-existing write_audit_log call site in the
 -- codebase -- only the ones this phase's Audit Centre UI is built to show (RFQ actions, credit
 -- ledger actions, and the two product-catalog import flows) are updated, in the next migration.
--- Older call sites (business verification, order returns/deliveries, batches, discounts, order
+-- Older call sites (order returns/deliveries, batches, discounts, order
 -- terms) still log successfully, just without business_id, so their entries won't appear in the
 -- new per-business Audit Centre view -- a known, documented scope cut, not a silent gap.
 
 ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS business_id UUID REFERENCES public.businesses(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_business ON public.audit_logs(business_id, created_at DESC) WHERE business_id IS NOT NULL;
 
--- Free, safe backfill: every existing 'business' record_type row already has the business's own id
--- as record_id (see audit_business_changes below), so business_id = record_id is exact, not a guess.
-UPDATE public.audit_logs SET business_id = record_id WHERE record_type = 'business' AND business_id IS NULL;
+-- Do not backfill audit_logs: phase2_audit_immutable rejects historical UPDATEs.
+-- Also, record_type = 'business' does not identify the acting business: credit-payment
+-- events use the counterparty pharmacy as record_id. Only new events receive attribution.
 
 -- CREATE OR REPLACE cannot change a function's parameter COUNT -- adding _business_id as a 10th
 -- parameter would otherwise create a second overload alongside the original 9-parameter version
@@ -58,6 +58,14 @@ BEGIN
   );
 END;
 $$;
+
+-- Internal writer only: callers must use permission-checked business RPCs. Recreating a
+-- function does not preserve the old signature's ACL. Explicitly revoke client execution
+-- because actor identity and business attribution are supplied by trusted server functions.
+REVOKE ALL ON FUNCTION public.write_audit_log(TEXT, TEXT, TEXT, UUID, TEXT, JSONB, UUID, TEXT, TEXT, UUID)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.write_audit_log(TEXT, TEXT, TEXT, UUID, TEXT, JSONB, UUID, TEXT, TEXT, UUID)
+  TO service_role;
 
 -- The business-verification trigger already has the business id on hand (NEW.id) -- pass it
 -- through explicitly now that there's somewhere for it to go, instead of relying on the backfill
