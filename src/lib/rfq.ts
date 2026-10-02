@@ -140,3 +140,30 @@ export function validateQuoteDraft(lines: QuoteLineDraft[]) {
   }
   return { error: null, included };
 }
+
+export type MasterProductSuggestion = {
+  id: string;
+  name: string;
+  generic_name: string | null;
+  brand_name: string | null;
+  strength: string | null;
+  dosage_form: string | null;
+  pack_size: string | null;
+};
+
+/** The text an RFQ line gets when a catalogue medicine is picked: the catalogue name plus whichever
+ * of strength / form / pack size it doesn't already contain, so two pharmacies picking the same
+ * medicine send suppliers identical wording instead of free-text variants. */
+export function masterProductLabel(product: MasterProductSuggestion): string {
+  const name = product.name.trim();
+  const lower = name.toLowerCase();
+  const extras = [product.strength, product.dosage_form, product.pack_size]
+    .map((part) => (part ?? "").trim())
+    .filter((part) => part !== "" && !lower.includes(part.toLowerCase()));
+  return extras.length > 0 ? `${name} ${extras.join(" ")}` : name;
+}
+
+/** Escapes characters that are special inside a PostgREST ilike/or filter value. */
+export function toIlikeTerm(raw: string): string {
+  return raw.trim().replace(/[%_\,()]/g, " ").replace(/\s+/g, " ").trim();
+}

@@ -13,6 +13,7 @@ import {
   PackageSearch,
   Pill,
   ScrollText,
+  Wallet,
   ShieldAlert,
   ShieldCheck,
   Users,
@@ -325,6 +326,16 @@ export function DashboardHeader({
                 >
                   <PackageSearch className="h-4 w-4 inline mr-2" />
                   Inventory
+                </Link>
+              )}
+              {showInventoryLink && (
+                <Link
+                  to="/pharmacy"
+                  search={{ tab: "credit" }}
+                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+                >
+                  <Wallet className="h-4 w-4 inline mr-2" />
+                  Credit
                 </Link>
               )}
               {showAuditLink && (
