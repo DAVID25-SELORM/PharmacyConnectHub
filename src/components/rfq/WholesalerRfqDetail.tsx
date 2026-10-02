@@ -22,7 +22,9 @@ import {
   RFQ_QUOTE_STATUS_STYLES,
   RFQ_STATUS_LABELS,
   RFQ_STATUS_STYLES,
+  finalUnitPrice,
   validateQuoteDraft,
+  validateQuoteTerms,
   type QuoteLineDraft,
   type Rfq,
   type RfqItem,
@@ -59,6 +61,9 @@ export function WholesalerRfqDetail({
   const [lines, setLines] = useState<QuoteLineDraft[]>([]);
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [validUntil, setValidUntil] = useState("");
+  const [deliveryCharge, setDeliveryCharge] = useState("");
+  const [leadTimeDays, setLeadTimeDays] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +87,9 @@ export function WholesalerRfqDetail({
     setMyQuote(quote);
     setDeliveryNotes(quote?.delivery_notes ?? "");
     setValidUntil(quote?.valid_until ? quote.valid_until.slice(0, 10) : "");
+    setDeliveryCharge(quote && Number(quote.delivery_charge_ghs) > 0 ? String(quote.delivery_charge_ghs) : "");
+    setLeadTimeDays(quote?.lead_time_days != null ? String(quote.lead_time_days) : "");
+    setPaymentTerms(quote?.payment_terms ?? "");
 
     let existingLines: RfqQuoteItem[] = [];
     if (quote) {
@@ -95,6 +103,8 @@ export function WholesalerRfqDetail({
           rfqItemId: item.id,
           productId: existing?.product_id ?? "",
           unitPriceGhs: existing ? String(existing.unit_price_ghs) : "",
+          quantity: existing && existing.quantity !== item.quantity ? String(existing.quantity) : "",
+          discountPercent: existing && Number(existing.discount_percent) > 0 ? String(existing.discount_percent) : "",
           notes: existing?.notes ?? "",
           include: !!existing,
         };
@@ -112,9 +122,15 @@ export function WholesalerRfqDetail({
   };
 
   const submitQuote = async () => {
-    const { error: validationError, included } = validateQuoteDraft(lines);
+    const requested = Object.fromEntries(items.map((i) => [i.id, i.quantity]));
+    const { error: validationError, included } = validateQuoteDraft(lines, requested);
     if (validationError || !included) {
       setError(validationError);
+      return;
+    }
+    const { error: termsError } = validateQuoteTerms({ deliveryCharge, leadTimeDays, paymentTerms });
+    if (termsError) {
+      setError(termsError);
       return;
     }
     setError(null);
@@ -126,10 +142,15 @@ export function WholesalerRfqDetail({
         rfqItemId: l.rfqItemId,
         productId: l.productId,
         unitPriceGhs: Number(l.unitPriceGhs),
+        quantity: l.quantity.trim() ? Number(l.quantity) : null,
+        discountPercent: l.discountPercent.trim() ? Number(l.discountPercent) : 0,
         notes: l.notes.trim() || null,
       })),
       p_delivery_notes: deliveryNotes.trim() || null,
       p_valid_until: validUntil ? new Date(validUntil).toISOString() : null,
+      p_delivery_charge: deliveryCharge.trim() ? Number(deliveryCharge) : 0,
+      p_lead_time_days: leadTimeDays.trim() ? Number(leadTimeDays) : null,
+      p_payment_terms: paymentTerms.trim() || null,
     });
     setBusy(false);
     if (rpcError) {
@@ -190,6 +211,7 @@ export function WholesalerRfqDetail({
             {myQuote && (
               <p className="mt-3 text-sm">
                 Your current total: <span className="font-semibold">{formatGHS(myQuote.total_ghs)}</span>
+                {Number(myQuote.delivery_charge_ghs) > 0 && <> + {formatGHS(myQuote.delivery_charge_ghs)} delivery</>}
               </p>
             )}
 
@@ -245,6 +267,39 @@ export function WholesalerRfqDetail({
                             onChange={(e) => updateLine(item.id, { unitPriceGhs: e.target.value })}
                           />
                         </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Available quantity (of {item.quantity})</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.quantity}
+                            placeholder={String(item.quantity)}
+                            value={line.quantity}
+                            onChange={(e) => updateLine(item.id, { quantity: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Discount % (optional)</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={99.99}
+                            step="0.01"
+                            value={line.discountPercent}
+                            onChange={(e) => updateLine(item.id, { discountPercent: e.target.value })}
+                          />
+                        </div>
+                        {Number(line.unitPriceGhs) > 0 && (
+                          <p className="text-xs text-muted-foreground sm:col-span-2">
+                            Final price: {formatGHS(finalUnitPrice(Number(line.unitPriceGhs), Number(line.discountPercent) || 0))} each
+                            {" × "}
+                            {Number(line.quantity) || item.quantity} ={" "}
+                            {formatGHS(
+                              finalUnitPrice(Number(line.unitPriceGhs), Number(line.discountPercent) || 0) *
+                                (Number(line.quantity) || item.quantity),
+                            )}
+                          </p>
+                        )}
                         <div className="space-y-1 sm:col-span-2">
                           <Label className="text-xs">Notes (optional, e.g. substitute brand)</Label>
                           <Input value={line.notes} onChange={(e) => updateLine(item.id, { notes: e.target.value })} />
@@ -255,6 +310,8 @@ export function WholesalerRfqDetail({
                     {!canEditQuote && line.include && (
                       <div className="mt-2 text-sm text-muted-foreground">
                         {products.find((p) => p.id === line.productId)?.name ?? "Product"} at {formatGHS(Number(line.unitPriceGhs) || 0)} each
+                        {Number(line.discountPercent) > 0 ? ` less ${line.discountPercent}%` : ""}
+                        {line.quantity ? ` · ${line.quantity} of ${item.quantity} available` : ""}
                       </div>
                     )}
                   </div>
@@ -272,6 +329,20 @@ export function WholesalerRfqDetail({
                     onChange={(e) => setDeliveryNotes(e.target.value)}
                     rows={2}
                   />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="delivery-charge">Delivery charge GHS (optional)</Label>
+                    <Input id="delivery-charge" type="number" min={0} step="0.01" value={deliveryCharge} onChange={(e) => setDeliveryCharge(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="lead-time">Lead time, days (optional)</Label>
+                    <Input id="lead-time" type="number" min={0} step="1" value={leadTimeDays} onChange={(e) => setLeadTimeDays(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="payment-terms">Payment terms (optional)</Label>
+                    <Input id="payment-terms" maxLength={200} placeholder="e.g. Net 14" value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="valid-until">Quote valid until (optional)</Label>

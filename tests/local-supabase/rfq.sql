@@ -357,7 +357,7 @@ BEGIN
   ------------------------------------------------------------------
   PERFORM zz.check('anon has no EXECUTE on any rfq mutation RPC',
     NOT has_function_privilege('anon', 'public.create_rfq(uuid,text,text,timestamptz,uuid[],jsonb)', 'EXECUTE')
-    AND NOT has_function_privilege('anon', 'public.submit_rfq_quote(uuid,uuid,jsonb,text,timestamptz)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.submit_rfq_quote(uuid,uuid,jsonb,text,timestamptz,numeric,integer,text)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.withdraw_rfq_quote(uuid,uuid)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.cancel_rfq(uuid)', 'EXECUTE'));
 END $$;

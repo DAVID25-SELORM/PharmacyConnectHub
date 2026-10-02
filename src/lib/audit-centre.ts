@@ -31,6 +31,7 @@ const DISPLAY_LABELS: Record<string, string> = {
   "RFQ cancelled": "RFQ cancelled",
   "RFQ awarded": "RFQ awarded",
   "RFQ quote submitted": "Quote submitted",
+  "RFQ quote revised": "Quote revised",
   "RFQ quote withdrawn": "Quote withdrawn",
   "Credit payment recorded": "Payment recorded",
   "Credit ledger adjustment recorded": "Ledger adjustment",
@@ -61,6 +62,7 @@ const RFQ_EVENTS = new Set([
   "RFQ cancelled",
   "RFQ awarded",
   "RFQ quote submitted",
+  "RFQ quote revised",
   "RFQ quote withdrawn",
 ]);
 const CREDIT_EVENTS = new Set([

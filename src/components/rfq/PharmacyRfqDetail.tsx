@@ -14,12 +14,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { formatReportDate, formatReportDateTime } from "@/lib/reports";
+import { QuoteComparison } from "@/components/rfq/QuoteComparison";
 import {
-  RFQ_QUOTE_STATUS_LABELS,
-  RFQ_QUOTE_STATUS_STYLES,
   RFQ_STATUS_LABELS,
   RFQ_STATUS_STYLES,
+  summariseAward,
+  validateAwardSelection,
+  type AwardSelection,
   type Rfq,
+  type RfqAward,
   type RfqInvitee,
   type RfqItem,
   type RfqQuote,
@@ -59,17 +62,26 @@ export function PharmacyRfqDetail({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [useCredit, setUseCredit] = useState(false);
+  const [selection, setSelection] = useState<AwardSelection>({});
+  const [confirming, setConfirming] = useState(false);
+  const [awardError, setAwardError] = useState<string | null>(null);
+  const [awards, setAwards] = useState<RfqAward[]>([]);
 
   const load = useCallback(async () => {
     if (!rfqId) return;
     setLoading(true);
-    const [{ data: rfqData }, { data: itemsData }, { data: inviteesData }, { data: quotesData }] =
+    const [{ data: rfqData }, { data: itemsData }, { data: inviteesData }, { data: quotesData }, { data: awardsData }] =
       await Promise.all([
         db.from("rfqs").select("*").eq("id", rfqId).maybeSingle(),
         db.from("rfq_items").select("*").eq("rfq_id", rfqId),
         db.from("rfq_invitees").select("*").eq("rfq_id", rfqId),
         db.from("rfq_quotes").select("*").eq("rfq_id", rfqId).order("total_ghs", { ascending: true }),
+        db.from("rfq_awards").select("*").eq("rfq_id", rfqId),
       ]);
+    setAwards((awardsData as RfqAward[] | null) ?? []);
+    setSelection({});
+    setConfirming(false);
+    setAwardError(null);
     setRfq((rfqData as Rfq) ?? null);
     setItems((itemsData as RfqItem[]) ?? []);
     setInvitees((inviteesData as RfqInvitee[]) ?? []);
@@ -106,16 +118,32 @@ export function PharmacyRfqDetail({
     if (open && rfqId) void load();
   }, [open, rfqId, load]);
 
-  const award = async (quoteId: string) => {
+  const allQuoteItems = Object.values(quoteItems).flat();
+  const awardTotals = summariseAward(selection, quotes, allQuoteItems);
+
+  const reviewAward = () => {
+    const { error } = validateAwardSelection(selection, allQuoteItems, items);
+    setAwardError(error);
+    setConfirming(!error);
+  };
+
+  const confirmAward = async () => {
     if (!rfqId) return;
-    setBusy(true);
-    const { error } = await rpc("award_rfq_quote", { p_rfq_id: rfqId, p_quote_id: quoteId, p_use_credit: useCredit });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
+    const { error: validationError, payload } = validateAwardSelection(selection, allQuoteItems, items);
+    if (validationError || !payload) {
+      setAwardError(validationError);
+      setConfirming(false);
       return;
     }
-    toast.success("Quote accepted - order created");
+    setBusy(true);
+    const { error } = await rpc("award_rfq_lines", { p_rfq_id: rfqId, p_awards: payload, p_use_credit: useCredit });
+    setBusy(false);
+    if (error) {
+      setAwardError(error.message);
+      setConfirming(false);
+      return;
+    }
+    toast.success(awardTotals.length === 1 ? "Order created" : `${awardTotals.length} orders created`);
     onChanged();
     void load();
   };
@@ -139,7 +167,7 @@ export function PharmacyRfqDetail({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-5xl">
         {loading || !rfq ? (
           <div className="space-y-3 pt-6">
             <Skeleton className="h-6 w-2/3" />
@@ -182,59 +210,30 @@ export function PharmacyRfqDetail({
               <h3 className="text-sm font-medium text-muted-foreground">
                 Quotes received ({quotes.filter((q) => q.status !== "withdrawn").length})
               </h3>
-              {quotes.length === 0 ? (
-                <p className="mt-2 text-sm text-muted-foreground">No quotes yet.</p>
-              ) : (
-                <div className="mt-2 space-y-3">
-                  {quotes.map((quote) => {
-                    const lines = quoteItems[quote.id] ?? [];
-                    return (
-                      <div key={quote.id} className="rounded-xl border border-border p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="font-medium">{wholesalers[quote.wholesaler_id]?.name ?? "Supplier"}</div>
-                          <Badge variant="secondary" className={`border ${RFQ_QUOTE_STATUS_STYLES[quote.status]}`}>
-                            {RFQ_QUOTE_STATUS_LABELS[quote.status]}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 text-lg font-display font-bold">{formatGHS(quote.total_ghs)}</div>
-                        {quote.delivery_notes && (
-                          <p className="mt-1 text-xs text-muted-foreground">{quote.delivery_notes}</p>
-                        )}
-                        {quote.valid_until && (
-                          <p className="text-xs text-muted-foreground">
-                            Valid until {formatReportDateTime(quote.valid_until)}
-                          </p>
-                        )}
-                        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                          {lines.map((line) => {
-                            const item = items.find((i) => i.id === line.rfq_item_id);
-                            return (
-                              <li key={line.id} className="flex items-center justify-between gap-2">
-                                <span>
-                                  {item?.product_name ?? "Item"} × {line.quantity}
-                                </span>
-                                <span>
-                                  {formatGHS(line.unit_price_ghs)} each · {formatGHS(line.line_total_ghs)}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        {canAward && rfq.status === "open" && quote.status === "submitted" && (
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="mt-3"
-                            disabled={busy}
-                            onClick={() => void award(quote.id)}
-                          >
-                            Accept this quote
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              <QuoteComparison
+                items={items}
+                quotes={quotes}
+                quoteItems={allQuoteItems}
+                suppliers={wholesalers}
+                selection={selection}
+                onSelectionChange={(next) => {
+                  setSelection(next);
+                  setConfirming(false);
+                  setAwardError(null);
+                }}
+                canAward={canAward && rfq.status === "open"}
+              />
+              {quotes.some((q) => q.status !== "withdrawn" && q.delivery_notes) && (
+                <ul className="mt-3 space-y-1 text-xs text-muted-foreground">
+                  {quotes
+                    .filter((q) => q.status !== "withdrawn" && q.delivery_notes)
+                    .map((q) => (
+                      <li key={q.id}>
+                        <span className="font-medium text-foreground">{wholesalers[q.wholesaler_id]?.name ?? "Supplier"}:</span>{" "}
+                        {q.delivery_notes}
+                      </li>
+                    ))}
+                </ul>
               )}
               {awaitingInvitees.length > 0 && rfq.status === "open" && (
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -245,10 +244,82 @@ export function PharmacyRfqDetail({
             </div>
 
             {canAward && rfq.status === "open" && quotes.some((q) => q.status === "submitted") && (
-              <label className="mt-4 flex items-center gap-2 text-sm">
-                <Checkbox checked={useCredit} onCheckedChange={(c) => setUseCredit(c === true)} />
-                Pay on credit (if the supplier has approved credit for you)
-              </label>
+              <div className="mt-4 space-y-3 rounded-xl border border-border p-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={useCredit} onCheckedChange={(c) => setUseCredit(c === true)} />
+                  Pay on credit (each supplier must have approved credit for you)
+                </label>
+                {awardError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {awardError}
+                  </p>
+                )}
+                {confirming && (
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium">
+                      This will create {awardTotals.length} order{awardTotals.length === 1 ? "" : "s"}
+                      {awardTotals.length > 1 ? " — one per supplier" : ""}:
+                    </p>
+                    <ul className="space-y-0.5 text-muted-foreground">
+                      {awardTotals.map((t) => (
+                        <li key={t.quoteId}>
+                          {wholesalers[t.wholesalerId]?.name ?? "Supplier"}: {formatGHS(t.goods)} goods
+                          {t.delivery > 0 ? ` + ${formatGHS(t.delivery)} delivery` : ""} = {formatGHS(t.total)}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      Suppliers with nothing awarded are told only that their quote wasn&apos;t selected. This can&apos;t be undone.
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {confirming ? (
+                    <>
+                      <Button type="button" disabled={busy} onClick={() => void confirmAward()}>
+                        {busy ? "Placing orders..." : "Confirm award"}
+                      </Button>
+                      <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
+                        Back
+                      </Button>
+                    </>
+                  ) : (
+                    <Button type="button" disabled={busy || awardTotals.length === 0} onClick={reviewAward}>
+                      Review award
+                    </Button>
+                  )}
+                  {Object.keys(selection).length > 0 && !confirming && (
+                    <Button type="button" variant="ghost" onClick={() => setSelection({})}>
+                      Clear selection
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Nothing is awarded automatically. Enter the quantity to award to each supplier per item (you can split an
+                  item between suppliers), or use &ldquo;Select whole quote&rdquo;.
+                </p>
+              </div>
+            )}
+
+            {rfq.status === "awarded" && awards.length > 0 && (
+              <div className="mt-5">
+                <h3 className="text-sm font-medium text-muted-foreground">Awarded</h3>
+                <ul className="mt-2 divide-y divide-border rounded-xl border border-border text-sm">
+                  {awards.map((a) => (
+                    <li key={a.id} className="flex items-center justify-between gap-3 p-3">
+                      <span>
+                        {items.find((i) => i.id === a.rfq_item_id)?.product_name ?? "Item"} × {a.quantity}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {wholesalers[a.wholesaler_id]?.name ?? "Supplier"} · {formatGHS(a.unit_price_ghs)} each
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  An order was created for each supplier above. Track it under My orders.
+                </p>
+              </div>
             )}
 
             {canCancel && rfq.status === "open" && (
