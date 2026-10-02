@@ -90,7 +90,7 @@ export function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-export function reportFilename(prefix: string, ext: "csv" | "xlsx" = "csv") {
+export function reportFilename(prefix: string, ext: "csv" | "xlsx" | "pdf" = "csv") {
   return `drugxone-${prefix}-${new Date().toISOString().slice(0, 10)}.${ext}`;
 }
 
@@ -122,6 +122,42 @@ export async function downloadXlsx(filename: string, sheets: ReportExportSheet[]
     XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name.slice(0, 31));
   }
   XLSX.writeFile(workbook, filename);
+}
+
+// ---------------------------------------------------------------------------
+// PDF export — one table per sheet, lazy-loaded (jspdf + jspdf-autotable) the same way as the
+// xlsx package above, so neither loads on a page that doesn't export. Landscape by default since
+// these tables are usually wider than they are tall; callers should keep to a handful of columns
+// that still print legibly rather than dumping every field.
+// ---------------------------------------------------------------------------
+
+let pdfModulePromise: Promise<{ jsPDF: typeof import("jspdf").default; autoTable: typeof import("jspdf-autotable").autoTable }> | null = null;
+function loadPdf() {
+  pdfModulePromise ??= Promise.all([import("jspdf"), import("jspdf-autotable")]).then(([jspdfMod, autoTableMod]) => ({
+    jsPDF: jspdfMod.default,
+    autoTable: autoTableMod.autoTable,
+  }));
+  return pdfModulePromise;
+}
+
+export async function downloadPdf(filename: string, title: string, sheets: ReportExportSheet[]) {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ orientation: "landscape" });
+  sheets.forEach((sheet, index) => {
+    if (index > 0) doc.addPage();
+    doc.setFontSize(14);
+    doc.text(sheets.length > 1 ? `${title} — ${sheet.name}` : title, 14, 15);
+    doc.setFontSize(9);
+    doc.text(new Date().toLocaleString("en-GB"), 14, 21);
+    autoTable(doc, {
+      head: [sheet.headers],
+      body: sheet.rows.map((row) => row.map(String)),
+      startY: 26,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [15, 118, 110] },
+    });
+  });
+  doc.save(filename);
 }
 
 /** What a report tab's exportRef hands back: the same data the CSV and XLSX exports both

@@ -17,6 +17,10 @@ export default defineConfig({
             return "pdf";
           }
 
+          if (id.includes("jspdf")) {
+            return "pdf-export";
+          }
+
           if (id.includes("xlsx")) {
             return "xlsx";
           }

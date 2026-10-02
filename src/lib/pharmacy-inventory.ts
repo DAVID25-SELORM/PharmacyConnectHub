@@ -158,3 +158,52 @@ export function validateStockAdjustment(input: {
   const delta = input.kind === "write_off" ? -Math.abs(quantity) : quantity;
   return { error: null, delta };
 }
+
+// ---------------------------------------------------------------------------
+// Export: CSV/Excel carry every field (wide tables are fine in a spreadsheet); PDF uses a
+// condensed, print-friendly subset instead of cramming 20+ columns onto a landscape page.
+// ---------------------------------------------------------------------------
+
+function cell(value: string | number | null): string | number {
+  return value ?? "";
+}
+
+const FULL_EXPORT_HEADERS = [
+  "Name", "Item type", "Brand", "Category", "Form", "Pack size", "Generic name", "Strength",
+  "Manufacturer", "Barcode", "Batch number", "Expiry date", "Model", "Serial number",
+  "Warranty info", "Unit of measure", "Stock", "Reorder level", "Cost price (GHS)",
+  "Selling price (GHS)", "Supplier", "Active",
+];
+
+export function inventoryItemToExportRow(item: PharmacyInventoryItem): Array<string | number> {
+  return [
+    item.name, ITEM_TYPE_LABELS[item.item_type], cell(item.brand), cell(item.category), cell(item.form),
+    cell(item.pack_size), cell(item.generic_name), cell(item.strength), cell(item.manufacturer),
+    cell(item.barcode), cell(item.batch_number), cell(item.expiry_date), cell(item.model),
+    cell(item.serial_number), cell(item.warranty_info), cell(item.unit_of_measure), item.stock,
+    cell(item.reorder_level), cell(item.unit_cost_ghs), cell(item.selling_price_ghs), cell(item.supplier),
+    item.active ? "Yes" : "No",
+  ];
+}
+
+export function inventoryItemsToExportSheet(items: PharmacyInventoryItem[]) {
+  return { name: "Inventory", headers: FULL_EXPORT_HEADERS, rows: items.map(inventoryItemToExportRow) };
+}
+
+const PDF_EXPORT_HEADERS = [
+  "Name", "Item type", "Category", "Stock", "Reorder level", "Cost (GHS)", "Selling price (GHS)",
+  "Expiry / batch", "Supplier",
+];
+
+export function inventoryItemToPdfRow(item: PharmacyInventoryItem): Array<string | number> {
+  const expiryOrBatch = [item.expiry_date, item.batch_number].filter(Boolean).join(" / ");
+  return [
+    item.name, ITEM_TYPE_LABELS[item.item_type], cell(item.category), item.stock,
+    cell(item.reorder_level), cell(item.unit_cost_ghs), cell(item.selling_price_ghs),
+    expiryOrBatch, cell(item.supplier),
+  ];
+}
+
+export function inventoryItemsToPdfSheet(items: PharmacyInventoryItem[]) {
+  return { name: "Inventory", headers: PDF_EXPORT_HEADERS, rows: items.map(inventoryItemToPdfRow) };
+}

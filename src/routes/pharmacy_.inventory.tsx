@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Package, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Download, Package, Plus } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,12 @@ import { AdjustStockDialog } from "@/components/pharmacy-inventory/AdjustStockDi
 import { BulkImportInventoryDialog } from "@/components/pharmacy-inventory/BulkImportInventoryDialog";
 import { InventoryItemFormDialog } from "@/components/pharmacy-inventory/InventoryItemFormDialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -21,8 +27,10 @@ import {
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
-import { formatReportDate, formatReportDateTime } from "@/lib/reports";
+import { downloadCsv, downloadPdf, downloadXlsx, formatReportDate, formatReportDateTime, reportFilename, rowsToCsv } from "@/lib/reports";
 import {
+  inventoryItemsToExportSheet,
+  inventoryItemsToPdfSheet,
   isLowStock,
   ITEM_TYPE_LABELS,
   ITEM_TYPE_OPTIONS,
@@ -57,6 +65,7 @@ function PharmacyInventoryPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [movements, setMovements] = useState<PharmacyInventoryMovement[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!business) return;
@@ -123,6 +132,25 @@ function PharmacyInventoryPage() {
 
   const lowStockCount = items.filter((i) => i.active && isLowStock(i)).length;
 
+  // Exports whatever is currently on screen, so active search/type/low-stock/inactive filters are
+  // preserved rather than always dumping the full inventory.
+  const exportInventory = async (format: "csv" | "xlsx" | "pdf") => {
+    if (visibleItems.length === 0 || exporting) return;
+    setExporting(true);
+    try {
+      if (format === "pdf") {
+        const sheet = inventoryItemsToPdfSheet(visibleItems);
+        await downloadPdf(reportFilename("inventory", "pdf"), `${business.name} — Inventory`, [sheet]);
+      } else {
+        const sheet = inventoryItemsToExportSheet(visibleItems);
+        if (format === "xlsx") await downloadXlsx(reportFilename("inventory", "xlsx"), [sheet]);
+        else downloadCsv(reportFilename("inventory", "csv"), rowsToCsv(sheet.headers, sheet.rows));
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Inventory" showNav={true} />
@@ -140,6 +168,19 @@ function PharmacyInventoryPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" disabled={visibleItems.length === 0 || exporting}>
+                  <Download className="mr-1.5 h-4 w-4" />
+                  {exporting ? "Exporting..." : "Export"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void exportInventory("csv")}>Export as CSV</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportInventory("xlsx")}>Export as Excel</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportInventory("pdf")}>Export as PDF</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {canImport && <BulkImportInventoryDialog pharmacyId={business.id} reload={load} />}
             {canManage && (
               <Button type="button" onClick={() => setFormItem("new")}>
