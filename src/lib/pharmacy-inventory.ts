@@ -1,5 +1,53 @@
 // Pharmacy-owned inventory: shared types for the list/add/adjust/edit/import UI.
 
+export type PharmacyItemType = "medicine" | "medical_consumable" | "medical_equipment" | "non_medical";
+
+export const ITEM_TYPE_OPTIONS: Array<{ value: PharmacyItemType; label: string }> = [
+  { value: "medicine", label: "Medicine" },
+  { value: "medical_consumable", label: "Medical Consumable" },
+  { value: "medical_equipment", label: "Medical Equipment" },
+  { value: "non_medical", label: "Non-Medical Item" },
+];
+
+export const ITEM_TYPE_LABELS: Record<PharmacyItemType, string> = {
+  medicine: "Medicine",
+  medical_consumable: "Medical Consumable",
+  medical_equipment: "Medical Equipment",
+  non_medical: "Non-Medical Item",
+};
+
+/** Which optional fields apply to each item type, so the Add/Edit form can show only relevant
+ * inputs and the list/import views can stay consistent with what was actually asked for. Fields
+ * not listed here (name, category, stock, reorder_level, unit_cost_ghs, selling_price_ghs,
+ * supplier, brand, active) apply to every type. */
+export const ITEM_TYPE_FIELDS: Record<
+  PharmacyItemType,
+  { form: boolean; packSize: boolean; genericName: boolean; strength: boolean; manufacturer: boolean;
+    barcode: boolean; batch: boolean; expiry: boolean; unitOfMeasure: boolean; model: boolean;
+    serialNumber: boolean; warranty: boolean }
+> = {
+  medicine: {
+    form: true, packSize: true, genericName: true, strength: true, manufacturer: true,
+    barcode: true, batch: true, expiry: true, unitOfMeasure: false, model: false,
+    serialNumber: false, warranty: false,
+  },
+  medical_consumable: {
+    form: false, packSize: true, genericName: false, strength: false, manufacturer: false,
+    barcode: true, batch: true, expiry: true, unitOfMeasure: true, model: false,
+    serialNumber: false, warranty: false,
+  },
+  medical_equipment: {
+    form: false, packSize: false, genericName: false, strength: false, manufacturer: false,
+    barcode: false, batch: false, expiry: false, unitOfMeasure: false, model: true,
+    serialNumber: true, warranty: true,
+  },
+  non_medical: {
+    form: false, packSize: false, genericName: false, strength: false, manufacturer: false,
+    barcode: true, batch: false, expiry: false, unitOfMeasure: true, model: false,
+    serialNumber: false, warranty: false,
+  },
+};
+
 export type PharmacyInventoryItem = {
   id: string;
   pharmacy_id: string;
@@ -12,6 +60,19 @@ export type PharmacyInventoryItem = {
   reorder_level: number | null;
   unit_cost_ghs: number | null;
   active: boolean;
+  item_type: PharmacyItemType;
+  generic_name: string | null;
+  strength: string | null;
+  manufacturer: string | null;
+  barcode: string | null;
+  batch_number: string | null;
+  expiry_date: string | null;
+  selling_price_ghs: number | null;
+  supplier: string | null;
+  unit_of_measure: string | null;
+  model: string | null;
+  serial_number: string | null;
+  warranty_info: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -48,6 +109,7 @@ export function validateInventoryItemDraft(input: {
   stock?: string;
   reorderLevel: string;
   unitCostGhs: string;
+  sellingPriceGhs?: string;
 }) {
   if (!input.name.trim()) {
     return { error: "Enter a name." };
@@ -68,6 +130,12 @@ export function validateInventoryItemDraft(input: {
     const cost = Number(input.unitCostGhs);
     if (!Number.isFinite(cost) || cost < 0) {
       return { error: "Unit cost must be zero or more." };
+    }
+  }
+  if (input.sellingPriceGhs?.trim()) {
+    const price = Number(input.sellingPriceGhs);
+    if (!Number.isFinite(price) || price < 0) {
+      return { error: "Selling price must be zero or more." };
     }
   }
   return { error: null };

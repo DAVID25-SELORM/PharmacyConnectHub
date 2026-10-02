@@ -9,90 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WholesalerRouteImport } from './routes/wholesaler'
-import { Route as StaffRouteImport } from './routes/staff'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as PharmacyRouteImport } from './routes/pharmacy'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as NotificationsRouteImport } from './routes/notifications'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HelpRouteImport } from './routes/help'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AddBusinessRouteImport } from './routes/add-business'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as WholesalerRfqsRouteImport } from './routes/wholesaler_.rfqs'
-import { Route as WholesalerReportsRouteImport } from './routes/wholesaler_.reports'
-import { Route as WholesalerAuditRouteImport } from './routes/wholesaler_.audit'
-import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
-import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
-import { Route as PharmacyInventoryRouteImport } from './routes/pharmacy_.inventory'
-import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
-import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
-import { Route as AdminStaffRouteImport } from './routes/admin.staff'
-import { Route as AdminReportsRouteImport } from './routes/admin.reports'
+import { Route as AddBusinessRouteImport } from './routes/add-business'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as HelpRouteImport } from './routes/help'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as PharmacyRouteImport } from './routes/pharmacy'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as StaffRouteImport } from './routes/staff'
+import { Route as WholesalerRouteImport } from './routes/wholesaler'
 import { Route as AdminActivityRouteImport } from './routes/admin.activity'
+import { Route as AdminReportsRouteImport } from './routes/admin.reports'
+import { Route as AdminStaffRouteImport } from './routes/admin.staff'
+import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
+import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
+import { Route as PharmacyInventoryRouteImport } from './routes/pharmacy_.inventory'
+import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
+import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
+import { Route as WholesalerAuditRouteImport } from './routes/wholesaler_.audit'
+import { Route as WholesalerReportsRouteImport } from './routes/wholesaler_.reports'
+import { Route as WholesalerRfqsRouteImport } from './routes/wholesaler_.rfqs'
 
-const WholesalerRoute = WholesalerRouteImport.update({
-  id: '/wholesaler',
-  path: '/wholesaler',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StaffRoute = StaffRouteImport.update({
-  id: '/staff',
-  path: '/staff',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PharmacyRoute = PharmacyRouteImport.update({
-  id: '/pharmacy',
-  path: '/pharmacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NotificationsRoute = NotificationsRouteImport.update({
-  id: '/notifications',
-  path: '/notifications',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HelpRoute = HelpRouteImport.update({
-  id: '/help',
-  path: '/help',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AddBusinessRoute = AddBusinessRouteImport.update({
@@ -100,54 +45,69 @@ const AddBusinessRoute = AddBusinessRouteImport.update({
   path: '/add-business',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WholesalerRfqsRoute = WholesalerRfqsRouteImport.update({
-  id: '/wholesaler_/rfqs',
-  path: '/wholesaler/rfqs',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WholesalerReportsRoute = WholesalerReportsRouteImport.update({
-  id: '/wholesaler_/reports',
-  path: '/wholesaler/reports',
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WholesalerAuditRoute = WholesalerAuditRouteImport.update({
-  id: '/wholesaler_/audit',
-  path: '/wholesaler/audit',
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PharmacyRfqsRoute = PharmacyRfqsRouteImport.update({
-  id: '/pharmacy_/rfqs',
-  path: '/pharmacy/rfqs',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PharmacyReportsRoute = PharmacyReportsRouteImport.update({
-  id: '/pharmacy_/reports',
-  path: '/pharmacy/reports',
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PharmacyInventoryRoute = PharmacyInventoryRouteImport.update({
-  id: '/pharmacy_/inventory',
-  path: '/pharmacy/inventory',
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PharmacyAuditRoute = PharmacyAuditRouteImport.update({
-  id: '/pharmacy_/audit',
-  path: '/pharmacy/audit',
+const PharmacyRoute = PharmacyRouteImport.update({
+  id: '/pharmacy',
+  path: '/pharmacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminVerificationRoute = AdminVerificationRouteImport.update({
-  id: '/verification',
-  path: '/verification',
-  getParentRoute: () => AdminRoute,
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AdminStaffRoute = AdminStaffRouteImport.update({
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffRoute = StaffRouteImport.update({
   id: '/staff',
   path: '/staff',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WholesalerRoute = WholesalerRouteImport.update({
+  id: '/wholesaler',
+  path: '/wholesaler',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminActivityRoute = AdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminReportsRoute = AdminReportsRouteImport.update({
@@ -155,10 +115,50 @@ const AdminReportsRoute = AdminReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminActivityRoute = AdminActivityRouteImport.update({
-  id: '/activity',
-  path: '/activity',
+const AdminStaffRoute = AdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
   getParentRoute: () => AdminRoute,
+} as any)
+const AdminVerificationRoute = AdminVerificationRouteImport.update({
+  id: '/verification',
+  path: '/verification',
+  getParentRoute: () => AdminRoute,
+} as any)
+const PharmacyAuditRoute = PharmacyAuditRouteImport.update({
+  id: '/pharmacy_/audit',
+  path: '/pharmacy/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PharmacyInventoryRoute = PharmacyInventoryRouteImport.update({
+  id: '/pharmacy_/inventory',
+  path: '/pharmacy/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PharmacyReportsRoute = PharmacyReportsRouteImport.update({
+  id: '/pharmacy_/reports',
+  path: '/pharmacy/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PharmacyRfqsRoute = PharmacyRfqsRouteImport.update({
+  id: '/pharmacy_/rfqs',
+  path: '/pharmacy/rfqs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WholesalerAuditRoute = WholesalerAuditRouteImport.update({
+  id: '/wholesaler_/audit',
+  path: '/wholesaler/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WholesalerReportsRoute = WholesalerReportsRouteImport.update({
+  id: '/wholesaler_/reports',
+  path: '/wholesaler/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WholesalerRfqsRoute = WholesalerRfqsRouteImport.update({
+  id: '/wholesaler_/rfqs',
+  path: '/wholesaler/rfqs',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -353,88 +353,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/wholesaler': {
-      id: '/wholesaler'
-      path: '/wholesaler'
-      fullPath: '/wholesaler'
-      preLoaderRoute: typeof WholesalerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/staff': {
-      id: '/staff'
-      path: '/staff'
-      fullPath: '/staff'
-      preLoaderRoute: typeof StaffRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pharmacy': {
-      id: '/pharmacy'
-      path: '/pharmacy'
-      fullPath: '/pharmacy'
-      preLoaderRoute: typeof PharmacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/notifications': {
-      id: '/notifications'
-      path: '/notifications'
-      fullPath: '/notifications'
-      preLoaderRoute: typeof NotificationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/help': {
-      id: '/help'
-      path: '/help'
-      fullPath: '/help'
-      preLoaderRoute: typeof HelpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/add-business': {
@@ -444,74 +367,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AddBusinessRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/wholesaler_/rfqs': {
-      id: '/wholesaler_/rfqs'
-      path: '/wholesaler/rfqs'
-      fullPath: '/wholesaler/rfqs'
-      preLoaderRoute: typeof WholesalerRfqsRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/wholesaler_/reports': {
-      id: '/wholesaler_/reports'
-      path: '/wholesaler/reports'
-      fullPath: '/wholesaler/reports'
-      preLoaderRoute: typeof WholesalerReportsRouteImport
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/wholesaler_/audit': {
-      id: '/wholesaler_/audit'
-      path: '/wholesaler/audit'
-      fullPath: '/wholesaler/audit'
-      preLoaderRoute: typeof WholesalerAuditRouteImport
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pharmacy_/rfqs': {
-      id: '/pharmacy_/rfqs'
-      path: '/pharmacy/rfqs'
-      fullPath: '/pharmacy/rfqs'
-      preLoaderRoute: typeof PharmacyRfqsRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pharmacy_/reports': {
-      id: '/pharmacy_/reports'
-      path: '/pharmacy/reports'
-      fullPath: '/pharmacy/reports'
-      preLoaderRoute: typeof PharmacyReportsRouteImport
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pharmacy_/inventory': {
-      id: '/pharmacy_/inventory'
-      path: '/pharmacy/inventory'
-      fullPath: '/pharmacy/inventory'
-      preLoaderRoute: typeof PharmacyInventoryRouteImport
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pharmacy_/audit': {
-      id: '/pharmacy_/audit'
-      path: '/pharmacy/audit'
-      fullPath: '/pharmacy/audit'
-      preLoaderRoute: typeof PharmacyAuditRouteImport
+    '/pharmacy': {
+      id: '/pharmacy'
+      path: '/pharmacy'
+      fullPath: '/pharmacy'
+      preLoaderRoute: typeof PharmacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/verification': {
-      id: '/admin/verification'
-      path: '/verification'
-      fullPath: '/admin/verification'
-      preLoaderRoute: typeof AdminVerificationRouteImport
-      parentRoute: typeof AdminRoute
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/staff': {
-      id: '/admin/staff'
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff': {
+      id: '/staff'
       path: '/staff'
-      fullPath: '/admin/staff'
-      preLoaderRoute: typeof AdminStaffRouteImport
+      fullPath: '/staff'
+      preLoaderRoute: typeof StaffRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesaler': {
+      id: '/wholesaler'
+      path: '/wholesaler'
+      fullPath: '/wholesaler'
+      preLoaderRoute: typeof WholesalerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/activity': {
+      id: '/admin/activity'
+      path: '/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AdminActivityRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/reports': {
@@ -521,12 +465,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminReportsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/activity': {
-      id: '/admin/activity'
-      path: '/activity'
-      fullPath: '/admin/activity'
-      preLoaderRoute: typeof AdminActivityRouteImport
+    '/admin/staff': {
+      id: '/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AdminStaffRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/admin/verification': {
+      id: '/admin/verification'
+      path: '/verification'
+      fullPath: '/admin/verification'
+      preLoaderRoute: typeof AdminVerificationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/pharmacy_/audit': {
+      id: '/pharmacy_/audit'
+      path: '/pharmacy/audit'
+      fullPath: '/pharmacy/audit'
+      preLoaderRoute: typeof PharmacyAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pharmacy_/inventory': {
+      id: '/pharmacy_/inventory'
+      path: '/pharmacy/inventory'
+      fullPath: '/pharmacy/inventory'
+      preLoaderRoute: typeof PharmacyInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pharmacy_/reports': {
+      id: '/pharmacy_/reports'
+      path: '/pharmacy/reports'
+      fullPath: '/pharmacy/reports'
+      preLoaderRoute: typeof PharmacyReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pharmacy_/rfqs': {
+      id: '/pharmacy_/rfqs'
+      path: '/pharmacy/rfqs'
+      fullPath: '/pharmacy/rfqs'
+      preLoaderRoute: typeof PharmacyRfqsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesaler_/audit': {
+      id: '/wholesaler_/audit'
+      path: '/wholesaler/audit'
+      fullPath: '/wholesaler/audit'
+      preLoaderRoute: typeof WholesalerAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesaler_/reports': {
+      id: '/wholesaler_/reports'
+      path: '/wholesaler/reports'
+      fullPath: '/wholesaler/reports'
+      preLoaderRoute: typeof WholesalerReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wholesaler_/rfqs': {
+      id: '/wholesaler_/rfqs'
+      path: '/wholesaler/rfqs'
+      fullPath: '/wholesaler/rfqs'
+      preLoaderRoute: typeof WholesalerRfqsRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }

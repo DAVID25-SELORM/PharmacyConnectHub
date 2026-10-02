@@ -36,6 +36,8 @@ describe("event labels and categories", () => {
     expect(auditCategoryLabel("RFQ awarded")).toBe("RFQ");
     expect(auditCategoryLabel("Credit ledger entry reversed")).toBe("Credit");
     expect(auditCategoryLabel("Pharmacy inventory imported")).toBe("Inventory");
+    expect(auditCategoryLabel("Pharmacy inventory item added")).toBe("Inventory");
+    expect(auditCategoryLabel("Pharmacy inventory stock adjusted")).toBe("Inventory");
     expect(auditCategoryLabel("Business approved")).toBe("Verification");
     expect(auditCategoryLabel("Mystery")).toBe("Other");
   });

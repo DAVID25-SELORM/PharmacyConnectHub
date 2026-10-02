@@ -40,6 +40,9 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Credit invoice dispute cleared": "Dispute cleared",
   "Pharmacy inventory imported": "Inventory imported",
   "Inventory imported": "Catalog imported",
+  "Pharmacy inventory item added": "Item added",
+  "Pharmacy inventory item updated": "Item updated",
+  "Pharmacy inventory stock adjusted": "Stock adjusted",
   "Pharmacy submitted": "Verification submitted",
   "Wholesaler submitted": "Verification submitted",
   "Business approved": "Business approved",
@@ -68,7 +71,13 @@ const CREDIT_EVENTS = new Set([
   "Credit invoice disputed",
   "Credit invoice dispute cleared",
 ]);
-const INVENTORY_EVENTS = new Set(["Pharmacy inventory imported", "Inventory imported"]);
+const INVENTORY_EVENTS = new Set([
+  "Pharmacy inventory imported",
+  "Inventory imported",
+  "Pharmacy inventory item added",
+  "Pharmacy inventory item updated",
+  "Pharmacy inventory stock adjusted",
+]);
 const VERIFICATION_EVENTS = new Set([
   "Pharmacy submitted",
   "Wholesaler submitted",

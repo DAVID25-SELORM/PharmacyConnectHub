@@ -313,9 +313,9 @@ END $$;
 DO $$
 BEGIN
   PERFORM zz.check('anon has no EXECUTE on any pharmacy inventory RPC',
-    NOT has_function_privilege('anon', 'public.create_pharmacy_inventory_item(uuid,text,text,text,text,text,integer,integer,numeric)', 'EXECUTE')
+    NOT has_function_privilege('anon', 'public.create_pharmacy_inventory_item(uuid,text,text,text,text,text,integer,integer,numeric,text,text,text,text,text,text,date,numeric,text,text,text,text,text)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.adjust_pharmacy_inventory_stock(uuid,integer,text,text,text)', 'EXECUTE')
-    AND NOT has_function_privilege('anon', 'public.update_pharmacy_inventory_item_details(uuid,text,text,text,text,text,integer,numeric,boolean)', 'EXECUTE')
+    AND NOT has_function_privilege('anon', 'public.update_pharmacy_inventory_item_details(uuid,text,text,text,text,text,integer,numeric,boolean,text,text,text,text,text,text,date,numeric,text,text,text,text,text)', 'EXECUTE')
     AND NOT has_function_privilege('anon', 'public.preview_pharmacy_inventory_import(uuid,jsonb,text,text,uuid)', 'EXECUTE'));
 END $$;
 

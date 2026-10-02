@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
+import { ITEM_TYPE_LABELS, type PharmacyItemType } from "@/lib/pharmacy-inventory";
 import {
   parsePharmacyInventoryImportFile,
   parsePharmacyInventoryImportText,
@@ -33,11 +34,39 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const rpc = (name: string, args: Record<string, unknown>) => (supabase as any).rpc(name, args);
 
+function toImportRpcItem(i: InventoryImportResult["items"][number]) {
+  return {
+    name: i.name,
+    brand: i.brand,
+    category: i.category,
+    form: i.form,
+    pack_size: i.pack_size,
+    stock: i.stock,
+    unitCostGhs: i.unitCostGhs,
+    reorderLevel: i.reorderLevel,
+    itemType: i.itemType,
+    genericName: i.genericName,
+    strength: i.strength,
+    manufacturer: i.manufacturer,
+    barcode: i.barcode,
+    batchNumber: i.batchNumber,
+    expiryDate: i.expiryDate,
+    sellingPriceGhs: i.sellingPriceGhs,
+    supplier: i.supplier,
+    unitOfMeasure: i.unitOfMeasure,
+    model: i.model,
+    serialNumber: i.serialNumber,
+    warrantyInfo: i.warrantyInfo,
+    source_row: i.source_row,
+  };
+}
+
 type ImportPreview = {
   token: string;
   rows: {
     row: number;
     name: string;
+    item_type: string;
     kind: "new" | "existing";
     stock_before: number | null;
     stock_after: number;
@@ -73,9 +102,11 @@ export function BulkImportInventoryDialog({
   };
 
   const downloadTemplate = () => {
-    const csvContent = `name,brand,category,form,pack_size,stock,unit_cost_ghs,reorder_level
-Paracetamol 500mg,Generic,Analgesics & Pain Relief,Tablet,20s,100,4.50,20
-Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
+    const csvContent = `name,item_type,brand,category,form,pack_size,generic_name,strength,manufacturer,barcode,batch_number,expiry_date,stock,unit_cost_ghs,selling_price_ghs,reorder_level,supplier,unit_of_measure,model,serial_number,warranty_info
+Paracetamol 500mg,Medicine,Generic,Analgesics & Pain Relief,Tablet,20s,Paracetamol,500mg,GSK,6009000001,B-2201,2027-06-30,100,4.50,6.50,20,Alpha Wholesale,,,,
+Latex Gloves,Medical Consumable,MedSafe,PPE,,100s,,,,6009000002,,,20,25.00,35.00,5,Beta Supplies,box,,,
+BP Monitor,Medical Equipment,Omron,Diagnostics,,,,,,,,,3,180.00,250.00,1,Gamma Medical,,HEM-7120,SN-88213,2 years
+Facial Tissue,Non-Medical Item,SoftCare,Shop items,,,,,,6009000003,,,40,3.00,5.00,10,,pack,,,`;
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -119,17 +150,7 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
       }
       const { data, error } = await rpc("preview_pharmacy_inventory_import", {
         p_pharmacy_id: pharmacyId,
-        p_items: result.items.map((i) => ({
-          name: i.name,
-          brand: i.brand,
-          category: i.category,
-          form: i.form,
-          pack_size: i.pack_size,
-          stock: i.stock,
-          unitCostGhs: i.unitCostGhs,
-          reorderLevel: i.reorderLevel,
-          source_row: i.source_row,
-        })),
+        p_items: result.items.map(toImportRpcItem),
         p_mode: mode,
       });
       if (error) throw error;
@@ -147,17 +168,7 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
     try {
       const { data, error } = await rpc("preview_pharmacy_inventory_import", {
         p_pharmacy_id: pharmacyId,
-        p_items: parsed.items.map((i) => ({
-          name: i.name,
-          brand: i.brand,
-          category: i.category,
-          form: i.form,
-          pack_size: i.pack_size,
-          stock: i.stock,
-          unitCostGhs: i.unitCostGhs,
-          reorderLevel: i.reorderLevel,
-          source_row: i.source_row,
-        })),
+        p_items: parsed.items.map(toImportRpcItem),
         p_mode: mode,
         p_confirm_token: preview.token,
         p_request_id: requestId,
@@ -187,7 +198,9 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
           <DialogTitle>Bulk upload inventory</DialogTitle>
           <DialogDescription>
             Import items from CSV, Excel, PDF, or a pasted table. No price or cost column is
-            required -- just a name and, optionally, a stock count.
+            required -- just a name and, optionally, a stock count. Add an Item Type column
+            (Medicine, Medical Consumable, Medical Equipment, Non-Medical Item) to classify rows;
+            rows without one import as Medicine.
           </DialogDescription>
         </DialogHeader>
         <fieldset disabled={uploading} className="space-y-4 disabled:opacity-70">
@@ -260,7 +273,8 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
             {parsed.invalidRows.length > 0 && (
               <p role="alert" className="text-sm text-destructive">
                 Invalid rows: {parsed.invalidRows.join(", ")}. Each row needs a name and, if given, a
-                non-negative whole stock quantity and cost.
+                non-negative whole stock quantity, cost, selling price, a valid item type, and an
+                expiry date in YYYY-MM-DD format.
               </p>
             )}
             {preview.issues.map((issue, index) => (
@@ -274,6 +288,7 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
                 <thead>
                   <tr>
                     <th className="p-2">Row / item</th>
+                    <th className="p-2">Item type</th>
                     <th className="p-2">Match</th>
                     <th className="p-2">Stock</th>
                     <th className="p-2">Cost (GHS)</th>
@@ -283,6 +298,7 @@ Amoxicillin 500mg,Generic,Antibiotics,Capsule,10s,60,8.00,10`;
                   {preview.rows.map((row) => (
                     <tr key={row.row} className="border-t">
                       <td className="p-2">{row.row}. {row.name}</td>
+                      <td className="p-2">{ITEM_TYPE_LABELS[row.item_type as PharmacyItemType] ?? row.item_type}</td>
                       <td className="p-2">{row.kind}</td>
                       <td className="p-2">{row.stock_before ?? "New"} to {row.stock_after}</td>
                       <td className="p-2">{row.cost_after === null ? "—" : formatGHS(row.cost_after)}</td>

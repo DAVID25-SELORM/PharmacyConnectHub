@@ -416,18 +416,57 @@ export function parseProductImportText(text: string): ProductImportResult {
 // field aliases and relaxed validation -- a pharmacy stock count has no mandatory selling price,
 // unlike a wholesaler catalog upload where price_ghs is required on every row.
 // ---------------------------------------------------------------------------
-type InventoryImportField = "name" | "brand" | "category" | "form" | "pack_size" | "unit_cost_ghs" | "stock" | "reorder_level";
+type InventoryImportField =
+  | "name" | "brand" | "category" | "form" | "pack_size" | "unit_cost_ghs" | "stock" | "reorder_level"
+  | "item_type" | "generic_name" | "strength" | "manufacturer" | "barcode" | "batch_number"
+  | "expiry_date" | "selling_price_ghs" | "supplier" | "unit_of_measure" | "model" | "serial_number" | "warranty_info";
 
 const inventoryFieldAliases: Record<InventoryImportField, string[]> = {
-  name: ["name", "product", "product name", "medicine", "item", "drug"],
-  brand: ["brand", "manufacturer", "company", "label"],
+  name: ["name", "product", "product name", "medicine", "item", "item name", "drug"],
+  brand: ["brand", "label"],
   category: ["category", "group", "class", "therapeutic group"],
   form: ["form", "dosage form", "type"],
   pack_size: ["pack", "pack size", "packsize", "size", "packaging"],
   unit_cost_ghs: ["cost", "unit cost", "cost price", "cost_ghs", "price", "price_ghs"],
   stock: ["stock", "qty", "quantity", "available", "inventory", "units", "on hand", "stock on hand"],
   reorder_level: ["reorder level", "reorder point", "reorder_level", "min stock", "minimum stock", "low stock threshold"],
+  item_type: ["item type", "item_type", "type of item"],
+  generic_name: ["generic name", "generic_name", "generic"],
+  strength: ["strength"],
+  manufacturer: ["manufacturer", "company"],
+  barcode: ["barcode", "sku", "sku/barcode", "sku / barcode"],
+  batch_number: ["batch", "batch number", "batch_number", "lot", "lot number"],
+  expiry_date: ["expiry", "expiry date", "expiry_date", "exp date", "exp"],
+  selling_price_ghs: ["selling price", "selling_price_ghs", "sale price", "retail price"],
+  supplier: ["supplier", "vendor"],
+  unit_of_measure: ["unit", "unit of measure", "uom"],
+  model: ["model"],
+  serial_number: ["serial number", "serial_number", "serial"],
+  warranty_info: ["warranty", "warranty information", "warranty_info"],
 };
+
+const KNOWN_ITEM_TYPES = new Set(["medicine", "medical_consumable", "medical_equipment", "non_medical"]);
+const ITEM_TYPE_IMPORT_ALIASES: Record<string, string> = {
+  medicine: "medicine",
+  "medical consumable": "medical_consumable",
+  medical_consumable: "medical_consumable",
+  consumable: "medical_consumable",
+  "medical equipment": "medical_equipment",
+  medical_equipment: "medical_equipment",
+  equipment: "medical_equipment",
+  "non-medical item": "non_medical",
+  "non medical item": "non_medical",
+  non_medical: "non_medical",
+  "non-medical": "non_medical",
+};
+
+function normalizeItemType(raw: string | undefined): string | null {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return null;
+  const key = trimmed.toLowerCase();
+  if (KNOWN_ITEM_TYPES.has(key)) return key;
+  return ITEM_TYPE_IMPORT_ALIASES[key] ?? null;
+}
 
 function findInventoryImportField(header: string): InventoryImportField | null {
   const normalized = normalizeToken(header);
@@ -449,6 +488,19 @@ export type ImportedInventoryItemDraft = {
   unitCostGhs: number | null;
   stock: number | null;
   reorderLevel: number | null;
+  itemType: string | null;
+  genericName: string | null;
+  strength: string | null;
+  manufacturer: string | null;
+  barcode: string | null;
+  batchNumber: string | null;
+  expiryDate: string | null;
+  sellingPriceGhs: number | null;
+  supplier: string | null;
+  unitOfMeasure: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  warrantyInfo: string | null;
   source_row: number;
 };
 
@@ -485,11 +537,20 @@ function buildImportedInventoryItems(rawRows: RawImportRow[], sourceLabel: strin
     const unitCostGhs = costText ? parseNumericValue(costText, NaN) : null;
     const reorderText = mappedRow.reorder_level?.trim() ?? "";
     const reorderLevel = reorderText ? parseNumericValue(reorderText, NaN) : null;
+    const sellingPriceText = mappedRow.selling_price_ghs?.trim() ?? "";
+    const sellingPriceGhs = sellingPriceText ? parseNumericValue(sellingPriceText, NaN) : null;
+    const itemType = normalizeItemType(mappedRow.item_type);
+    const itemTypeInvalid = Boolean(mappedRow.item_type?.trim()) && itemType === null;
+    const expiryDateText = mappedRow.expiry_date?.trim() ?? "";
+    const expiryDateInvalid = Boolean(expiryDateText) && !/^\d{4}-\d{2}-\d{2}$/.test(expiryDateText);
 
     if (
       !name ||
+      itemTypeInvalid ||
+      expiryDateInvalid ||
       (stock !== null && (!Number.isSafeInteger(stock) || stock < 0 || stock > 2147483647)) ||
       (unitCostGhs !== null && (!Number.isFinite(unitCostGhs) || unitCostGhs < 0 || unitCostGhs > 99999999.99)) ||
+      (sellingPriceGhs !== null && (!Number.isFinite(sellingPriceGhs) || sellingPriceGhs < 0 || sellingPriceGhs > 99999999.99)) ||
       (reorderLevel !== null && (!Number.isSafeInteger(reorderLevel) || reorderLevel < 0))
     ) {
       invalidRows.push(index + 2);
@@ -505,6 +566,19 @@ function buildImportedInventoryItems(rawRows: RawImportRow[], sourceLabel: strin
       unitCostGhs,
       stock,
       reorderLevel,
+      itemType,
+      genericName: mappedRow.generic_name?.trim() || null,
+      strength: mappedRow.strength?.trim() || null,
+      manufacturer: mappedRow.manufacturer?.trim() || null,
+      barcode: mappedRow.barcode?.trim() || null,
+      batchNumber: mappedRow.batch_number?.trim() || null,
+      expiryDate: mappedRow.expiry_date?.trim() || null,
+      sellingPriceGhs,
+      supplier: mappedRow.supplier?.trim() || null,
+      unitOfMeasure: mappedRow.unit_of_measure?.trim() || null,
+      model: mappedRow.model?.trim() || null,
+      serialNumber: mappedRow.serial_number?.trim() || null,
+      warrantyInfo: mappedRow.warranty_info?.trim() || null,
       source_row: index + 2,
     });
   });

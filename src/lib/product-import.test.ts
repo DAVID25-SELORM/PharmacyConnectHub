@@ -79,3 +79,46 @@ describe("pharmacy inventory import parsing", () => {
     expect(parsePharmacyInventoryImportText("name,unit cost\nDrug A,-5").invalidRows).toEqual([2]);
   });
 });
+
+describe("pharmacy inventory import: item type and new fields", () => {
+  it("leaves itemType null when the column is absent (the RPC defaults to medicine)", () => {
+    const result = parsePharmacyInventoryImportText("name,stock\nParacetamol 500mg,25");
+    expect(result.items[0].itemType).toBeNull();
+  });
+  it("normalizes known item type spellings and casing", () => {
+    const result = parsePharmacyInventoryImportText(
+      "name,item type\nA,Medicine\nB,Medical Consumable\nC,medical_equipment\nD,non-medical item",
+    );
+    expect(result.items.map((row) => row.itemType)).toEqual([
+      "medicine",
+      "medical_consumable",
+      "medical_equipment",
+      "non_medical",
+    ]);
+  });
+  it("rejects a row with an unrecognized item type", () => {
+    expect(parsePharmacyInventoryImportText("name,item type\nDrug A,surgical_tape").invalidRows).toEqual([2]);
+  });
+  it("rejects an expiry date that isn't YYYY-MM-DD", () => {
+    expect(parsePharmacyInventoryImportText("name,expiry\nDrug A,30/06/2027").invalidRows).toEqual([2]);
+  });
+  it("accepts a well-formed expiry date", () => {
+    const result = parsePharmacyInventoryImportText("name,expiry\nDrug A,2027-06-30");
+    expect(result.invalidRows).toEqual([]);
+    expect(result.items[0].expiryDate).toBe("2027-06-30");
+  });
+  it("rejects a negative or out-of-range selling price", () => {
+    expect(parsePharmacyInventoryImportText("name,selling price\nDrug A,-5").invalidRows).toEqual([2]);
+  });
+  it("maps the new equipment and consumable field aliases", () => {
+    const result = parsePharmacyInventoryImportText(
+      "name,item type,model,serial number,warranty,barcode,unit\nBP Monitor,Medical Equipment,HEM-7120,SN-1,2 years,,",
+    );
+    expect(result.items[0]).toMatchObject({
+      itemType: "medical_equipment",
+      model: "HEM-7120",
+      serialNumber: "SN-1",
+      warrantyInfo: "2 years",
+    });
+  });
+});

@@ -11,15 +11,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AdjustStockDialog } from "@/components/pharmacy-inventory/AdjustStockDialog";
 import { BulkImportInventoryDialog } from "@/components/pharmacy-inventory/BulkImportInventoryDialog";
 import { InventoryItemFormDialog } from "@/components/pharmacy-inventory/InventoryItemFormDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
-import { formatReportDateTime } from "@/lib/reports";
+import { formatReportDate, formatReportDateTime } from "@/lib/reports";
 import {
   isLowStock,
+  ITEM_TYPE_LABELS,
+  ITEM_TYPE_OPTIONS,
   MOVEMENT_REASON_LABELS,
   type PharmacyInventoryItem,
   type PharmacyInventoryMovement,
+  type PharmacyItemType,
 } from "@/lib/pharmacy-inventory";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +51,7 @@ function PharmacyInventoryPage() {
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<PharmacyItemType | "all">("all");
   const [formItem, setFormItem] = useState<PharmacyInventoryItem | null | "new">(null);
   const [adjustItem, setAdjustItem] = useState<PharmacyInventoryItem | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -96,13 +107,17 @@ function PharmacyInventoryPage() {
   const visibleItems = items
     .filter((i) => showInactive || i.active)
     .filter((i) => !lowStockOnly || isLowStock(i))
+    .filter((i) => typeFilter === "all" || i.item_type === typeFilter)
     .filter((i) => {
       const q = search.trim().toLowerCase();
       if (!q) return true;
       return (
         i.name.toLowerCase().includes(q) ||
         (i.brand ?? "").toLowerCase().includes(q) ||
-        (i.category ?? "").toLowerCase().includes(q)
+        (i.category ?? "").toLowerCase().includes(q) ||
+        (i.barcode ?? "").toLowerCase().includes(q) ||
+        (i.manufacturer ?? "").toLowerCase().includes(q) ||
+        (i.supplier ?? "").toLowerCase().includes(q)
       );
     });
 
@@ -138,10 +153,23 @@ function PharmacyInventoryPage() {
         <div className="mt-6 flex flex-wrap items-center gap-2">
           <Input
             className="max-w-xs"
-            placeholder="Search by name, brand, category"
+            placeholder="Search by name, brand, category, barcode..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as PharmacyItemType | "all")}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All item types</SelectItem>
+              {ITEM_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button type="button" size="sm" variant={lowStockOnly ? "secondary" : "ghost"} onClick={() => setLowStockOnly((v) => !v)}>
             Low stock only
           </Button>
@@ -172,6 +200,9 @@ function PharmacyInventoryPage() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{item.name}</span>
+                          <Badge variant="outline" className="whitespace-nowrap">
+                            {ITEM_TYPE_LABELS[item.item_type]}
+                          </Badge>
                           {!item.active && (
                             <Badge variant="secondary" className="border bg-muted text-muted-foreground">
                               Inactive
@@ -185,6 +216,7 @@ function PharmacyInventoryPage() {
                         </div>
                         <div className="text-muted-foreground">
                           {[item.brand, item.category, item.form, item.pack_size].filter(Boolean).join(" · ") || "—"}
+                          {item.expiry_date && ` · expires ${formatReportDate(item.expiry_date)}`}
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
