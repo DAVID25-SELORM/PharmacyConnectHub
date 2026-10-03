@@ -1,19 +1,10 @@
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  Building2,
-  ClipboardList,
-  Package,
-  Pill,
-  Receipt,
-  ShoppingBag,
-  Store,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight, Building2, Package, Pill, Receipt, Store, Users, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
+import { PharmacyOverview } from "@/components/dashboard/PharmacyOverview";
+import { WholesalerOverview } from "@/components/dashboard/WholesalerOverview";
 import {
   PaymentBadge,
   StatusBadge,
@@ -24,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
+import { wholesalerDashboardAccess } from "@/lib/dashboard";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { useSession, type Business } from "@/hooks/use-session";
 
@@ -528,139 +520,50 @@ function WorkspaceDashboardContent() {
             Dashboard data is not available right now.
           </Card>
         ) : snapshot.type === "pharmacy" ? (
-          <div className="space-y-8">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Approved Wholesalers"
-                value={String(snapshot.approvedWholesalers)}
-                helper="Verified suppliers available right now."
-                icon={<Building2 className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Listed Products"
-                value={String(snapshot.listedProducts)}
-                helper="Active medicines visible in the marketplace."
-                icon={<Package className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Open Orders"
-                value={String(snapshot.openOrders)}
-                helper="Orders still moving through fulfilment."
-                icon={<ClipboardList className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Awaiting Receipts"
-                value={String(snapshot.awaitingReceipts)}
-                helper="Delivered orders that still need a receipt email."
-                icon={<Receipt className="h-5 w-5" />}
-              />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1.4fr,0.9fr]">
-              <RecentPharmacyOrdersCard orders={snapshot.recentOrders} />
-              <QuickActionsCard
-                title="Quick Actions"
-                items={[
-                  {
-                    title: "Browse catalog",
-                    description: "Compare verified wholesalers and place new orders.",
-                    to: "/pharmacy",
-                  },
-                  {
-                    title: "Manage team",
-                    description: "Invite staff and control who can order for the pharmacy.",
-                    to: "/staff",
-                  },
-                  ...(roles.includes("admin")
-                    ? [
-                        {
-                          title: "Admin console",
-                          description:
-                            "Open platform oversight tools without leaving your workspace.",
-                          to: "/admin",
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            </div>
-
-            <Card className="p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold">Marketplace health</div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Browse stays focused on shopping. This dashboard keeps the top-level numbers in
-                    one place.
-                  </p>
-                </div>
-                <Badge variant="outline">{snapshot.categoryCount} categories live</Badge>
-              </div>
-            </Card>
-          </div>
+          <PharmacyOverview
+            business={business}
+            openOrders={snapshot.openOrders}
+            awaitingReceipts={snapshot.awaitingReceipts}
+            recentOrders={<RecentPharmacyOrdersCard orders={snapshot.recentOrders} />}
+          />
         ) : (
-          <div className="space-y-8">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <StatCard
-                label="Pending Orders"
-                value={String(snapshot.pendingOrders)}
-                helper="New orders waiting for action."
-                icon={<ShoppingBag className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Active SKUs"
-                value={String(snapshot.activeSkus)}
-                helper="Products currently visible to pharmacies."
-                icon={<Package className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Low Stock"
-                value={String(snapshot.lowStockSkus)}
-                helper="Active items below 100 units."
-                icon={<Store className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Awaiting Payment"
-                value={String(snapshot.awaitingPayment)}
-                helper="Delivered COD orders still waiting for confirmation."
-                icon={<Wallet className="h-5 w-5" />}
-              />
-              <StatCard
-                label="Collected Revenue"
-                value={formatGHS(snapshot.collectedRevenue)}
-                helper={`${snapshot.receiptsSent} receipt email${snapshot.receiptsSent === 1 ? "" : "s"} sent`}
-                icon={<Receipt className="h-5 w-5" />}
-              />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1.4fr,0.9fr]">
-              <RecentWholesalerOrdersCard orders={snapshot.recentOrders} />
-              <QuickActionsCard
-                title="Quick Actions"
-                items={[
-                  {
-                    title: "Open workspace",
-                    description: "Process orders, confirm payments, and manage products.",
-                    to: "/wholesaler",
-                  },
-                  {
-                    title: "Manage team",
-                    description: "Update wholesaler staff access and order-processing roles.",
-                    to: "/staff",
-                  },
-                  ...(roles.includes("admin")
-                    ? [
-                        {
-                          title: "Admin console",
-                          description: "Jump to platform oversight without leaving this account.",
-                          to: "/admin",
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            </div>
-          </div>
+          <WholesalerOverview
+            business={business}
+            pendingOrders={snapshot.pendingOrders}
+            lowStockSkus={snapshot.lowStockSkus}
+            awaitingPayment={snapshot.awaitingPayment}
+            summaryCards={
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  label="Active SKUs"
+                  value={String(snapshot.activeSkus)}
+                  helper="Products currently visible to pharmacies."
+                  icon={<Package className="h-5 w-5" />}
+                />
+                <StatCard
+                  label="Low Stock"
+                  value={String(snapshot.lowStockSkus)}
+                  helper="Active items below 100 units."
+                  icon={<Store className="h-5 w-5" />}
+                />
+                <StatCard
+                  label="Awaiting Payment"
+                  value={String(snapshot.awaitingPayment)}
+                  helper="Delivered COD orders still waiting for confirmation."
+                  icon={<Wallet className="h-5 w-5" />}
+                />
+                {wholesalerDashboardAccess(business.staff_role).finance && (
+                  <StatCard
+                    label="Collected Revenue"
+                    value={formatGHS(snapshot.collectedRevenue)}
+                    helper={`${snapshot.receiptsSent} receipt email${snapshot.receiptsSent === 1 ? "" : "s"} sent`}
+                    icon={<Receipt className="h-5 w-5" />}
+                  />
+                )}
+              </div>
+            }
+            recentOrders={<RecentWholesalerOrdersCard orders={snapshot.recentOrders} />}
+          />
         )}
       </main>
     </div>
@@ -705,7 +608,9 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link to="/pharmacy" search={{ tab: "orders" }}>View orders</Link>
+          <Link to="/pharmacy" search={{ tab: "orders" }}>
+            View orders
+          </Link>
         </Button>
       </div>
 
@@ -790,41 +695,6 @@ function RecentWholesalerOrdersCard({ orders }: { orders: WholesalerOrderSummary
           ))}
         </div>
       )}
-    </Card>
-  );
-}
-
-function QuickActionsCard({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{
-    title: string;
-    description: string;
-    to: string;
-  }>;
-}) {
-  return (
-    <Card className="p-5">
-      <div className="font-semibold">{title}</div>
-      <div className="mt-4 space-y-3">
-        {items.map((item) => (
-          <Link
-            key={item.title}
-            to={item.to}
-            className="block rounded-xl border border-border p-4 transition-colors hover:border-primary/40 hover:bg-muted/40"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium">{item.title}</div>
-                <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-              </div>
-              <ArrowRight className="mt-0.5 h-4 w-4 text-muted-foreground" />
-            </div>
-          </Link>
-        ))}
-      </div>
     </Card>
   );
 }

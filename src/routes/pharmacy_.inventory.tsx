@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
+import { EXPIRING_SOON_DAYS, daysUntil } from "@/lib/dashboard";
 import { formatGHS } from "@/lib/format";
 import { downloadCsv, downloadPdf, downloadXlsx, formatReportDate, formatReportDateTime, reportFilename, rowsToCsv } from "@/lib/reports";
 import {
@@ -45,6 +46,9 @@ const db = supabase as any;
 
 export const Route = createFileRoute("/pharmacy_/inventory")({
   head: () => ({ meta: [{ title: "Inventory - Drugxone" }] }),
+  // Dashboard links arrive as ?filter=low|expiring.
+  validateSearch: (search: Record<string, unknown>): { filter?: "low" | "expiring" } =>
+    search.filter === "low" || search.filter === "expiring" ? { filter: search.filter } : {},
   component: () => (
     <WorkspaceGate>
       <PharmacyInventoryPage />
@@ -54,11 +58,13 @@ export const Route = createFileRoute("/pharmacy_/inventory")({
 
 function PharmacyInventoryPage() {
   const { business } = useSession();
+  const { filter: initialFilter } = Route.useSearch();
   const [items, setItems] = useState<PharmacyInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
-  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [lowStockOnly, setLowStockOnly] = useState(initialFilter === "low");
+  const [expiringOnly, setExpiringOnly] = useState(initialFilter === "expiring");
   const [typeFilter, setTypeFilter] = useState<PharmacyItemType | "all">("all");
   const [formItem, setFormItem] = useState<PharmacyInventoryItem | null | "new">(null);
   const [adjustItem, setAdjustItem] = useState<PharmacyInventoryItem | null>(null);
@@ -115,7 +121,8 @@ function PharmacyInventoryPage() {
 
   const visibleItems = items
     .filter((i) => showInactive || i.active)
-    .filter((i) => !lowStockOnly || isLowStock(i))
+    .filter((i) => !lowStockOnly || isLowStock(i) || i.stock <= 0)
+    .filter((i) => !expiringOnly || (i.expiry_date !== null && daysUntil(i.expiry_date) <= EXPIRING_SOON_DAYS))
     .filter((i) => typeFilter === "all" || i.item_type === typeFilter)
     .filter((i) => {
       const q = search.trim().toLowerCase();
@@ -213,6 +220,9 @@ function PharmacyInventoryPage() {
           </Select>
           <Button type="button" size="sm" variant={lowStockOnly ? "secondary" : "ghost"} onClick={() => setLowStockOnly((v) => !v)}>
             Low stock only
+          </Button>
+          <Button type="button" size="sm" variant={expiringOnly ? "secondary" : "ghost"} onClick={() => setExpiringOnly((v) => !v)}>
+            Expiring soon
           </Button>
           <Button type="button" size="sm" variant={showInactive ? "secondary" : "ghost"} onClick={() => setShowInactive((v) => !v)}>
             Show inactive

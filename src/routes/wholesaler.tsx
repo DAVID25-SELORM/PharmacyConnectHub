@@ -381,7 +381,7 @@ function WholesalerDashboardContent() {
         <Tabs
           defaultValue={(() => {
             const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab && ["orders", "products", "insights", "batches", "returns", "customers", "discounts"].includes(tab) ? tab : "orders";
+            return tab && ["orders", "products", "insights", "batches", "returns", "customers", "discounts", "credit"].includes(tab) ? tab : "orders";
           })()}
           className="w-full"
         >
