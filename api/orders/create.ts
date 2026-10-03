@@ -62,11 +62,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Invalid purchase category" });
   }
 
+  // A real checkout must classify every line (NHIS / Cash); the database enforces it and reports
+  // how many lines are missing, so the cart can point the user at them.
   const { data, error } = await admin.rpc("create_marketplace_orders", {
     _caller_id: caller.id,
     _items: items,
     _pharmacy_id: pharmacyId,
     _credit_wholesaler_ids: creditWholesalerIds,
+    _require_classification: true,
   });
 
   if (error) {

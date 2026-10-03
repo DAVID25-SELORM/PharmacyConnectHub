@@ -21,7 +21,8 @@ export const ITEM_PURCHASE_CATEGORIES: ItemPurchaseCategory[] = ["nhis", "cash_p
 
 export const purchaseCategoryLabels: Record<PurchaseCategory, string> = {
   nhis: "NHIS",
-  cash_private: "Cash / Private",
+  // Stored as "cash_private" (six report functions and all history use that key); shown as "Cash".
+  cash_private: "Cash",
   mixed: "Mixed",
   other: "Other",
 };
@@ -76,4 +77,71 @@ export function purchaseCategoryBadgeClass(category: PurchaseCategory | null | u
 
 export function purchaseCategoryLabel(category: PurchaseCategory | null | undefined): string {
   return category ? purchaseCategoryLabels[category] : "Not classified";
+}
+
+/** The two classifications offered on a new order. "other" stays valid in the database (and on
+ * history) but is not offered at checkout. */
+export const CHECKOUT_CATEGORIES: ItemPurchaseCategory[] = ["nhis", "cash_private"];
+
+export type ClassificationLine = {
+  id: string;
+  /** Estimated line value after discounts (the database computes the authoritative figure). */
+  amount: number;
+  category: ItemPurchaseCategory | undefined;
+};
+
+export type ClassificationSummary = {
+  byCategory: Record<ItemPurchaseCategory, { lines: number; amount: number }>;
+  unclassified: { lines: number; amount: number; ids: string[] };
+  total: number;
+  /** "NHIS Order" / "Cash Order" / "Other Order" / "Mixed Purchase", derived from the lines;
+   * null while any line is still unclassified (or the cart is empty). */
+  label: string | null;
+};
+
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/**
+ * Checkout summary, derived entirely from the lines: spend and line count per classification, which
+ * lines still need one, and the order label. Nothing here is stored or editable -- the server
+ * derives the real order category from the lines it saves.
+ */
+export function summarizeClassification(lines: ClassificationLine[]): ClassificationSummary {
+  const byCategory: ClassificationSummary["byCategory"] = {
+    nhis: { lines: 0, amount: 0 },
+    cash_private: { lines: 0, amount: 0 },
+    other: { lines: 0, amount: 0 },
+  };
+  const unclassified: ClassificationSummary["unclassified"] = { lines: 0, amount: 0, ids: [] };
+  for (const line of lines) {
+    if (line.category) {
+      byCategory[line.category].lines += 1;
+      byCategory[line.category].amount += line.amount;
+    } else {
+      unclassified.lines += 1;
+      unclassified.amount += line.amount;
+      unclassified.ids.push(line.id);
+    }
+  }
+  for (const key of ITEM_PURCHASE_CATEGORIES)
+    byCategory[key].amount = roundMoney(byCategory[key].amount);
+  unclassified.amount = roundMoney(unclassified.amount);
+  const total = roundMoney(
+    ITEM_PURCHASE_CATEGORIES.reduce((sum, key) => sum + byCategory[key].amount, 0) +
+      unclassified.amount,
+  );
+
+  const used = ITEM_PURCHASE_CATEGORIES.filter((key) => byCategory[key].lines > 0);
+  let label: string | null = null;
+  if (lines.length > 0 && unclassified.lines === 0) {
+    label = used.length > 1 ? "Mixed Purchase" : `${purchaseCategoryLabels[used[0]]} Order`;
+  }
+  return { byCategory, unclassified, total, label };
+}
+
+/** "3 items still need a purchase classification." (and the singular form). */
+export function unclassifiedMessage(count: number): string {
+  return count === 1
+    ? "1 item still needs a purchase classification."
+    : `${count} items still need a purchase classification.`;
 }

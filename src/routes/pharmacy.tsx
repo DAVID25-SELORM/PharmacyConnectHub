@@ -49,16 +49,19 @@ import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
 import {
-  allItemsClassified,
+  CHECKOUT_CATEGORIES,
   purchaseCategoryBadgeClass,
-  purchaseCategoryChoiceDescriptions,
   purchaseCategoryLabel,
   purchaseCategoryLabels,
-  resolveItemCategory,
+  summarizeClassification,
+  unclassifiedMessage,
   type ItemPurchaseCategory,
   type PurchaseCategory,
-  type PurchaseCategoryChoice,
 } from "@/lib/purchase-category";
+import {
+  ClassificationChangeDialog,
+  type ClassificationTarget,
+} from "@/components/pharmacy/ClassificationChangeDialog";
 import { SavedCartsMenu } from "@/components/pharmacy/SavedCartsMenu";
 import { useSavedCarts, type SavedCartsApi } from "@/hooks/use-saved-carts";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -163,6 +166,7 @@ type OrderRow = {
   receipt_sent_to: string | null;
   wholesaler: { name: string } | null;
   order_items: {
+    id?: string;
     product_name: string;
     quantity: number;
     unit_price_ghs: number;
@@ -905,6 +909,7 @@ function PharmacyDashboardContent() {
               onRequestReturn={
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
               }
+              canReclassify={["owner", "manager", "accountant"].includes(business?.staff_role ?? "")}
             />
           </TabsContent>
         </Tabs>
@@ -957,7 +962,6 @@ function CartSheet({
 }) {
   const [open, setOpen] = useState(false);
   const [creditSelected, setCreditSelected] = useState<Record<string, boolean>>({});
-  const [purchaseCategoryChoice, setPurchaseCategoryChoice] = useState<PurchaseCategoryChoice | "">("");
   const [itemCategories, setItemCategories] = useState<Record<string, ItemPurchaseCategory>>({});
   const items = cart
     .map((c) => ({ p: productMap[c.productId], qty: c.quantity }))
@@ -986,6 +990,28 @@ function CartSheet({
     0,
   );
   const belowMinimum = Object.entries(estimates).filter(([, estimate]) => !estimate.minimumMet);
+
+  // Each line's estimated value after discounts: the supplier's discounted goods total, shared out
+  // by each line's share of the undiscounted value. Display only; the database computes the real
+  // figures and derives the order's category from the lines it saves.
+  const classification = summarizeClassification(
+    Object.entries(grouped).flatMap(([wid, group]) => {
+      const baseTotal = group.reduce((sum, it) => sum + Number(it.p!.price_ghs) * it.qty, 0);
+      const factor = baseTotal > 0 ? estimates[wid].goods / baseTotal : 1;
+      return group.map((it) => ({
+        id: it.p!.id,
+        amount: Number(it.p!.price_ghs) * it.qty * factor,
+        category: itemCategories[it.p!.id],
+      }));
+    }),
+  );
+  const setAllCategories = (category: ItemPurchaseCategory) =>
+    setItemCategories(Object.fromEntries(items.map((it) => [it.p!.id, category])));
+  const jumpToUnclassified = () => {
+    const target = document.getElementById(`cart-line-class-${classification.unclassified.ids[0]}`);
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.focus();
+  };
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -1017,29 +1043,25 @@ function CartSheet({
           />
         </div>
         {items.length > 0 && (
-          <div className="space-y-1.5 rounded-xl border border-border p-3">
-            <label htmlFor="purchase-category-choice" className="text-sm font-medium">
-              How will this purchase be classified?
-            </label>
-            <Select
-              value={purchaseCategoryChoice}
-              onValueChange={(value) => setPurchaseCategoryChoice(value as PurchaseCategoryChoice)}
-            >
-              <SelectTrigger id="purchase-category-choice">
-                <SelectValue placeholder="Not classified" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nhis">NHIS</SelectItem>
-                <SelectItem value="cash_private">Cash / Private</SelectItem>
-                <SelectItem value="mixed">Mixed</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-            {purchaseCategoryChoice && (
-              <p className="text-xs text-muted-foreground">
-                {purchaseCategoryChoiceDescriptions[purchaseCategoryChoice]}
-              </p>
-            )}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <div className="text-sm font-medium">Classify each item as NHIS or Cash</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">Set all items to:</span>
+              {CHECKOUT_CATEGORIES.map((key) => (
+                <Button
+                  key={key}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAllCategories(key)}
+                >
+                  {purchaseCategoryLabels[key]}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Then change individual items below. One supplier order can mix NHIS and Cash items.
+            </p>
           </div>
         )}
         {items.length === 0 ? (
@@ -1104,26 +1126,31 @@ function CartSheet({
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                        {purchaseCategoryChoice === "mixed" && (
-                          <Select
-                            value={itemCategories[it.p!.id] ?? ""}
-                            onValueChange={(value) =>
-                              setItemCategories((current) => ({
-                                ...current,
-                                [it.p!.id]: value as ItemPurchaseCategory,
-                              }))
-                            }
+                        <Select
+                          value={itemCategories[it.p!.id] ?? ""}
+                          onValueChange={(value) =>
+                            setItemCategories((current) => ({
+                              ...current,
+                              [it.p!.id]: value as ItemPurchaseCategory,
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            id={`cart-line-class-${it.p!.id}`}
+                            className={`h-8 text-xs ${itemCategories[it.p!.id] ? "" : "border-destructive"}`}
+                            aria-label={`Classification for ${it.p!.name}`}
+                            aria-invalid={!itemCategories[it.p!.id]}
                           >
-                            <SelectTrigger className="h-8 text-xs" aria-label={`Category for ${it.p!.name}`}>
-                              <SelectValue placeholder="Choose a category…" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="nhis">NHIS</SelectItem>
-                              <SelectItem value="cash_private">Cash / Private</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
+                            <SelectValue placeholder="Required: choose NHIS or Cash" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CHECKOUT_CATEGORIES.map((key) => (
+                              <SelectItem key={key} value={key}>
+                                {purchaseCategoryLabels[key]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     ))}
                   </div>
@@ -1216,12 +1243,44 @@ function CartSheet({
                     to place orders.
                   </div>
                 )}
-                {purchaseCategoryChoice === "mixed" &&
-                  !allItemsClassified(purchaseCategoryChoice, itemCategories, items.map((it) => it.p!.id)) && (
-                    <p role="alert" className="text-xs font-medium text-destructive">
-                      Choose a category for every item before placing a mixed order.
-                    </p>
+                <div
+                  className="space-y-1.5 rounded-lg border border-border p-3 text-sm"
+                  aria-label="Purchase classification summary"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">Purchase classification</span>
+                    {classification.label && <Badge variant="outline">{classification.label}</Badge>}
+                  </div>
+                  {CHECKOUT_CATEGORIES.map(
+                    (key) =>
+                      classification.byCategory[key].lines > 0 && (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            {purchaseCategoryLabels[key]} · {classification.byCategory[key].lines}{" "}
+                            product line{classification.byCategory[key].lines === 1 ? "" : "s"}
+                          </span>
+                          <span>{formatGHS(classification.byCategory[key].amount)}</span>
+                        </div>
+                      ),
                   )}
+                  {classification.unclassified.lines > 0 && (
+                    <div
+                      role="alert"
+                      className="flex items-center justify-between gap-2 rounded-md bg-destructive/10 p-2 text-xs"
+                    >
+                      <span className="font-medium text-destructive">
+                        {unclassifiedMessage(classification.unclassified.lines)}
+                      </span>
+                      <Button type="button" size="sm" variant="outline" onClick={jumpToUnclassified}>
+                        Show me
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-border pt-1.5 text-xs font-medium">
+                    <span>Goods (estimated)</span>
+                    <span>{formatGHS(classification.total)}</span>
+                  </div>
+                </div>
                 <Button
                   variant="hero"
                   size="lg"
@@ -1230,7 +1289,7 @@ function CartSheet({
                     placing ||
                     !canPlaceOrders ||
                     belowMinimum.length > 0 ||
-                    !allItemsClassified(purchaseCategoryChoice, itemCategories, items.map((it) => it.p!.id))
+                    classification.unclassified.lines > 0
                   }
                   onClick={async () => {
                     const creditWholesalerIds = Object.keys(grouped).filter(
@@ -1239,17 +1298,13 @@ function CartSheet({
                     );
                     const resolvedCategories = Object.fromEntries(
                       items
-                        .map((it) => [
-                          it.p!.id,
-                          resolveItemCategory(purchaseCategoryChoice, itemCategories, it.p!.id),
-                        ])
+                        .map((it) => [it.p!.id, itemCategories[it.p!.id]])
                         .filter(([, category]) => Boolean(category)),
                     ) as Record<string, ItemPurchaseCategory>;
                     const placed = await placeOrder(creditWholesalerIds, resolvedCategories);
                     if (placed) {
                       setOpen(false);
                       setCreditSelected({});
-                      setPurchaseCategoryChoice("");
                       setItemCategories({});
                     }
                   }}
@@ -1554,7 +1609,9 @@ function OrdersView({
   wholesalers,
   onReorder,
   onRequestReturn,
+  canReclassify = false,
 }: {
+  canReclassify?: boolean;
   onRequestReturn?: (orderId: string, orderLabel: string) => void;
   onReorder?: (orderId: string, orderLabel: string) => Promise<void>;
   orders: OrderRow[];
@@ -1564,6 +1621,7 @@ function OrdersView({
   wholesalers: WholesalerSummary[];
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [classifyTarget, setClassifyTarget] = useState<ClassificationTarget | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [payment, setPayment] = useState("all");
@@ -1926,11 +1984,32 @@ function OrdersView({
 
                 <div className="mt-4 divide-y divide-border rounded-xl border border-border">
                   {o.order_items.map((it, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 text-sm">
-                      <div>
+                    <div key={i} className="flex items-center justify-between gap-3 p-3 text-sm">
+                      <div className="min-w-0">
                         <div className="font-medium">{it.product_name}</div>
                         <div className="text-xs text-muted-foreground">
                           {formatGHS(it.unit_price_ghs)} × {it.quantity}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <Badge className={purchaseCategoryBadgeClass(it.purchase_category)}>
+                            {purchaseCategoryLabel(it.purchase_category)}
+                          </Badge>
+                          {canReclassify && it.id && o.status !== "cancelled" && (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-primary hover:underline"
+                              onClick={() =>
+                                setClassifyTarget({
+                                  itemId: it.id!,
+                                  productName: it.product_name,
+                                  current: it.purchase_category,
+                                  orderNumber: o.order_number,
+                                })
+                              }
+                            >
+                              Change classification
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="font-medium">
@@ -1967,6 +2046,13 @@ function OrdersView({
           </Button>
         </div>
       </div>
+      <ClassificationChangeDialog
+        target={classifyTarget}
+        onClose={() => setClassifyTarget(null)}
+        onChanged={async () => {
+          if (openOrderId) await loadOrderDetail(openOrderId);
+        }}
+      />
     </div>
   );
 }

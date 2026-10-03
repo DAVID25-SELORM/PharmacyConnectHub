@@ -49,13 +49,15 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Business approved": "Business approved",
   "Business rejected": "Business rejected",
   "Business verification updated": "Verification updated",
+  "Order classification recorded": "Order classified",
+  "Order classification changed": "Classification changed",
 };
 
 export function auditActivityLabel(activity: string) {
   return DISPLAY_LABELS[activity] ?? activity;
 }
 
-type AuditCategory = "rfq" | "credit" | "inventory" | "verification" | "other";
+type AuditCategory = "rfq" | "credit" | "inventory" | "verification" | "order" | "other";
 
 const RFQ_EVENTS = new Set([
   "RFQ created",
@@ -88,11 +90,14 @@ const VERIFICATION_EVENTS = new Set([
   "Business verification updated",
 ]);
 
+const ORDER_EVENTS = new Set(["Order classification recorded", "Order classification changed"]);
+
 export function auditCategory(activity: string): AuditCategory {
   if (RFQ_EVENTS.has(activity)) return "rfq";
   if (CREDIT_EVENTS.has(activity)) return "credit";
   if (INVENTORY_EVENTS.has(activity)) return "inventory";
   if (VERIFICATION_EVENTS.has(activity)) return "verification";
+  if (ORDER_EVENTS.has(activity)) return "order";
   return "other";
 }
 
@@ -101,6 +106,7 @@ const CATEGORY_LABELS: Record<AuditCategory, string> = {
   credit: "Credit",
   inventory: "Inventory",
   verification: "Verification",
+  order: "Order",
   other: "Other",
 };
 

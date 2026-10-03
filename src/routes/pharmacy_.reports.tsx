@@ -540,7 +540,7 @@ function PurchasesTab({
     },
     { label: "NHIS Value", value: summary ? formatGHSCell(summary.nhis_value_ghs) : "—" },
     {
-      label: "Cash / Private Value",
+      label: "Cash Value",
       value: summary ? formatGHSCell(summary.cash_private_value_ghs) : "—",
     },
     { label: "Orders", value: summary ? String(summary.order_count) : "—" },
@@ -589,7 +589,7 @@ function PurchasesTab({
         >
           <option value="">All categories</option>
           <option value="nhis">NHIS</option>
-          <option value="cash_private">Cash / Private</option>
+          <option value="cash_private">Cash</option>
           <option value="other">Other</option>
           <option value="unclassified">Not classified</option>
         </select>
@@ -789,7 +789,7 @@ function ProductsTab({
         >
           <option value="">All categories</option>
           <option value="nhis">NHIS</option>
-          <option value="cash_private">Cash / Private</option>
+          <option value="cash_private">Cash</option>
           <option value="other">Other</option>
           <option value="unclassified">Not classified</option>
         </select>

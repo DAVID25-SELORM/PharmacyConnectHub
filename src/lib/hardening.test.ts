@@ -78,6 +78,8 @@ describe("audit categories", () => {
     expect(auditCategory("Credit payment recorded")).toBe("credit");
     expect(auditCategory("Pharmacy inventory stock adjusted")).toBe("inventory");
     expect(auditCategory("Business approved")).toBe("verification");
+    expect(auditCategory("Order classification recorded")).toBe("order");
+    expect(auditCategory("Order classification changed")).toBe("order");
     expect(auditCategory("Something new")).toBe("other");
     expect(auditCategoryLabel("RFQ created")).toBe("RFQ");
   });
