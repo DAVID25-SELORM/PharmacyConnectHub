@@ -9,6 +9,10 @@ export default tseslint.config(
   {
     ignores: [
       "dist",
+      ".tmp/**",
+      ".vercel/**",
+      ".claude/**",
+      ".sixth/**",
       ".output",
       ".tanstack",
       ".vinxi",

@@ -76,6 +76,7 @@ export function StatementView({
     const win = window.open("", "_blank");
     if (!win) return toast.error("Allow pop-ups to print the statement.");
     win.document.open();
+    win.addEventListener("load", () => win.print(), { once: true });
     win.document.write(statementPrintHtml(statement));
     win.document.close();
   };

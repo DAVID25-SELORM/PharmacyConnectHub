@@ -73,7 +73,27 @@ async function postWithSession<T>(path: string, input: unknown): Promise<T> {
 export async function createMarketplaceOrders(
   input: CreateMarketplaceOrdersInput,
 ): Promise<CreateMarketplaceOrdersResult> {
-  const data = await postWithSession<CreateMarketplaceOrdersResult>("/api/orders/create", input);
+  const session = await getRequiredSession();
+  const key = `checkout-request:${session.user.id}:${input.pharmacyId}`;
+  const payload = JSON.stringify(input);
+  // Keep the ID after a lost response and across reloads. A successful checkout clears it,
+  // allowing a deliberate second purchase of the same cart.
+  let pending: { payload: string; requestId: string } | undefined;
+  try {
+    pending = JSON.parse(sessionStorage.getItem(key) ?? "null") ?? undefined;
+  } catch {
+    /* replace malformed state */
+  }
+  if (!pending || pending.payload !== payload || !pending.requestId) {
+    pending = { payload, requestId: crypto.randomUUID() };
+    sessionStorage.setItem(key, JSON.stringify(pending));
+  }
+  const data = await postWithSession<CreateMarketplaceOrdersResult>("/api/orders/create", {
+    ...input,
+    requestId: pending.requestId,
+  });
+  // A slower response must not clear a newer cart's pending request.
+  if (sessionStorage.getItem(key) === JSON.stringify(pending)) sessionStorage.removeItem(key);
 
   return { orderCount: Number(data.orderCount) || 0 };
 }
