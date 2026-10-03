@@ -11,9 +11,21 @@ import {
 describe("settlementOptions", () => {
   const values = (options: ReturnType<typeof settlementOptions>) => options.map((o) => o.value);
 
-  it("offers every method but credit when the supplier has not approved credit", () => {
+  it("shows disabled credit with approval guidance when no terms are available", () => {
     const options = settlementOptions({ state: "none" });
-    expect(values(options)).toEqual(["cod", "bank_transfer", "momo", "cheque", "other", "pay_now"]);
+    expect(values(options)).toEqual([
+      "cod",
+      "credit",
+      "bank_transfer",
+      "momo",
+      "cheque",
+      "other",
+      "pay_now",
+    ]);
+    expect(options.find((o) => o.value === "credit")).toMatchObject({
+      disabled: true,
+      reason: "Ask this supplier to approve a credit account.",
+    });
   });
 
   it("offers credit when it is available", () => {

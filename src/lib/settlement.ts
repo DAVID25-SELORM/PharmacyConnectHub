@@ -54,16 +54,20 @@ export type CreditAvailability =
   | { state: "blocked" };
 
 /**
- * The options a pharmacy sees for one supplier. Credit is offered only when that supplier has
- * approved credit for the pharmacy; if it has but the order can't go on it, the option stays visible
- * and disabled with the reason, rather than silently disappearing.
+ * Keep credit discoverable even when unavailable; approval and limit checks still gate selection.
  */
 export function settlementOptions(credit: CreditAvailability): SettlementOption[] {
-  const options: SettlementOption[] = SELECTABLE_SETTLEMENT_METHODS.filter(
-    (method) => method !== "credit" || credit.state !== "none",
-  ).map((value) => ({ value, label: SETTLEMENT_LABELS[value], disabled: false }));
+  const options: SettlementOption[] = SELECTABLE_SETTLEMENT_METHODS.map((value) => ({
+    value,
+    label: SETTLEMENT_LABELS[value],
+    disabled: false,
+  }));
 
   const creditOption = options.find((option) => option.value === "credit");
+  if (creditOption && credit.state === "none") {
+    creditOption.disabled = true;
+    creditOption.reason = "Ask this supplier to approve a credit account.";
+  }
   if (creditOption && credit.state === "insufficient") {
     creditOption.disabled = true;
     creditOption.reason = `Only ${credit.availableLabel} of approved credit is left.`;
