@@ -1,3 +1,4 @@
+import { WholesalerCreditRequests } from "@/components/credit/CreditAccountRequests";
 import { useCallback, useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
@@ -147,216 +148,219 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   };
 
   return (
-    <Card className="p-5">
-      <div className="flex items-center gap-2">
-        <CreditCard className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-xl font-bold">Credit clients</h2>
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Choose the pharmacies you want to approve as credit clients. Set a limit and payment terms
-        for each pharmacy; approval applies only to orders from your business. Checkout blocks any
-        credit order that would push their balance over the limit. Settle a credit order the same
-        way as a cash order, by confirming payment once it is delivered.
-      </p>
+    <div className="space-y-4">
+      <WholesalerCreditRequests wholesalerId={wholesalerId} onReviewed={() => void load()} />
+      <Card className="p-5">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-5 w-5 text-primary" aria-hidden="true" />
+          <h2 className="font-display text-xl font-bold">Credit clients</h2>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Choose the pharmacies you want to approve as credit clients. Set a limit and payment terms
+          for each pharmacy; approval applies only to orders from your business. Checkout blocks any
+          credit order that would push their balance over the limit. Settle a credit order the same
+          way as a cash order, by confirming payment once it is delivered.
+        </p>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <label className="block text-sm md:col-span-2">
-          <span className="mb-1 block text-muted-foreground">Pharmacy</span>
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
-            value={pharmacyId}
-            disabled={loading || error || saving}
-            onChange={(event) => selectPharmacy(event.target.value)}
-          >
-            <option value="">Choose a pharmacy</option>
-            {pharmacies.map((pharmacy) => (
-              <option key={pharmacy.id} value={pharmacy.id}>
-                {pharmacy.name}
-                {lines.some((line) => line.pharmacy_id === pharmacy.id) ? " (credit client)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Credit limit (GHS)</span>
-          <Input
-            type="number"
-            min={0.01}
-            step="0.01"
-            value={limit}
-            onChange={(event) => setLimit(event.target.value)}
-          />
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Payment terms (days)</span>
-          <Input
-            type="number"
-            min={1}
-            max={365}
-            value={days}
-            onChange={(event) => setDays(event.target.value)}
-          />
-        </label>
-      </div>
-      <label className="mt-3 block text-sm">
-        <span className="mb-1 block text-muted-foreground">Note (optional, internal)</span>
-        <Input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
-      </label>
-      <Button
-        className="mt-4"
-        size="sm"
-        variant="hero"
-        disabled={saving || loading || error || !pharmacyId}
-        onClick={() => void save()}
-      >
-        {saving ? "Saving..." : selectedLine ? "Update credit terms" : "Approve credit client"}
-      </Button>
-
-      <div className="mt-6">
-        {loading ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            Loading...
-          </p>
-        ) : error ? (
-          <p role="alert" className="text-sm">
-            We couldn&apos;t load pharmacies or credit terms.{" "}
-            <button type="button" className="text-primary underline" onClick={() => void load()}>
-              Try again
-            </button>
-          </p>
-        ) : lines.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            You have not approved any pharmacies as credit clients yet.
-          </p>
-        ) : (
-          <ul className="divide-y divide-border rounded-xl border border-border text-sm">
-            {lines.map((line) => (
-              <li
-                key={line.pharmacy_id}
-                className="flex flex-wrap items-center justify-between gap-3 p-3"
-              >
-                <div>
-                  <div className="font-medium">{line.pharmacy_name}</div>
-                  <div className="text-muted-foreground">
-                    {formatGHS(line.outstanding_ghs)} owed of {formatGHS(line.credit_limit_ghs)} ·{" "}
-                    {line.payment_terms_days}-day terms · updated{" "}
-                    {formatReportDate(line.updated_at)}
-                    {line.internal_note ? ` · ${line.internal_note}` : ""}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    <Badge variant={line.status === "active" ? "secondary" : "destructive"}>
-                      {STATUS_LABELS[line.status]}
-                    </Badge>
-                    <span className="text-muted-foreground">
-                      {formatGHS(line.available_ghs)} available
-                      {line.status !== "active" && line.status_reason
-                        ? ` · ${line.status_reason}`
-                        : ""}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => selectPharmacy(line.pharmacy_id)}
-                  >
-                    Edit terms
-                  </Button>
-                  {line.status !== "active" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStatusChange({ line, next: "active" })}
-                    >
-                      Reactivate
-                    </Button>
-                  )}
-                  {line.status === "active" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStatusChange({ line, next: "suspended" })}
-                    >
-                      Suspend
-                    </Button>
-                  )}
-                  {line.status !== "blocked" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStatusChange({ line, next: "blocked" })}
-                    >
-                      Block
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => void revoke(line)}>
-                    Revoke
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <Dialog
-        open={statusChange !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setStatusChange(null);
-            setStatusReason("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {statusChange?.next === "active"
-                ? "Reactivate credit"
-                : statusChange?.next === "suspended"
-                  ? "Suspend credit"
-                  : "Block credit"}
-            </DialogTitle>
-            <DialogDescription>
-              {statusChange
-                ? statusChange.next === "active"
-                  ? `${statusChange.line.pharmacy_name} will be able to place credit orders again.`
-                  : `${statusChange.line.pharmacy_name} won't be able to place new credit orders. Existing invoices stay payable. They are notified with your reason.`
-                : ""}
-            </DialogDescription>
-          </DialogHeader>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <label className="block text-sm md:col-span-2">
+            <span className="mb-1 block text-muted-foreground">Pharmacy</span>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+              value={pharmacyId}
+              disabled={loading || error || saving}
+              onChange={(event) => selectPharmacy(event.target.value)}
+            >
+              <option value="">Choose a pharmacy</option>
+              {pharmacies.map((pharmacy) => (
+                <option key={pharmacy.id} value={pharmacy.id}>
+                  {pharmacy.name}
+                  {lines.some((line) => line.pharmacy_id === pharmacy.id) ? " (credit client)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-muted-foreground">Reason (required)</span>
-            <Textarea
-              value={statusReason}
-              maxLength={500}
-              rows={3}
-              onChange={(event) => setStatusReason(event.target.value)}
+            <span className="mb-1 block text-muted-foreground">Credit limit (GHS)</span>
+            <Input
+              type="number"
+              min={0.01}
+              step="0.01"
+              value={limit}
+              onChange={(event) => setLimit(event.target.value)}
             />
           </label>
-          {statusReason.length > 0 && statusReason.trim().length < 5 && (
-            <p className="text-xs text-destructive">Enter at least 5 characters.</p>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Payment terms (days)</span>
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={days}
+              onChange={(event) => setDays(event.target.value)}
+            />
+          </label>
+        </div>
+        <label className="mt-3 block text-sm">
+          <span className="mb-1 block text-muted-foreground">Note (optional, internal)</span>
+          <Input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
+        </label>
+        <Button
+          className="mt-4"
+          size="sm"
+          variant="hero"
+          disabled={saving || loading || error || !pharmacyId}
+          onClick={() => void save()}
+        >
+          {saving ? "Saving..." : selectedLine ? "Update credit terms" : "Approve credit client"}
+        </Button>
+
+        <div className="mt-6">
+          {loading ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Loading...
+            </p>
+          ) : error ? (
+            <p role="alert" className="text-sm">
+              We couldn&apos;t load pharmacies or credit terms.{" "}
+              <button type="button" className="text-primary underline" onClick={() => void load()}>
+                Try again
+              </button>
+            </p>
+          ) : lines.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You have not approved any pharmacies as credit clients yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border rounded-xl border border-border text-sm">
+              {lines.map((line) => (
+                <li
+                  key={line.pharmacy_id}
+                  className="flex flex-wrap items-center justify-between gap-3 p-3"
+                >
+                  <div>
+                    <div className="font-medium">{line.pharmacy_name}</div>
+                    <div className="text-muted-foreground">
+                      {formatGHS(line.outstanding_ghs)} owed of {formatGHS(line.credit_limit_ghs)} ·{" "}
+                      {line.payment_terms_days}-day terms · updated{" "}
+                      {formatReportDate(line.updated_at)}
+                      {line.internal_note ? ` · ${line.internal_note}` : ""}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <Badge variant={line.status === "active" ? "secondary" : "destructive"}>
+                        {STATUS_LABELS[line.status]}
+                      </Badge>
+                      <span className="text-muted-foreground">
+                        {formatGHS(line.available_ghs)} available
+                        {line.status !== "active" && line.status_reason
+                          ? ` · ${line.status_reason}`
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selectPharmacy(line.pharmacy_id)}
+                    >
+                      Edit terms
+                    </Button>
+                    {line.status !== "active" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStatusChange({ line, next: "active" })}
+                      >
+                        Reactivate
+                      </Button>
+                    )}
+                    {line.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStatusChange({ line, next: "suspended" })}
+                      >
+                        Suspend
+                      </Button>
+                    )}
+                    {line.status !== "blocked" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setStatusChange({ line, next: "blocked" })}
+                      >
+                        Block
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => void revoke(line)}>
+                      Revoke
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setStatusChange(null);
-                setStatusReason("");
-              }}
-              disabled={statusSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void applyStatus()}
-              disabled={statusSaving || statusReason.trim().length < 5}
-            >
-              {statusSaving ? "Saving…" : "Confirm"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </Card>
+        </div>
+        <Dialog
+          open={statusChange !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setStatusChange(null);
+              setStatusReason("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {statusChange?.next === "active"
+                  ? "Reactivate credit"
+                  : statusChange?.next === "suspended"
+                    ? "Suspend credit"
+                    : "Block credit"}
+              </DialogTitle>
+              <DialogDescription>
+                {statusChange
+                  ? statusChange.next === "active"
+                    ? `${statusChange.line.pharmacy_name} will be able to place credit orders again.`
+                    : `${statusChange.line.pharmacy_name} won't be able to place new credit orders. Existing invoices stay payable. They are notified with your reason.`
+                  : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <label className="block text-sm">
+              <span className="mb-1 block text-muted-foreground">Reason (required)</span>
+              <Textarea
+                value={statusReason}
+                maxLength={500}
+                rows={3}
+                onChange={(event) => setStatusReason(event.target.value)}
+              />
+            </label>
+            {statusReason.length > 0 && statusReason.trim().length < 5 && (
+              <p className="text-xs text-destructive">Enter at least 5 characters.</p>
+            )}
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStatusChange(null);
+                  setStatusReason("");
+                }}
+                disabled={statusSaving}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void applyStatus()}
+                disabled={statusSaving || statusReason.trim().length < 5}
+              >
+                {statusSaving ? "Saving…" : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </Card>
+    </div>
   );
 }

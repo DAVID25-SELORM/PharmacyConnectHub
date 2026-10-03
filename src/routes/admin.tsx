@@ -1,3 +1,4 @@
+import { CreditRequestEligibility } from "@/components/credit/CreditAccountRequests";
 import { reviewBusinessEvidence, type EvidenceDocument } from "@/lib/review-business-evidence";
 import { Outlet, createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -1062,6 +1063,7 @@ function BusinessCard({
             </>
           )}
 
+          {biz.type === "pharmacy" && biz.verification_status === "approved" && <CreditRequestEligibility pharmacyId={biz.id} />}
           {biz.verification_status === "approved" && (
             <Button variant="outline" size="sm" onClick={() => setShowRejectDialog(true)}>
               Revoke

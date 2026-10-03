@@ -1,3 +1,4 @@
+import { PharmacyCreditRequest } from "@/components/credit/CreditAccountRequests";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -810,6 +811,9 @@ function PharmacyDashboardContent() {
             discounts={discounts}
             terms={terms}
             productRules={productRules}
+            pharmacyId={business.id}
+            canRequestCredit={business.staff_role === "owner" || business.staff_role === "manager"}
+            onRefreshCredit={async () => { const { data, error } = await (supabase as any).rpc("get_my_credit_terms", { p_pharmacy_id: business.id }); if (error) { toast.error("Could not refresh credit terms."); return; } setCreditTerms(Object.fromEntries((data ?? []).map((term: CreditTerms) => [term.wholesaler_id, term]))); }}
             creditTerms={creditTerms}
             productMap={productMap}
             updateQty={updateQty}
@@ -963,6 +967,9 @@ function CartSheet({
   terms,
   productRules,
   creditTerms,
+  pharmacyId,
+  canRequestCredit,
+  onRefreshCredit,
   productMap,
   updateQty,
   placeOrder,
@@ -986,6 +993,9 @@ function CartSheet({
   terms: Record<string, OrderTerms>;
   productRules: ProductRule[];
   creditTerms: Record<string, CreditTerms>;
+  pharmacyId: string;
+  canRequestCredit: boolean;
+  onRefreshCredit: () => void;
   productMap: Record<string, Product>;
   updateQty: (id: string, qty: number) => void;
   placeOrder: (
@@ -1268,6 +1278,7 @@ function CartSheet({
                           ))}
                         </SelectContent>
                       </Select>
+                      {canRequestCredit && <PharmacyCreditRequest pharmacyId={pharmacyId} wholesalerId={wid} amount={estimates[wid].total} restricted={creditStatus(wid) !== "active"} onApproved={onRefreshCredit} />}
                       {methodFor(wid) === "cod" && (
                         <p className="text-muted-foreground">
                           Pay the supplier when the order is delivered.
