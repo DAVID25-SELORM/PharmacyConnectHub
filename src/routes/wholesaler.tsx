@@ -43,6 +43,7 @@ import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS, timeAgo, PRODUCT_CATEGORIES } from "@/lib/format";
+import { effectiveSettlementMethod, settlementSummary } from "@/lib/settlement";
 import {
   parseProductImportFile,
   parseProductImportText,
@@ -106,6 +107,8 @@ type OrderRow = {
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
+  settlement_method?: string | null;
+  is_credit_order?: boolean | null;
   accepted_at: string | null;
   picking_started_at: string | null;
   packed_at: string | null;
@@ -180,7 +183,7 @@ function WholesalerDashboardContent() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,settlement_method,is_credit_order,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
@@ -594,6 +597,9 @@ function OrdersInbox({
                   <span className="font-display text-lg font-bold">{o.order_number}</span>
                   <StatusBadge status={o.status} />
                   <PaymentBadge method={o.payment_method} status={o.payment_status} />
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Payment: {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
                 </div>
                 <div className="mt-1 text-sm">
                   <span className="text-muted-foreground">From</span>{" "}

@@ -49,6 +49,15 @@ import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
 import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
 import {
+  SETTLEMENT_LABELS,
+  canChangeSettlement,
+  effectiveSettlementMethod,
+  settlementOptions,
+  settlementSummary,
+  type CreditAvailability,
+  type SettlementMethod,
+} from "@/lib/settlement";
+import {
   CHECKOUT_CATEGORIES,
   purchaseCategoryBadgeClass,
   purchaseCategoryLabel,
@@ -62,6 +71,10 @@ import {
   ClassificationChangeDialog,
   type ClassificationTarget,
 } from "@/components/pharmacy/ClassificationChangeDialog";
+import {
+  SettlementChangeDialog,
+  type SettlementTarget,
+} from "@/components/pharmacy/SettlementChangeDialog";
 import { SavedCartsMenu } from "@/components/pharmacy/SavedCartsMenu";
 import { useSavedCarts, type SavedCartsApi } from "@/hooks/use-saved-carts";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
@@ -174,6 +187,8 @@ type OrderRow = {
   }[];
   item_count?: number;
   unit_count?: number;
+  settlement_method?: string | null;
+  is_credit_order?: boolean | null;
   purchase_category?: PurchaseCategory | null;
   procurement_id?: string | null;
   procurement_reference?: string | null;
@@ -597,6 +612,7 @@ function PharmacyDashboardContent() {
   const placeOrder = async (
     creditWholesalerIds: string[] = [],
     itemCategories: Record<string, ItemPurchaseCategory> = {},
+    settlementMethods: Record<string, string> = {},
   ) => {
     if (!business) return false;
     if (business.staff_role === "assistant") {
@@ -621,6 +637,7 @@ function PharmacyDashboardContent() {
           category: itemCategories[item.productId],
         })),
         creditWholesalerIds,
+        settlementMethods,
       });
 
       let procurementNote = "";
@@ -636,12 +653,15 @@ function PharmacyDashboardContent() {
           .maybeSingle();
         if (procurement?.reference) procurementNote = ` · ${procurement.reference}`;
       }
-      toast.success(
-        (creditWholesalerIds.length > 0
-          ? `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (some on approved credit)`
-          : `Placed ${result.orderCount} order${result.orderCount > 1 ? "s" : ""} (Pay on Delivery)`) +
-          procurementNote,
-      );
+      const orderWord = `${result.orderCount} order${result.orderCount > 1 ? "s" : ""}`;
+      const methods = Object.values(settlementMethods);
+      const allSame = methods.length > 0 && methods.every((method) => method === methods[0]);
+      const paymentNote = allSame
+        ? methods[0] === "credit"
+          ? "on approved credit"
+          : `${SETTLEMENT_LABELS[methods[0] as SettlementMethod] ?? "payment pending"}, payment pending`
+        : "payment methods as chosen";
+      toast.success(`Placed ${orderWord} (${paymentNote})${procurementNote}`);
       setCart([]);
       void loadOrders();
       return true;
@@ -910,6 +930,9 @@ function PharmacyDashboardContent() {
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
               }
               canReclassify={["owner", "manager", "accountant"].includes(business?.staff_role ?? "")}
+              canChangePayment={["owner", "manager", "cashier", "accountant"].includes(
+                business?.staff_role ?? "",
+              )}
             />
           </TabsContent>
         </Tabs>
@@ -954,6 +977,7 @@ function CartSheet({
   placeOrder: (
     creditWholesalerIds?: string[],
     itemCategories?: Record<string, ItemPurchaseCategory>,
+    settlementMethods?: Record<string, string>,
   ) => Promise<boolean>;
   placing: boolean;
   canPlaceOrders: boolean;
@@ -961,7 +985,7 @@ function CartSheet({
   onResumeSavedCart: (items: Array<{ productId: string; quantity: number }>, label: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [creditSelected, setCreditSelected] = useState<Record<string, boolean>>({});
+  const [settlementChoice, setSettlementChoice] = useState<Record<string, SettlementMethod>>({});
   const [itemCategories, setItemCategories] = useState<Record<string, ItemPurchaseCategory>>({});
   const items = cart
     .map((c) => ({ p: productMap[c.productId], qty: c.quantity }))
@@ -1005,6 +1029,20 @@ function CartSheet({
       }));
     }),
   );
+  // Payment method per supplier (default cash on delivery). Choosing credit is only valid while the
+  // order fits the approved line; if the cart grows past it, placing is blocked with a message
+  // rather than quietly switching the order to another method.
+  const methodFor = (wid: string): SettlementMethod => settlementChoice[wid] ?? "cod";
+  const creditUsable = (wid: string) => canUseCredit(creditTerms[wid], estimates[wid].total);
+  const creditBlocked = (wid: string) =>
+    methodFor(wid) === "credit" && Boolean(creditTerms[wid]) && !creditUsable(wid);
+  const creditAvailability = (wid: string): CreditAvailability =>
+    !creditTerms[wid]
+      ? { state: "none" }
+      : creditUsable(wid)
+        ? { state: "available" }
+        : { state: "insufficient", availableLabel: formatGHS(creditTerms[wid].available_ghs) };
+  const anyCreditBlocked = Object.keys(grouped).some(creditBlocked);
   const setAllCategories = (category: ItemPurchaseCategory) =>
     setItemCategories(Object.fromEntries(items.map((it) => [it.p!.id, category])));
   const jumpToUnclassified = () => {
@@ -1184,43 +1222,53 @@ function CartSheet({
                         delivery.
                       </div>
                     )}
-                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
-                      <span className="text-muted-foreground">Payment</span>
-                      {creditTerms[wid] ? (
-                        <label className="flex items-center gap-1.5">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(creditSelected[wid])}
-                            disabled={!canUseCredit(creditTerms[wid], estimates[wid].total)}
-                            onChange={(event) =>
-                              setCreditSelected((current) => ({
-                                ...current,
-                                [wid]: event.target.checked,
-                              }))
-                            }
-                          />
-                          Use approved credit
-                        </label>
-                      ) : (
-                        <span className="font-medium">Cash on delivery</span>
+                    <div className="mt-2 space-y-1.5 border-t border-border pt-2">
+                      <label htmlFor={`settlement-${wid}`} className="font-medium">
+                        Payment method
+                      </label>
+                      <Select
+                        value={methodFor(wid)}
+                        onValueChange={(value) =>
+                          setSettlementChoice((current) => ({
+                            ...current,
+                            [wid]: value as SettlementMethod,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id={`settlement-${wid}`} className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {settlementOptions(creditAvailability(wid)).map((option) => (
+                            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                              {option.label}
+                              {option.reason ? ` (${option.reason})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {methodFor(wid) === "cod" && (
+                        <p className="text-muted-foreground">Pay the supplier when the order is delivered.</p>
                       )}
-                    </div>
-                    {creditTerms[wid] &&
-                      creditSelected[wid] &&
-                      canUseCredit(creditTerms[wid], estimates[wid].total) && (
-                        <div className="text-muted-foreground">
+                      {["bank_transfer", "momo", "cheque", "other"].includes(methodFor(wid)) && (
+                        <p className="text-muted-foreground">
+                          Choosing this doesn&apos;t pay the supplier. The order stays unpaid until the
+                          payment is recorded.
+                        </p>
+                      )}
+                      {methodFor(wid) === "credit" && creditUsable(wid) && (
+                        <p className="text-muted-foreground">
                           Due in {creditTerms[wid].payment_terms_days} days ·{" "}
                           {formatGHS(creditTerms[wid].available_ghs)} available
-                        </div>
+                        </p>
                       )}
-                    {creditTerms[wid] &&
-                      creditSelected[wid] &&
-                      !canUseCredit(creditTerms[wid], estimates[wid].total) && (
-                        <div className="text-warning">
-                          Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is
-                          left; this order will be pay on delivery.
-                        </div>
+                      {creditBlocked(wid) && (
+                        <p role="alert" className="text-destructive">
+                          Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is left
+                          for this order. Choose another payment method or reduce the order.
+                        </p>
                       )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1289,22 +1337,29 @@ function CartSheet({
                     placing ||
                     !canPlaceOrders ||
                     belowMinimum.length > 0 ||
-                    classification.unclassified.lines > 0
+                    classification.unclassified.lines > 0 ||
+                    anyCreditBlocked
                   }
                   onClick={async () => {
+                    const settlementMethods = Object.fromEntries(
+                      Object.keys(grouped).map((wid) => [wid, methodFor(wid)]),
+                    ) as Record<string, SettlementMethod>;
                     const creditWholesalerIds = Object.keys(grouped).filter(
-                      (wid) =>
-                        creditSelected[wid] && canUseCredit(creditTerms[wid], estimates[wid].total),
+                      (wid) => settlementMethods[wid] === "credit",
                     );
                     const resolvedCategories = Object.fromEntries(
                       items
                         .map((it) => [it.p!.id, itemCategories[it.p!.id]])
                         .filter(([, category]) => Boolean(category)),
                     ) as Record<string, ItemPurchaseCategory>;
-                    const placed = await placeOrder(creditWholesalerIds, resolvedCategories);
+                    const placed = await placeOrder(
+                      creditWholesalerIds,
+                      resolvedCategories,
+                      settlementMethods,
+                    );
                     if (placed) {
                       setOpen(false);
-                      setCreditSelected({});
+                      setSettlementChoice({});
                       setItemCategories({});
                     }
                   }}
@@ -1610,8 +1665,10 @@ function OrdersView({
   onReorder,
   onRequestReturn,
   canReclassify = false,
+  canChangePayment = false,
 }: {
   canReclassify?: boolean;
+  canChangePayment?: boolean;
   onRequestReturn?: (orderId: string, orderLabel: string) => void;
   onReorder?: (orderId: string, orderLabel: string) => Promise<void>;
   orders: OrderRow[];
@@ -1622,6 +1679,7 @@ function OrdersView({
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [classifyTarget, setClassifyTarget] = useState<ClassificationTarget | null>(null);
+  const [settlementTarget, setSettlementTarget] = useState<SettlementTarget | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [payment, setPayment] = useState("all");
@@ -1978,6 +2036,33 @@ function OrdersView({
 
                 <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
 
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Payment
+                    </div>
+                    <div className="font-medium">
+                      {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
+                    </div>
+                  </div>
+                  {canChangePayment && canChangeSettlement(o) && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setSettlementTarget({
+                          orderId: o.id,
+                          orderNumber: o.order_number,
+                          current: effectiveSettlementMethod(o),
+                        })
+                      }
+                    >
+                      Change payment method
+                    </Button>
+                  )}
+                </div>
+
                 <OrderPrintActions
                   order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}
                 />
@@ -2049,6 +2134,13 @@ function OrdersView({
       <ClassificationChangeDialog
         target={classifyTarget}
         onClose={() => setClassifyTarget(null)}
+        onChanged={async () => {
+          if (openOrderId) await loadOrderDetail(openOrderId);
+        }}
+      />
+      <SettlementChangeDialog
+        target={settlementTarget}
+        onClose={() => setSettlementTarget(null)}
         onChanged={async () => {
           if (openOrderId) await loadOrderDetail(openOrderId);
         }}

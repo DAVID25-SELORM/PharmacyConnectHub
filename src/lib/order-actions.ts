@@ -11,6 +11,9 @@ type CreateMarketplaceOrdersInput = {
   }>;
   /** Wholesaler ids for which the pharmacy wants to buy on its approved credit line. */
   creditWholesalerIds?: string[];
+  /** Payment method per wholesaler id (cod, credit, bank_transfer, momo, cheque, other). Omitted =
+   * cash on delivery, or credit for the wholesalers in creditWholesalerIds. */
+  settlementMethods?: Record<string, string>;
 };
 
 type CreateMarketplaceOrdersResult = {

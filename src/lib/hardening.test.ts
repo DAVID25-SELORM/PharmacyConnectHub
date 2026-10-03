@@ -80,6 +80,7 @@ describe("audit categories", () => {
     expect(auditCategory("Business approved")).toBe("verification");
     expect(auditCategory("Order classification recorded")).toBe("order");
     expect(auditCategory("Order classification changed")).toBe("order");
+    expect(auditCategory("Order payment method changed")).toBe("order");
     expect(auditCategory("Something new")).toBe("other");
     expect(auditCategoryLabel("RFQ created")).toBe("RFQ");
   });

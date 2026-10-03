@@ -51,6 +51,7 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Business verification updated": "Verification updated",
   "Order classification recorded": "Order classified",
   "Order classification changed": "Classification changed",
+  "Order payment method changed": "Payment method changed",
 };
 
 export function auditActivityLabel(activity: string) {
@@ -90,7 +91,11 @@ const VERIFICATION_EVENTS = new Set([
   "Business verification updated",
 ]);
 
-const ORDER_EVENTS = new Set(["Order classification recorded", "Order classification changed"]);
+const ORDER_EVENTS = new Set([
+  "Order classification recorded",
+  "Order classification changed",
+  "Order payment method changed",
+]);
 
 export function auditCategory(activity: string): AuditCategory {
   if (RFQ_EVENTS.has(activity)) return "rfq";

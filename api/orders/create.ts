@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
 const VALID_ITEM_CATEGORIES = new Set(["nhis", "cash_private", "other"]);
+const VALID_SETTLEMENT_METHODS = new Set(["cod", "credit", "bank_transfer", "momo", "cheque", "other"]);
 
 type RequestItem = {
   productId: string;
@@ -42,6 +43,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? (req.body.creditWholesalerIds as unknown[]).filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
 
+  // Payment method per supplier. Online payment doesn't exist yet and is refused here and again in
+  // the database; choosing a method is never treated as payment.
+  const rawMethods = req.body?.settlementMethods;
+  const settlementMethods: Record<string, string> = {};
+  if (rawMethods !== undefined && rawMethods !== null) {
+    if (typeof rawMethods !== "object" || Array.isArray(rawMethods)) {
+      return res.status(400).json({ error: "settlementMethods must be a map of supplier to method" });
+    }
+    for (const [wholesalerId, method] of Object.entries(rawMethods as Record<string, unknown>)) {
+      if (method === "pay_now") {
+        return res.status(400).json({ error: "Online payment is not available yet. Choose another payment method." });
+      }
+      if (typeof method !== "string" || !VALID_SETTLEMENT_METHODS.has(method)) {
+        return res.status(400).json({ error: "Invalid payment method" });
+      }
+      settlementMethods[wholesalerId] = method;
+    }
+  }
+
   if (!pharmacyId || items.length === 0) {
     return res.status(400).json({ error: "pharmacyId and at least one item are required" });
   }
@@ -70,6 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     _pharmacy_id: pharmacyId,
     _credit_wholesaler_ids: creditWholesalerIds,
     _require_classification: true,
+    _settlement_methods: settlementMethods,
   });
 
   if (error) {
