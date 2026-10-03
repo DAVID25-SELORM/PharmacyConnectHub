@@ -81,6 +81,9 @@ describe("audit categories", () => {
     expect(auditCategory("Order classification recorded")).toBe("order");
     expect(auditCategory("Order classification changed")).toBe("order");
     expect(auditCategory("Order payment method changed")).toBe("order");
+    expect(auditCategory("Credit account suspended")).toBe("credit");
+    expect(auditCategory("Credit account blocked")).toBe("credit");
+    expect(auditCategory("Credit account reactivated")).toBe("credit");
     expect(auditCategory("Something new")).toBe("other");
     expect(auditCategoryLabel("RFQ created")).toBe("RFQ");
   });

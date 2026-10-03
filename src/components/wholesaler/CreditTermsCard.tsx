@@ -3,7 +3,17 @@ import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { validateCreditForm } from "@/lib/credit-terms";
@@ -21,7 +31,14 @@ type CreditLine = {
   available_ghs: number;
   internal_note: string | null;
   updated_at: string;
+  status: "active" | "suspended" | "blocked";
+  status_reason: string | null;
+  status_changed_at: string | null;
 };
+
+type StatusChange = { line: CreditLine; next: "active" | "suspended" | "blocked" };
+
+const STATUS_LABELS = { active: "Active", suspended: "Suspended", blocked: "Blocked" } as const;
 
 /** Approved credit limits per pharmacy. Settling a credit order still goes through "Confirm payment" once delivered. */
 export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
@@ -34,6 +51,9 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   const [days, setDays] = useState("30");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [statusChange, setStatusChange] = useState<StatusChange | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,6 +94,25 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     toast.success("Credit terms saved.");
     setLimit("");
     setNote("");
+    void load();
+  };
+
+  const applyStatus = async () => {
+    if (!statusChange || statusReason.trim().length < 5) return;
+    setStatusSaving(true);
+    const { error: rpcError } = await rpc("set_credit_status", {
+      p_wholesaler_id: wholesalerId,
+      p_pharmacy_id: statusChange.line.pharmacy_id,
+      p_status: statusChange.next,
+      p_reason: statusReason.trim(),
+    });
+    setStatusSaving(false);
+    if (rpcError) return toast.error(rpcError.message || "We couldn't change this credit status.");
+    toast.success(
+      `${statusChange.line.pharmacy_name}: credit ${STATUS_LABELS[statusChange.next].toLowerCase()}.`,
+    );
+    setStatusChange(null);
+    setStatusReason("");
     void load();
   };
 
@@ -185,15 +224,113 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
                     {formatReportDate(line.updated_at)}
                     {line.internal_note ? ` · ${line.internal_note}` : ""}
                   </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <Badge variant={line.status === "active" ? "secondary" : "destructive"}>
+                      {STATUS_LABELS[line.status]}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {formatGHS(line.available_ghs)} available
+                      {line.status !== "active" && line.status_reason
+                        ? ` · ${line.status_reason}`
+                        : ""}
+                    </span>
+                  </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => void revoke(line)}>
-                  Revoke
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {line.status !== "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setStatusChange({ line, next: "active" })}
+                    >
+                      Reactivate
+                    </Button>
+                  )}
+                  {line.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setStatusChange({ line, next: "suspended" })}
+                    >
+                      Suspend
+                    </Button>
+                  )}
+                  {line.status !== "blocked" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setStatusChange({ line, next: "blocked" })}
+                    >
+                      Block
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => void revoke(line)}>
+                    Revoke
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+      <Dialog
+        open={statusChange !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStatusChange(null);
+            setStatusReason("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {statusChange?.next === "active"
+                ? "Reactivate credit"
+                : statusChange?.next === "suspended"
+                  ? "Suspend credit"
+                  : "Block credit"}
+            </DialogTitle>
+            <DialogDescription>
+              {statusChange
+                ? statusChange.next === "active"
+                  ? `${statusChange.line.pharmacy_name} will be able to place credit orders again.`
+                  : `${statusChange.line.pharmacy_name} won't be able to place new credit orders. Existing invoices stay payable. They are notified with your reason.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="block text-sm">
+            <span className="mb-1 block text-muted-foreground">Reason (required)</span>
+            <Textarea
+              value={statusReason}
+              maxLength={500}
+              rows={3}
+              onChange={(event) => setStatusReason(event.target.value)}
+            />
+          </label>
+          {statusReason.length > 0 && statusReason.trim().length < 5 && (
+            <p className="text-xs text-destructive">Enter at least 5 characters.</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStatusChange(null);
+                setStatusReason("");
+              }}
+              disabled={statusSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void applyStatus()}
+              disabled={statusSaving || statusReason.trim().length < 5}
+            >
+              {statusSaving ? "Saving…" : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

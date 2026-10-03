@@ -4,13 +4,22 @@ export type CreditTerms = {
   payment_terms_days: number;
   outstanding_ghs: number;
   available_ghs: number;
+  /** active | suspended | blocked. Suspended and blocked relationships take no new credit orders. */
+  status?: "active" | "suspended" | "blocked";
 };
 
 const cents = (value: number) => Math.round(value * 100) / 100;
 
 /** Whether a charge of this size can go on the wholesaler's approved credit line right now. */
 export function canUseCredit(terms: CreditTerms | undefined, amount: number) {
-  return Boolean(terms) && cents(amount) <= cents(Number(terms!.available_ghs));
+  return (
+    Boolean(terms) &&
+    (terms!.status === undefined || terms!.status === "active") &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    Number.isFinite(Number(terms!.available_ghs)) &&
+    cents(amount) <= cents(Number(terms!.available_ghs))
+  );
 }
 
 const money = (value: number) =>

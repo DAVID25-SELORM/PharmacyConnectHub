@@ -160,7 +160,15 @@ type WholesalerSummary = {
 type OrderRow = {
   id: string;
   order_number: string;
-  status: "pending" | "accepted" | "picking" | "packed" | "ready_for_dispatch" | "dispatched" | "delivered" | "cancelled";
+  status:
+    | "pending"
+    | "accepted"
+    | "picking"
+    | "packed"
+    | "ready_for_dispatch"
+    | "dispatched"
+    | "delivered"
+    | "cancelled";
   total_ghs: number;
   created_at: string;
   payment_method: "cod" | "paystack";
@@ -861,7 +869,11 @@ function PharmacyDashboardContent() {
               typeof window !== "undefined"
                 ? new URLSearchParams(window.location.search).get("tab")
                 : null;
-            return tab === "orders" || tab === "lists" || tab === "returns" || tab === "statements" || tab === "credit"
+            return tab === "orders" ||
+              tab === "lists" ||
+              tab === "returns" ||
+              tab === "statements" ||
+              tab === "credit"
               ? tab
               : "catalog";
           })()}
@@ -929,7 +941,9 @@ function PharmacyDashboardContent() {
               onRequestReturn={
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
               }
-              canReclassify={["owner", "manager", "accountant"].includes(business?.staff_role ?? "")}
+              canReclassify={["owner", "manager", "accountant"].includes(
+                business?.staff_role ?? "",
+              )}
               canChangePayment={["owner", "manager", "cashier", "accountant"].includes(
                 business?.staff_role ?? "",
               )}
@@ -1033,15 +1047,21 @@ function CartSheet({
   // order fits the approved line; if the cart grows past it, placing is blocked with a message
   // rather than quietly switching the order to another method.
   const methodFor = (wid: string): SettlementMethod => settlementChoice[wid] ?? "cod";
-  const creditUsable = (wid: string) => canUseCredit(creditTerms[wid], estimates[wid].total);
+  const creditStatus = (wid: string) => creditTerms[wid]?.status ?? "active";
+  const creditUsable = (wid: string) =>
+    creditStatus(wid) === "active" && canUseCredit(creditTerms[wid], estimates[wid].total);
   const creditBlocked = (wid: string) =>
     methodFor(wid) === "credit" && Boolean(creditTerms[wid]) && !creditUsable(wid);
   const creditAvailability = (wid: string): CreditAvailability =>
     !creditTerms[wid]
       ? { state: "none" }
-      : creditUsable(wid)
-        ? { state: "available" }
-        : { state: "insufficient", availableLabel: formatGHS(creditTerms[wid].available_ghs) };
+      : creditStatus(wid) === "suspended"
+        ? { state: "suspended" }
+        : creditStatus(wid) === "blocked"
+          ? { state: "blocked" }
+          : creditUsable(wid)
+            ? { state: "available" }
+            : { state: "insufficient", availableLabel: formatGHS(creditTerms[wid].available_ghs) };
   const anyCreditBlocked = Object.keys(grouped).some(creditBlocked);
   const setAllCategories = (category: ItemPurchaseCategory) =>
     setItemCategories(Object.fromEntries(items.map((it) => [it.p!.id, category])));
@@ -1121,10 +1141,7 @@ function CartSheet({
                   </div>
                   <div className="space-y-2">
                     {group.map((it) => (
-                      <div
-                        key={it.p!.id}
-                        className="space-y-2 rounded-xl border border-border p-3"
-                      >
+                      <div key={it.p!.id} className="space-y-2 rounded-xl border border-border p-3">
                         <div className="flex items-center gap-3">
                           <div
                             className="h-12 w-12 shrink-0 rounded-lg"
@@ -1240,7 +1257,11 @@ function CartSheet({
                         </SelectTrigger>
                         <SelectContent>
                           {settlementOptions(creditAvailability(wid)).map((option) => (
-                            <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
+                            <SelectItem
+                              key={option.value}
+                              value={option.value}
+                              disabled={option.disabled}
+                            >
                               {option.label}
                               {option.reason ? ` (${option.reason})` : ""}
                             </SelectItem>
@@ -1248,12 +1269,14 @@ function CartSheet({
                         </SelectContent>
                       </Select>
                       {methodFor(wid) === "cod" && (
-                        <p className="text-muted-foreground">Pay the supplier when the order is delivered.</p>
+                        <p className="text-muted-foreground">
+                          Pay the supplier when the order is delivered.
+                        </p>
                       )}
                       {["bank_transfer", "momo", "cheque", "other"].includes(methodFor(wid)) && (
                         <p className="text-muted-foreground">
-                          Choosing this doesn&apos;t pay the supplier. The order stays unpaid until the
-                          payment is recorded.
+                          Choosing this doesn&apos;t pay the supplier. The order stays unpaid until
+                          the payment is recorded.
                         </p>
                       )}
                       {methodFor(wid) === "credit" && creditUsable(wid) && (
@@ -1264,8 +1287,9 @@ function CartSheet({
                       )}
                       {creditBlocked(wid) && (
                         <p role="alert" className="text-destructive">
-                          Only {formatGHS(creditTerms[wid].available_ghs)} of approved credit is left
-                          for this order. Choose another payment method or reduce the order.
+                          {creditStatus(wid) === "active"
+                            ? `Only ${formatGHS(creditTerms[wid].available_ghs)} of approved credit is left for this order. Choose another payment method or reduce the order.`
+                            : `This supplier has ${creditStatus(wid)} your credit. Choose another payment method.`}
                         </p>
                       )}
                     </div>
@@ -1297,7 +1321,9 @@ function CartSheet({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">Purchase classification</span>
-                    {classification.label && <Badge variant="outline">{classification.label}</Badge>}
+                    {classification.label && (
+                      <Badge variant="outline">{classification.label}</Badge>
+                    )}
                   </div>
                   {CHECKOUT_CATEGORIES.map(
                     (key) =>
@@ -1319,7 +1345,12 @@ function CartSheet({
                       <span className="font-medium text-destructive">
                         {unclassifiedMessage(classification.unclassified.lines)}
                       </span>
-                      <Button type="button" size="sm" variant="outline" onClick={jumpToUnclassified}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={jumpToUnclassified}
+                      >
                         Show me
                       </Button>
                     </div>

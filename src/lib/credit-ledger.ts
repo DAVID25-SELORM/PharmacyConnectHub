@@ -3,13 +3,7 @@
 // with a clear message before making the round trip.
 
 export type CreditInvoiceStatus =
-  | "not_due"
-  | "partially_paid"
-  | "paid"
-  | "due_today"
-  | "overdue"
-  | "written_off"
-  | "disputed";
+  "not_due" | "partially_paid" | "paid" | "due_today" | "overdue" | "written_off" | "disputed";
 
 export type CreditInvoice = {
   order_id: string;
@@ -119,13 +113,13 @@ const cents = (value: number) => Math.round(value * 100) / 100;
 /** Validates the payment header (amount + method) before submitting. */
 export function validatePaymentHeader(input: { amount: string; method: string }) {
   const amount = Number(input.amount);
-  if (!Number.isFinite(amount) || amount <= 0) {
+  if (!Number.isFinite(amount) || cents(amount) <= 0) {
     return { error: "Enter a payment amount greater than zero." };
   }
-  if (!input.method) {
+  if (!PAYMENT_METHODS.some((method) => method.value === input.method)) {
     return { error: "Choose a payment method." };
   }
-  return { error: null, amount };
+  return { error: null, amount: cents(amount) };
 }
 
 /** Validates the allocation list against the payment amount, mirroring record_credit_payment's
@@ -134,21 +128,31 @@ export function validateAllocations(
   amount: number,
   allocations: Array<{ order_id: string; amount: string; outstanding_ghs: number }>,
 ) {
+  if (!Number.isFinite(amount) || cents(amount) <= 0) {
+    return { error: "Enter a payment amount greater than zero." };
+  }
   let sum = 0;
+  const seen = new Set<string>();
   for (const a of allocations) {
+    if (!a.order_id || seen.has(a.order_id)) {
+      return { error: "Select each invoice only once." };
+    }
+    seen.add(a.order_id);
     const value = Number(a.amount);
-    if (!Number.isFinite(value) || value <= 0) {
+    if (!Number.isFinite(value) || cents(value) <= 0) {
       return { error: "Each selected invoice needs an allocation amount greater than zero." };
     }
-    if (cents(value) > cents(a.outstanding_ghs)) {
+    if (!Number.isFinite(a.outstanding_ghs) || cents(value) > cents(a.outstanding_ghs)) {
       return { error: "An allocation cannot exceed that invoice's outstanding balance." };
     }
-    sum += value;
+    // The RPC rounds each allocation before summing. Sum integer pesewas here too.
+    sum += Math.round(value * 100);
   }
-  if (cents(sum) > cents(amount)) {
+  const allocated = sum / 100;
+  if (allocated > cents(amount)) {
     return { error: "The allocations add up to more than the payment amount." };
   }
-  return { error: null, allocated: cents(sum), unallocated: cents(amount - sum) };
+  return { error: null, allocated, unallocated: cents(cents(amount) - allocated) };
 }
 
 /** Default allocation for a freshly-checked invoice: whatever is still unapplied from the

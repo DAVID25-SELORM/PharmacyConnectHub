@@ -27,8 +27,11 @@ describe("settlementOptions", () => {
       disabled: true,
       reason: "Only GHS 2,100.00 of approved credit is left.",
     });
-    const nhis = settlementOptions({ state: "nhis_only" });
-    expect(nhis.find((o) => o.value === "credit")?.reason).toMatch(/NHIS/);
+    for (const state of ["suspended", "blocked"] as const) {
+      const option = settlementOptions({ state }).find((o) => o.value === "credit");
+      expect(option).toMatchObject({ disabled: true });
+      expect(option?.reason).toMatch(new RegExp(state));
+    }
   });
 
   it("never lets Pay Now be chosen: no online payment exists yet", () => {

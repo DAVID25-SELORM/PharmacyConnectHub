@@ -39,6 +39,9 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Credit ledger entry reversed": "Ledger entry reversed",
   "Credit invoice disputed": "Invoice disputed",
   "Credit invoice dispute cleared": "Dispute cleared",
+  "Credit account suspended": "Credit suspended",
+  "Credit account blocked": "Credit blocked",
+  "Credit account reactivated": "Credit reactivated",
   "Pharmacy inventory imported": "Inventory imported",
   "Inventory imported": "Catalog imported",
   "Pharmacy inventory item added": "Item added",
@@ -75,6 +78,9 @@ const CREDIT_EVENTS = new Set([
   "Credit ledger entry reversed",
   "Credit invoice disputed",
   "Credit invoice dispute cleared",
+  "Credit account suspended",
+  "Credit account blocked",
+  "Credit account reactivated",
 ]);
 const INVENTORY_EVENTS = new Set([
   "Pharmacy inventory imported",
@@ -208,7 +214,8 @@ function nextDay(date: string) {
 }
 
 function rangeStart(range: AuditRange) {
-  if (range === "today") return new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z").toISOString();
+  if (range === "today")
+    return new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z").toISOString();
   if (range === "7d") return new Date(Date.now() - 7 * 86400_000).toISOString();
   if (range === "30d") return new Date(Date.now() - 30 * 86400_000).toISOString();
   return null;
@@ -224,7 +231,11 @@ export function buildAuditRpcArgs(
   const custom = filters.range === "custom";
   return {
     p_business_id: businessId,
-    p_from: custom ? (filters.from ? `${filters.from}T00:00:00.000Z` : null) : rangeStart(filters.range as AuditRange),
+    p_from: custom
+      ? filters.from
+        ? `${filters.from}T00:00:00.000Z`
+        : null
+      : rangeStart(filters.range as AuditRange),
     p_to: custom && filters.to ? nextDay(filters.to) : null,
     p_record_type: filters.recordType || null,
     p_search: filters.q.length >= 2 ? filters.q : null,

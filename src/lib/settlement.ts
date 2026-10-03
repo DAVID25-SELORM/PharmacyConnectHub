@@ -50,7 +50,8 @@ export type CreditAvailability =
   | { state: "none" }
   | { state: "available" }
   | { state: "insufficient"; availableLabel: string }
-  | { state: "nhis_only" };
+  | { state: "suspended" }
+  | { state: "blocked" };
 
 /**
  * The options a pharmacy sees for one supplier. Credit is offered only when that supplier has
@@ -67,9 +68,13 @@ export function settlementOptions(credit: CreditAvailability): SettlementOption[
     creditOption.disabled = true;
     creditOption.reason = `Only ${credit.availableLabel} of approved credit is left.`;
   }
-  if (creditOption && credit.state === "nhis_only") {
+  if (creditOption && credit.state === "suspended") {
     creditOption.disabled = true;
-    creditOption.reason = "NHIS-only orders can't be bought on credit.";
+    creditOption.reason = "This supplier has suspended your credit.";
+  }
+  if (creditOption && credit.state === "blocked") {
+    creditOption.disabled = true;
+    creditOption.reason = "This supplier has blocked your credit.";
   }
 
   options.push({
