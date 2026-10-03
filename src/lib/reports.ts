@@ -71,7 +71,9 @@ export function formatReportDateTime(iso: string | null | undefined) {
 
 function csvCell(value: unknown) {
   const raw = value === null || value === undefined ? "" : String(value);
-  const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  // Genuine numbers (e.g. a -12.50 adjustment) stay numeric; only text that could be read as a
+  // formula is neutralised.
+  const safe = typeof value !== "number" && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return `"${safe.replace(/"/g, '""')}"`;
 }
 

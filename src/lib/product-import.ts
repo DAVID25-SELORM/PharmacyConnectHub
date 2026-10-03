@@ -460,6 +460,16 @@ const ITEM_TYPE_IMPORT_ALIASES: Record<string, string> = {
   "non-medical": "non_medical",
 };
 
+/** YYYY-MM-DD that is also a real date. The format alone lets 2026-02-31 through, which Postgres
+ * rejects on insert -- failing the whole batch with an unhelpful message instead of one bad row. */
+export function isRealCalendarDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 function normalizeItemType(raw: string | undefined): string | null {
   const trimmed = (raw ?? "").trim();
   if (!trimmed) return null;
@@ -542,7 +552,7 @@ function buildImportedInventoryItems(rawRows: RawImportRow[], sourceLabel: strin
     const itemType = normalizeItemType(mappedRow.item_type);
     const itemTypeInvalid = Boolean(mappedRow.item_type?.trim()) && itemType === null;
     const expiryDateText = mappedRow.expiry_date?.trim() ?? "";
-    const expiryDateInvalid = Boolean(expiryDateText) && !/^\d{4}-\d{2}-\d{2}$/.test(expiryDateText);
+    const expiryDateInvalid = Boolean(expiryDateText) && !isRealCalendarDate(expiryDateText);
 
     if (
       !name ||
