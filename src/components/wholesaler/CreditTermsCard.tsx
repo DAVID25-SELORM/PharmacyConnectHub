@@ -58,17 +58,18 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(false);
-    const [{ data: pharmacyData }, { data, error: rpcError }] = await Promise.all([
-      supabase
-        .from("businesses")
-        .select("id,name")
-        .eq("type", "pharmacy")
-        .eq("verification_status", "approved")
-        .order("name"),
-      rpc("list_wholesaler_credit_terms", { p_wholesaler_id: wholesalerId }),
-    ]);
+    const [{ data: pharmacyData, error: pharmacyError }, { data, error: rpcError }] =
+      await Promise.all([
+        supabase
+          .from("businesses")
+          .select("id,name")
+          .eq("type", "pharmacy")
+          .eq("verification_status", "approved")
+          .order("name"),
+        rpc("list_wholesaler_credit_terms", { p_wholesaler_id: wholesalerId }),
+      ]);
     setPharmacies((pharmacyData as Array<{ id: string; name: string }>) ?? []);
-    if (rpcError) setError(true);
+    if (rpcError || pharmacyError) setError(true);
     else setLines(Array.isArray(data) ? (data as CreditLine[]) : []);
     setLoading(false);
   }, [wholesalerId]);
@@ -77,7 +78,18 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     void load();
   }, [load]);
 
+  const selectedLine = lines.find((line) => line.pharmacy_id === pharmacyId);
+
+  const selectPharmacy = (id: string) => {
+    const line = lines.find((item) => item.pharmacy_id === id);
+    setPharmacyId(id);
+    setLimit(line ? String(line.credit_limit_ghs) : "");
+    setDays(line ? String(line.payment_terms_days) : "30");
+    setNote(line?.internal_note ?? "");
+  };
+
   const save = async () => {
+    if (saving || loading || error) return;
     if (!pharmacyId) return toast.error("Choose a pharmacy.");
     const parsed = validateCreditForm({ limit, days });
     if (parsed.error) return toast.error(parsed.error);
@@ -91,7 +103,9 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     });
     setSaving(false);
     if (rpcError) return toast.error(rpcError.message || "We couldn't save this credit line.");
-    toast.success("Credit terms saved.");
+    toast.success(selectedLine ? "Credit terms updated." : "Pharmacy approved as a credit client.");
+    setPharmacyId("");
+    setDays("30");
     setLimit("");
     setNote("");
     void load();
@@ -119,7 +133,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   const revoke = async (line: CreditLine) => {
     if (
       !window.confirm(
-        `Revoke credit for ${line.pharmacy_name}? They will pay on delivery from now on.`,
+        `Revoke credit for ${line.pharmacy_name}? They will need another payment method for new orders. Existing invoices remain payable.`,
       )
     )
       return;
@@ -136,12 +150,13 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     <Card className="p-5">
       <div className="flex items-center gap-2">
         <CreditCard className="h-5 w-5 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-xl font-bold">Customer credit</h2>
+        <h2 className="font-display text-xl font-bold">Credit clients</h2>
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Approve a credit limit for a pharmacy so they can order now and pay within your terms.
-        Checkout blocks any credit order that would push their balance over the limit. Settle a
-        credit order the same way as a cash order, by confirming payment once it is delivered.
+        Choose the pharmacies you want to approve as credit clients. Set a limit and payment terms
+        for each pharmacy; approval applies only to orders from your business. Checkout blocks any
+        credit order that would push their balance over the limit. Settle a credit order the same
+        way as a cash order, by confirming payment once it is delivered.
       </p>
 
       <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -150,12 +165,14 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
           <select
             className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
             value={pharmacyId}
-            onChange={(event) => setPharmacyId(event.target.value)}
+            disabled={loading || error || saving}
+            onChange={(event) => selectPharmacy(event.target.value)}
           >
             <option value="">Choose a pharmacy</option>
             {pharmacies.map((pharmacy) => (
               <option key={pharmacy.id} value={pharmacy.id}>
                 {pharmacy.name}
+                {lines.some((line) => line.pharmacy_id === pharmacy.id) ? " (credit client)" : ""}
               </option>
             ))}
           </select>
@@ -189,10 +206,10 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
         className="mt-4"
         size="sm"
         variant="hero"
-        disabled={saving}
+        disabled={saving || loading || error || !pharmacyId}
         onClick={() => void save()}
       >
-        {saving ? "Saving..." : "Save credit terms"}
+        {saving ? "Saving..." : selectedLine ? "Update credit terms" : "Approve credit client"}
       </Button>
 
       <div className="mt-6">
@@ -202,13 +219,15 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
           </p>
         ) : error ? (
           <p role="alert" className="text-sm">
-            We couldn&apos;t load your credit lines.{" "}
+            We couldn&apos;t load pharmacies or credit terms.{" "}
             <button type="button" className="text-primary underline" onClick={() => void load()}>
               Try again
             </button>
           </p>
         ) : lines.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No pharmacy has approved credit yet.</p>
+          <p className="text-sm text-muted-foreground">
+            You have not approved any pharmacies as credit clients yet.
+          </p>
         ) : (
           <ul className="divide-y divide-border rounded-xl border border-border text-sm">
             {lines.map((line) => (
@@ -237,6 +256,13 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => selectPharmacy(line.pharmacy_id)}
+                  >
+                    Edit terms
+                  </Button>
                   {line.status !== "active" && (
                     <Button
                       size="sm"

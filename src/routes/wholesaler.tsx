@@ -426,7 +426,8 @@ function WholesalerDashboardContent() {
           {canProcessOrders && <TabsContent value="returns"><ReturnsPanel businessId={business.id} side="wholesaler" canProcess={canUpdateStatus} canManage={canManageProducts} /></TabsContent>}
           {canProcessOrders && <TabsContent value="customers"><CustomersView wholesalerId={business.id} /></TabsContent>}
           {canRecordCreditPayment && (
-            <TabsContent value="credit">
+            <TabsContent value="credit" className="space-y-6">
+              {canManageProducts && <CreditTermsCard wholesalerId={business.id} />}
               <CreditPaymentsPanel
                 wholesalerId={business.id}
                 canManage={canManageProducts}
@@ -434,7 +435,7 @@ function WholesalerDashboardContent() {
               />
             </TabsContent>
           )}
-          {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><ProductDiscountsCard wholesalerId={business.id} products={products.map((p) => ({ id: p.id, name: p.name }))} /><CreditTermsCard wholesalerId={business.id} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}
+          {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><ProductDiscountsCard wholesalerId={business.id} products={products.map((p) => ({ id: p.id, name: p.name }))} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}
         </Tabs>
       </main>
     </div>
