@@ -640,4 +640,13 @@ export const helpFaqs: HelpFaq[] = [
       "Include the business name, order or request reference, the action you tried and the exact error message. A screenshot can help, but hide private customer details. Never send your password, one-time sign-in code or secret API keys.",
     keywords: ["support", "error", "screenshot", "contact"],
   },
+  {
+    id: "rfq-large-lists",
+    category: "quotations",
+    roles: ["pharmacy"],
+    question: "How do I request quotes for hundreds of medicines?",
+    answer:
+      "Use the expanded RFQ editor. Import Excel/CSV or paste a table with Medicine, Quantity and optional Notes headers. Search your items and review them in pages of 25; fix highlighted duplicates or invalid quantities. Search suppliers in pages of 20, review your selected suppliers, or choose All eligible suppliers. Save draft on this device preserves progress for your account and pharmacy. Review the item count, recipient count and deadline before confirming submission. A draft is not sent and is not synced to another device.",
+    keywords: ["bulk", "rfq", "import", "draft", "pagination", "suppliers"],
+  },
 ];

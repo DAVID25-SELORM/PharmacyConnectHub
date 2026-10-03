@@ -1,5 +1,8 @@
+import { rfqRows, rfqRowIssues } from "@/lib/rfq-bulk";
+import { useSession } from "@/hooks/use-session";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,7 +43,19 @@ export function CreateRfqDialog({
   const [wholesalers, setWholesalers] = useState<WholesalerOption[]>([]);
   const [selectedWholesalers, setSelectedWholesalers] = useState<string[]>([]);
   const [sendMode, setSendMode] = useState<"selected" | "all">("selected");
-  const [showAllList, setShowAllList] = useState(false);
+  const { user } = useSession();
+  const draftKey = `rfq-draft:${user?.id}:${pharmacyId}`;
+  const [itemPage, setItemPage] = useState(0);
+  const [itemQuery, setItemQuery] = useState("");
+  const [supplierPage, setSupplierPage] = useState(0);
+  const [supplierCount, setSupplierCount] = useState(0);
+  const [totalSuppliers, setTotalSuppliers] = useState(0);
+  const [selectedOnly, setSelectedOnly] = useState(false);
+  const [supplierLoading, setSupplierLoading] = useState(false);
+  const [supplierError, setSupplierError] = useState("");
+  const [bulk, setBulk] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [review, setReview] = useState(false);
   const [supplierQuery, setSupplierQuery] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -49,6 +64,7 @@ export function CreateRfqDialog({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const search = useDebouncedValue(supplierQuery, 250);
   useEffect(() => {
     if (!open) return;
     setTitle("");
@@ -57,27 +73,124 @@ export function CreateRfqDialog({
     setItems([emptyItem()]);
     setSelectedWholesalers([]);
     setSendMode("selected");
-    setShowAllList(false);
+    setItemPage(0);
+    setItemQuery("");
+    setSupplierPage(0);
     setSupplierQuery("");
+    setSelectedOnly(false);
     setError(null);
-    void supabase
+    setReview(false);
+    setBulk("");
+    try {
+      const saved = JSON.parse(localStorage.getItem(draftKey) ?? "null");
+      if (
+        saved &&
+        Array.isArray(saved.items) &&
+        saved.items.every(
+          (i: RfqItemDraft) =>
+            typeof i.productName === "string" &&
+            typeof i.quantity === "string" &&
+            typeof i.notes === "string",
+        )
+      ) {
+        setTitle(saved.title ?? "");
+        setNotes(saved.notes ?? "");
+        setResponseDeadline(saved.responseDeadline ?? "");
+        setItems(saved.items.length ? saved.items : [emptyItem()]);
+        setSelectedWholesalers(saved.selectedWholesalers ?? []);
+        setSendMode(saved.sendMode === "all" ? "all" : "selected");
+      }
+    } catch {
+      toast.error("The saved draft could not be restored.");
+    }
+  }, [open, draftKey]);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setSupplierLoading(true);
+    setSupplierError("");
+    let query = supabase
       .from("businesses")
-      .select("id, name")
+      .select("id,name", { count: "exact" })
       .eq("type", "wholesaler")
-      .eq("verification_status", "approved")
-      .order("name")
-      .then(({ data }) => setWholesalers((data as WholesalerOption[] | null) ?? []));
-  }, [open]);
-
-  // "All eligible wholesalers" currently means every approved wholesaler account -- the same
-  // gate create_rfq itself enforces. There's no active/suspended flag or coverage-area/
-  // categories-supplied concept in the schema yet, so no further filtering is applied here; the
-  // brief's own eligibility list is explicit that each extra criterion only applies "where data is
-  // available" / "if such rules exist".
-  const recipientIds = sendMode === "all" ? wholesalers.map((w) => w.id) : selectedWholesalers;
-  const shownWholesalers = wholesalers.filter((w) =>
-    w.name.toLowerCase().includes(supplierQuery.trim().toLowerCase()),
-  );
+      .eq("verification_status", "approved");
+    if (search.trim()) query = query.ilike("name", `%${search.trim().replace(/[%_\\]/g, "")}%`);
+    if (selectedOnly)
+      query = query.in(
+        "id",
+        selectedWholesalers.length ? selectedWholesalers : ["00000000-0000-0000-0000-000000000000"],
+      );
+    void Promise.all([
+      query
+        .order("name")
+        .order("id")
+        .range(supplierPage * 20, supplierPage * 20 + 19),
+      supabase
+        .from("businesses")
+        .select("id", { count: "exact", head: true })
+        .eq("type", "wholesaler")
+        .eq("verification_status", "approved"),
+    ]).then(([result, total]) => {
+      if (cancelled) return;
+      setSupplierLoading(false);
+      if (result.error || total.error) {
+        setSupplierError("Could not load suppliers. Reopen the editor to retry.");
+        return;
+      }
+      setWholesalers(result.data ?? []);
+      setSupplierCount(result.count ?? 0);
+      setTotalSuppliers(total.count ?? 0);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, search, supplierPage, selectedOnly, selectedWholesalers]);
+  const shownWholesalers = wholesalers;
+  const indexedItems = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.productName.toLowerCase().includes(itemQuery.toLowerCase()));
+  const currentItemPage = Math.min(itemPage, Math.max(0, Math.ceil(indexedItems.length / 25) - 1));
+  const visibleItems = indexedItems.slice(currentItemPage * 25, currentItemPage * 25 + 25);
+  const issues = rfqRowIssues(items);
+  const saveDraft = () => {
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ title, notes, responseDeadline, items, selectedWholesalers, sendMode }),
+      );
+      toast.success("Draft saved on this device for this account and pharmacy.");
+    } catch {
+      toast.error("Could not save draft. Keep this editor open and try again.");
+    }
+  };
+  const importRows = async (file?: File) => {
+    setImporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = file
+        ? XLSX.read(await file.arrayBuffer(), { type: "array" })
+        : XLSX.read(bulk, { type: "string" });
+      const rows = rfqRows(
+        XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {
+          header: 1,
+          defval: "",
+          raw: false,
+        }),
+      );
+      setItems((current) => [
+        ...current.filter((i) => i.productName.trim() || i.quantity.trim() || i.notes.trim()),
+        ...rows,
+      ]);
+      setItemQuery("");
+      setItemPage(0);
+      setBulk("");
+      toast.success(`${rows.length} rows added. Review highlighted issues before sending.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not import rows.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const toggleWholesaler = (id: string, checked: boolean) => {
     setSelectedWholesalers((prev) => (checked ? [...prev, id] : prev.filter((w) => w !== id)));
@@ -92,6 +205,53 @@ export function CreateRfqDialog({
   };
 
   const submit = async () => {
+    if (submitting || importing || supplierLoading || supplierError) return;
+    if (issues.size) {
+      setError("Fix the highlighted medicine rows before sending.");
+      return;
+    }
+    let recipientIds = selectedWholesalers;
+    if (!review) {
+      const checked = validateRfqDraft({
+        title,
+        wholesalerIds: sendMode === "all" && totalSuppliers > 0 ? ["all"] : selectedWholesalers,
+        items,
+        responseDeadline,
+      });
+      if (checked.error) {
+        setError(checked.error);
+        return;
+      }
+      setError(null);
+      setReview(true);
+      return;
+    }
+    setSubmitting(true);
+    if (sendMode === "all") {
+      recipientIds = [];
+      for (let offset = 0; ; offset += 500) {
+        const result = await supabase
+          .from("businesses")
+          .select("id")
+          .eq("type", "wholesaler")
+          .eq("verification_status", "approved")
+          .order("id")
+          .range(offset, offset + 499);
+        if (result.error) {
+          setSubmitting(false);
+          setError("Could not resolve all suppliers. Nothing was sent.");
+          return;
+        }
+        recipientIds.push(...(result.data ?? []).map((w) => w.id));
+        if ((result.data?.length ?? 0) < 500) break;
+      }
+      if (recipientIds.length !== totalSuppliers) {
+        setTotalSuppliers(recipientIds.length);
+        setSubmitting(false);
+        setError("The eligible supplier count changed. Review the count and confirm again.");
+        return;
+      }
+    }
     const { error: validationError, items: cleanItems } = validateRfqDraft({
       title,
       wholesalerIds: recipientIds,
@@ -99,6 +259,7 @@ export function CreateRfqDialog({
       responseDeadline,
     });
     if (validationError || !cleanItems) {
+      setSubmitting(false);
       setError(validationError);
       return;
     }
@@ -121,24 +282,37 @@ export function CreateRfqDialog({
       setError(rpcError.message);
       return;
     }
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      /* Request is already saved on the server. */
+    }
     toast.success("Quote request sent");
     onOpenChange(false);
     onCreated();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submitting) onOpenChange(next);
+      }}
+    >
+      <DialogContent className="h-[95dvh] w-[96vw] max-w-none sm:max-w-[96vw] flex flex-col">
         <DialogHeader>
           <DialogTitle>Request quotes</DialogTitle>
           <DialogDescription>
-            Ask suppliers to quote on a list of items — pick specific ones or send to everyone
-            eligible. Only the suppliers you send this to will see it, and each supplier's quote
-            stays private to you and them.
+            Save your draft before closing to keep your work on this device. Ask suppliers to quote
+            on a list of items — pick specific ones or send to everyone eligible. Only the suppliers
+            you send this to will see it, and each supplier's quote stays private to you and them.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <fieldset
+          disabled={submitting || review || importing}
+          className="space-y-4 overflow-y-auto flex-1 px-1"
+        >
           <div className="space-y-1.5">
             <Label htmlFor="rfq-title">Title</Label>
             <Input
@@ -171,10 +345,61 @@ export function CreateRfqDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Items</Label>
+            <Label>Items ({items.length})</Label>
+            <Input
+              aria-label="Search request items"
+              placeholder="Find a medicine in this request"
+              value={itemQuery}
+              onChange={(e) => {
+                setItemQuery(e.target.value);
+                setItemPage(0);
+              }}
+            />
+            <details className="rounded border p-3">
+              <summary>Import Excel/CSV or paste a table</summary>
+              <p className="text-sm">
+                Use Medicine, Quantity, Notes headers. Import adds rows; duplicates and invalid
+                quantities must be resolved.
+              </p>
+              <Input
+                aria-label="Import RFQ items"
+                type="file"
+                accept=".csv,.tsv,.xlsx,.xls"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void importRows(file);
+                  e.target.value = "";
+                }}
+              />
+              <Textarea
+                aria-label="Paste medicine table"
+                placeholder={"Medicine\tQuantity\tNotes"}
+                value={bulk}
+                onChange={(e) => setBulk(e.target.value)}
+              />
+              <Button
+                type="button"
+                disabled={!bulk.trim() || importing}
+                onClick={() => void importRows()}
+              >
+                Add pasted rows
+              </Button>
+            </details>
+            {issues.size > 0 && (
+              <p role="status" className="text-sm text-destructive">
+                {issues.size} rows need attention. Search or page through the list to review them.
+              </p>
+            )}
             <div className="space-y-2">
-              {items.map((item, index) => (
-                <div key={index} className="flex flex-wrap items-start gap-2 rounded-lg border border-border p-3">
+              {visibleItems.map(({ item, index }) => (
+                <div
+                  key={index}
+                  className="flex flex-wrap items-start gap-2 rounded-lg border border-border p-3"
+                >
+                  <span className="text-xs">{index + 1}</span>
+                  {issues.has(index) && (
+                    <p className="w-full text-xs text-destructive">{issues.get(index)}</p>
+                  )}
                   <div className="min-w-[180px] flex-1 space-y-1">
                     <MedicationPicker
                       value={item.productName}
@@ -212,104 +437,153 @@ export function CreateRfqDialog({
                 </div>
               ))}
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => setItems((prev) => [...prev, emptyItem()])}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setItemQuery("");
+                setItemPage(Math.floor(items.length / 25));
+                setItems((prev) => [...prev, emptyItem()]);
+              }}
+            >
               <Plus className="mr-1 h-4 w-4" />
               Add item
             </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={currentItemPage === 0}
+                onClick={() => setItemPage(currentItemPage - 1)}
+              >
+                Previous items
+              </Button>
+              <span>
+                Page {currentItemPage + 1} of {Math.max(1, Math.ceil(indexedItems.length / 25))} ?{" "}
+                {indexedItems.length} matching rows
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={(currentItemPage + 1) * 25 >= indexedItems.length}
+                onClick={() => setItemPage(currentItemPage + 1)}
+              >
+                Next items
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
             <Label>Send to</Label>
-            {wholesalers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No approved suppliers available yet.</p>
+            <RadioGroup
+              value={sendMode}
+              onValueChange={(value) => setSendMode(value as "all" | "selected")}
+              className="flex gap-4"
+            >
+              <label className="flex gap-2">
+                <RadioGroupItem value="selected" />
+                Select suppliers
+              </label>
+              <label className="flex gap-2">
+                <RadioGroupItem value="all" />
+                All eligible suppliers ({totalSuppliers})
+              </label>
+            </RadioGroup>
+            {sendMode === "all" ? (
+              <p>
+                All {totalSuppliers} approved suppliers will receive this request. No individual
+                selection is needed.
+              </p>
             ) : (
               <>
-                <RadioGroup
-                  value={sendMode}
-                  onValueChange={(value) => setSendMode(value as "selected" | "all")}
-                  className="flex flex-col gap-2 sm:flex-row sm:gap-4"
-                >
-                  <label className="flex items-center gap-2 text-sm">
-                    <RadioGroupItem value="selected" />
-                    Select specific suppliers
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <RadioGroupItem value="all" />
-                    All eligible suppliers
-                  </label>
-                </RadioGroup>
-
-                {sendMode === "selected" ? (
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        value={supplierQuery}
-                        onChange={(e) => setSupplierQuery(e.target.value)}
-                        placeholder="Search suppliers"
-                        aria-label="Search suppliers"
-                        className="max-w-xs"
-                      />
-                      <span className="text-xs text-muted-foreground">
-                        {selectedWholesalers.length} of {wholesalers.length} selected
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedWholesalers((prev) => [
-                            ...new Set([...prev, ...shownWholesalers.map((w) => w.id)]),
-                          ])
-                        }
-                      >
-                        Select shown
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedWholesalers([])}>
-                        Clear
-                      </Button>
-                    </div>
-                    <div className="grid max-h-48 grid-cols-1 gap-2 overflow-y-auto rounded-lg border border-border p-3 sm:grid-cols-2">
-                      {shownWholesalers.length === 0 && (
-                        <p className="text-sm text-muted-foreground">No suppliers match your search.</p>
-                      )}
-                      {shownWholesalers.map((w) => (
-                        <label key={w.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={selectedWholesalers.includes(w.id)}
-                            onCheckedChange={(checked) => toggleWholesaler(w.id, checked === true)}
-                          />
-                          {w.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  <Input
+                    className="max-w-sm"
+                    aria-label="Search suppliers"
+                    placeholder="Search suppliers"
+                    value={supplierQuery}
+                    onChange={(e) => {
+                      setSupplierQuery(e.target.value);
+                      setSupplierPage(0);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedOnly(!selectedOnly);
+                      setSupplierPage(0);
+                      setSupplierQuery("");
+                    }}
+                  >
+                    {selectedOnly
+                      ? "Browse suppliers"
+                      : `Review selected (${selectedWholesalers.length})`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={supplierLoading || !!supplierError}
+                    onClick={() =>
+                      setSelectedWholesalers((prev) => [
+                        ...new Set([...prev, ...shownWholesalers.map((w) => w.id)]),
+                      ])
+                    }
+                  >
+                    Select this page
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setSelectedWholesalers([]);
+                      setSupplierPage(0);
+                    }}
+                  >
+                    Clear selection
+                  </Button>
+                </div>
+                <p>{selectedWholesalers.length} suppliers selected</p>
+                {supplierLoading ? (
+                  <p role="status">Loading suppliers?</p>
+                ) : supplierError ? (
+                  <p role="alert">{supplierError}</p>
                 ) : (
-                  <div className="rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm">
-                        Send to <span className="font-medium">{wholesalers.length}</span> eligible
-                        wholesaler{wholesalers.length === 1 ? "" : "s"}
-                        {" "}— every approved supplier account on Drugxone right now.
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowAllList((v) => !v)}
-                      >
-                        {showAllList ? "Hide list" : "View list"}
-                        {showAllList ? <ChevronUp className="ml-1 h-3.5 w-3.5" /> : <ChevronDown className="ml-1 h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
-                    {showAllList && (
-                      <ul className="mt-2 grid max-h-40 grid-cols-1 gap-1 overflow-y-auto border-t border-border pt-2 text-sm text-muted-foreground sm:grid-cols-2">
-                        {wholesalers.map((w) => (
-                          <li key={w.id}>{w.name}</li>
-                        ))}
-                      </ul>
-                    )}
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {shownWholesalers.map((w) => (
+                      <label key={w.id} className="flex gap-2 rounded border p-2">
+                        <Checkbox
+                          checked={selectedWholesalers.includes(w.id)}
+                          onCheckedChange={(checked) => toggleWholesaler(w.id, checked === true)}
+                        />
+                        {w.name}
+                      </label>
+                    ))}
+                    {!shownWholesalers.length && <p>No suppliers match.</p>}
                   </div>
                 )}
+                <div className="flex gap-3 items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={supplierPage === 0 || supplierLoading}
+                    onClick={() => setSupplierPage((p) => p - 1)}
+                  >
+                    Previous suppliers
+                  </Button>
+                  <span>
+                    Page {supplierPage + 1} of {Math.max(1, Math.ceil(supplierCount / 20))}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={supplierLoading || (supplierPage + 1) * 20 >= supplierCount}
+                    onClick={() => setSupplierPage((p) => p + 1)}
+                  >
+                    Next suppliers
+                  </Button>
+                </div>
               </>
             )}
           </div>
@@ -319,14 +593,44 @@ export function CreateRfqDialog({
               {error}
             </p>
           )}
-        </div>
-
+        </fieldset>
+        {review && (
+          <div className="rounded border p-3" role="status">
+            <strong>Review before sending: {title}</strong>
+            <p>
+              {items.length} medicines ? {items.reduce((sum, i) => sum + Number(i.quantity), 0)}{" "}
+              total units ? {sendMode === "all" ? totalSuppliers : selectedWholesalers.length}{" "}
+              suppliers ? Deadline: {responseDeadline || "None"}
+            </p>
+            <p>Sending shares this request with these suppliers.</p>
+            <Button variant="outline" disabled={submitting} onClick={() => setReview(false)}>
+              Back to edit
+            </Button>
+          </div>
+        )}
+        {review && error && (
+          <p role="alert" className="text-destructive">
+            {error}
+          </p>
+        )}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <Button type="button" variant="outline" disabled={submitting} onClick={saveDraft}>
+            Save draft on this device
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
             Cancel
           </Button>
-          <Button type="button" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? "Sending..." : "Send request"}
+          <Button
+            type="button"
+            onClick={() => void submit()}
+            disabled={submitting || importing || supplierLoading || !!supplierError}
+          >
+            {submitting ? "Sending..." : review ? "Confirm and send request" : "Review request"}
           </Button>
         </DialogFooter>
       </DialogContent>
