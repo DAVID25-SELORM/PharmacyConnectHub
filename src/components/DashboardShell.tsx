@@ -84,7 +84,6 @@ function NotificationBell() {
       window.clearInterval(pollInterval);
       window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onChanged);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const markAllRead = async () => {
@@ -200,7 +199,11 @@ export function DashboardHeader({
   // block it lives in is hidden entirely below the sm breakpoint.
   const accountBadge = business
     ? business.type === "wholesaler"
-      ? { label: "Wholesaler", Icon: Warehouse, className: "border-violet-200 bg-violet-100 text-violet-800" }
+      ? {
+          label: "Wholesaler",
+          Icon: Warehouse,
+          className: "border-violet-200 bg-violet-100 text-violet-800",
+        }
       : { label: "Pharmacy", Icon: Pill, className: "border-blue-200 bg-blue-100 text-blue-800" }
     : null;
   const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
@@ -274,8 +277,8 @@ export function DashboardHeader({
               <SelectContent>
                 {businesses.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.name} · {workspace.type === "wholesaler" ? "Wholesaler" : "Pharmacy"} ·{" "}
-                    {workspace.staff_role}
+                    {workspace.name} · {workspace.type === "wholesaler" ? "Wholesaler" : "Pharmacy"}{" "}
+                    · {workspace.staff_role}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -338,6 +341,16 @@ export function DashboardHeader({
                   Credit
                 </Link>
               )}
+              {business?.type === "pharmacy" &&
+                ["owner", "manager"].includes(business.staff_role) && (
+                  <Link
+                    to="/pharmacy/contacts"
+                    className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+                  >
+                    <Users className="h-4 w-4 inline mr-2" />
+                    Contacts / CRM
+                  </Link>
+                )}
               {showAuditLink && (
                 <Link
                   to={auditRoute}

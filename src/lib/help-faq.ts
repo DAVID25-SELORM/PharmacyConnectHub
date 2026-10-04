@@ -39,6 +39,15 @@ export type HelpFaq = {
 
 export const helpFaqs: HelpFaq[] = [
   {
+    id: "pharmacy-representatives",
+    category: "account",
+    roles: ["pharmacy"],
+    question: "How do I manage supplier and medical representatives?",
+    answer:
+      "Pharmacy owners and managers can open Contacts / CRM to add representatives, link companies and products, record visits or calls, and schedule follow-ups. You can mark follow-ups completed and export filtered contacts to Excel or PDF. Records and their activity history are private to your pharmacy's owners and managers. Archive keeps history. Samples recorded in a visit do not change inventory, and follow-ups do not send external messages.",
+    keywords: ["CRM", "representatives", "contacts", "visits", "follow-ups", "companies"],
+  },
+  {
     id: "register",
     category: "getting-started",
     roles: ["all"],

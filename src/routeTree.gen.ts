@@ -28,6 +28,7 @@ import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
 import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
+import { Route as PharmacyContactsRouteImport } from './routes/pharmacy_.contacts'
 import { Route as PharmacyInventoryRouteImport } from './routes/pharmacy_.inventory'
 import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
 import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
@@ -130,6 +131,11 @@ const PharmacyAuditRoute = PharmacyAuditRouteImport.update({
   path: '/pharmacy/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PharmacyContactsRoute = PharmacyContactsRouteImport.update({
+  id: '/pharmacy_/contacts',
+  path: '/pharmacy/contacts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PharmacyInventoryRoute = PharmacyInventoryRouteImport.update({
   id: '/pharmacy_/inventory',
   path: '/pharmacy/inventory',
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/pharmacy/audit': typeof PharmacyAuditRoute
+  '/pharmacy/contacts': typeof PharmacyContactsRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/pharmacy/audit': typeof PharmacyAuditRoute
+  '/pharmacy/contacts': typeof PharmacyContactsRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/pharmacy_/audit': typeof PharmacyAuditRoute
+  '/pharmacy_/contacts': typeof PharmacyContactsRoute
   '/pharmacy_/inventory': typeof PharmacyInventoryRoute
   '/pharmacy_/reports': typeof PharmacyReportsRoute
   '/pharmacy_/rfqs': typeof PharmacyRfqsRoute
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/admin/verification'
     | '/pharmacy/audit'
+    | '/pharmacy/contacts'
     | '/pharmacy/inventory'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/admin/verification'
     | '/pharmacy/audit'
+    | '/pharmacy/contacts'
     | '/pharmacy/inventory'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
@@ -319,6 +330,7 @@ export interface FileRouteTypes {
     | '/admin/staff'
     | '/admin/verification'
     | '/pharmacy_/audit'
+    | '/pharmacy_/contacts'
     | '/pharmacy_/inventory'
     | '/pharmacy_/reports'
     | '/pharmacy_/rfqs'
@@ -343,6 +355,7 @@ export interface RootRouteChildren {
   StaffRoute: typeof StaffRoute
   WholesalerRoute: typeof WholesalerRoute
   PharmacyAuditRoute: typeof PharmacyAuditRoute
+  PharmacyContactsRoute: typeof PharmacyContactsRoute
   PharmacyInventoryRoute: typeof PharmacyInventoryRoute
   PharmacyReportsRoute: typeof PharmacyReportsRoute
   PharmacyRfqsRoute: typeof PharmacyRfqsRoute
@@ -486,6 +499,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PharmacyAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pharmacy_/contacts': {
+      id: '/pharmacy_/contacts'
+      path: '/pharmacy/contacts'
+      fullPath: '/pharmacy/contacts'
+      preLoaderRoute: typeof PharmacyContactsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pharmacy_/inventory': {
       id: '/pharmacy_/inventory'
       path: '/pharmacy/inventory'
@@ -563,6 +583,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRoute: StaffRoute,
   WholesalerRoute: WholesalerRoute,
   PharmacyAuditRoute: PharmacyAuditRoute,
+  PharmacyContactsRoute: PharmacyContactsRoute,
   PharmacyInventoryRoute: PharmacyInventoryRoute,
   PharmacyReportsRoute: PharmacyReportsRoute,
   PharmacyRfqsRoute: PharmacyRfqsRoute,
