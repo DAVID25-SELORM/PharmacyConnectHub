@@ -79,3 +79,11 @@ available credit after partial payments and requires explicit financial review.
     the 2,000-line cap, the ageing block, the counterparty list, finance-only access on both sides and
     no probing of unrelated businesses. Run after 20261022100000. Mutation check: change the opening
     balance filter from `< p_from` to `<= p_from` and the one-day-range and truncation checks must fail.
+
+15. `pharmacy-price-history.sql` (51 checks): the pharmacy price-history report - price paid per product,
+    matched across suppliers on name + brand + form + pack size, change against the previous purchase
+    from the SAME supplier (looking back before the range), "cheaper elsewhere", cancelled orders ignored,
+    quantity-weighted average, filters, paging, the purchases behind a row, and access (owner and active
+    staff only; another pharmacy, a wholesaler and suspended staff are refused). The test lifts production's
+    `phase0_order_integrity` trigger only while dating the fixtures. Run after 20261023100000. Mutation
+    checks: count cancelled orders, or drop `h.sid` from the `lag()` partition; checks must fail.

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText, ShieldCheck, Wallet } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { DashboardHeader } from "@/components/DashboardShell";
+import { PriceHistoryTab } from "@/components/reports/PriceHistoryTab";
 import { ReportKpis, type ReportKpi } from "@/components/reports/ReportKpis";
 import { ReportsHeader } from "@/components/reports/ReportsHeader";
 import { ReportTable, type ReportColumn } from "@/components/reports/ReportTable";
@@ -142,6 +143,7 @@ function PharmacyReportsPage() {
             <TabsTrigger value="purchases">Purchases (NHIS &amp; Cash)</TabsTrigger>
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+            <TabsTrigger value="prices">Price history</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -158,6 +160,9 @@ function PharmacyReportsPage() {
           </TabsContent>
           <TabsContent value="suppliers">
             <SuppliersTab businessId={business.id} range={applied} exportRef={exportRef} />
+          </TabsContent>
+          <TabsContent value="prices">
+            <PriceHistoryTab businessId={business.id} range={applied} exportRef={exportRef} />
           </TabsContent>
         </Tabs>
       </main>
