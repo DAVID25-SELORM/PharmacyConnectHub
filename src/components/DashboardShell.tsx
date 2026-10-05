@@ -7,6 +7,7 @@ import {
   BarChart3,
   FileQuestion,
   Home,
+  Landmark,
   LayoutDashboard,
   LogOut,
   Package,
@@ -32,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { canViewAccounting } from "@/lib/accounting";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
 import {
@@ -211,6 +213,12 @@ export function DashboardHeader({
     business?.type === "wholesaler" ? "/wholesaler/reports" : "/pharmacy/reports";
   const rfqsRoute = business?.type === "wholesaler" ? "/wholesaler/rfqs" : "/pharmacy/rfqs";
   const auditRoute = business?.type === "wholesaler" ? "/wholesaler/audit" : "/pharmacy/audit";
+  const accountingRoute =
+    business?.type === "wholesaler" ? "/wholesaler/accounting" : "/pharmacy/accounting";
+  // Same roles the database allows for the accounting registers (see can_view_accounting).
+  const showAccountingLink = business
+    ? canViewAccounting(business.type, business.staff_role)
+    : false;
   const showInventoryLink = business?.type === "pharmacy";
   const showAuditLink =
     business?.staff_role === "owner" ||
@@ -351,6 +359,15 @@ export function DashboardHeader({
                     Contacts / CRM
                   </Link>
                 )}
+              {showAccountingLink && (
+                <Link
+                  to={accountingRoute}
+                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+                >
+                  <Landmark className="h-4 w-4 inline mr-2" />
+                  Accounting
+                </Link>
+              )}
               {showAuditLink && (
                 <Link
                   to={auditRoute}
