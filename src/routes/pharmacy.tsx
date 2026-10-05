@@ -48,7 +48,7 @@ import { OrderPrintActions } from "@/components/order-print";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
-import { canUseCredit, type CreditTerms } from "@/lib/credit-terms";
+import { activeOverride, canUseCredit, usesOverride, type CreditTerms } from "@/lib/credit-terms";
 import {
   SETTLEMENT_LABELS,
   canChangeSettlement,
@@ -1296,6 +1296,16 @@ function CartSheet({
                           {formatGHS(creditTerms[wid].available_ghs)} available
                         </p>
                       )}
+                      {methodFor(wid) === "credit" &&
+                        usesOverride(creditTerms[wid], estimates[wid].total) && (
+                          <p role="status" className="text-muted-foreground">
+                            This order is above your credit limit. It will use the supplier's one-time
+                            approval (up to {formatGHS(activeOverride(creditTerms[wid])?.maxOrderGhs ?? 0)},
+                            valid until{" "}
+                            {new Date(activeOverride(creditTerms[wid])?.expiresAt ?? "").toLocaleDateString("en-GB")}).
+                            Your next credit order is checked against the normal limit again.
+                          </p>
+                        )}
                       {creditBlocked(wid) && (
                         <p role="alert" className="text-destructive">
                           {creditStatus(wid) === "active"

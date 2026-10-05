@@ -128,8 +128,15 @@ BEGIN
   PERFORM zz.check('...exposure falls to 250 (only order A''s unpaid part)', public.credit_exposure((SELECT alpha FROM zz.cf), (SELECT good FROM zz.cf)) = 250);
 END $$;
 -- Re-cancelling must not release credit a second time.
-UPDATE public.orders SET status = 'pending' WHERE id = (SELECT order_id FROM zz.cf_runs WHERE label='B');
-UPDATE public.orders SET status = 'cancelled' WHERE id = (SELECT order_id FROM zz.cf_runs WHERE label='B');
+-- (Where production's lifecycle guard is installed an order can't be reopened at all, so there is
+-- nothing to re-cancel; the attempt is allowed to be refused and the checks below still must hold.)
+DO $$
+BEGIN
+  UPDATE public.orders SET status = 'pending' WHERE id = (SELECT order_id FROM zz.cf_runs WHERE label='B');
+  UPDATE public.orders SET status = 'cancelled' WHERE id = (SELECT order_id FROM zz.cf_runs WHERE label='B');
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM NOT LIKE 'Invalid order transition:%' THEN RAISE; END IF;
+END $$;
 DO $$
 BEGIN
   PERFORM zz.check('cancelling again does not double-release (still exactly one release entry)',

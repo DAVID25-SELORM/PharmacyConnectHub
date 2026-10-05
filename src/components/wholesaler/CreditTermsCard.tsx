@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { validateCreditForm } from "@/lib/credit-terms";
+import { CreditOverrideControls } from "@/components/wholesaler/CreditOverrideControls";
 import { formatReportDate } from "@/lib/reports";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +36,9 @@ type CreditLine = {
   status: "active" | "suspended" | "blocked";
   status_reason: string | null;
   status_changed_at: string | null;
+  override_max_order_ghs?: number | null;
+  override_expires_at?: string | null;
+  override_reason?: string | null;
 };
 
 type StatusChange = { line: CreditLine; next: "active" | "suspended" | "blocked" };
@@ -297,6 +301,11 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
                       Revoke
                     </Button>
                   </div>
+                  <CreditOverrideControls
+                    wholesalerId={wholesalerId}
+                    line={line}
+                    onChanged={() => void load()}
+                  />
                 </li>
               ))}
             </ul>

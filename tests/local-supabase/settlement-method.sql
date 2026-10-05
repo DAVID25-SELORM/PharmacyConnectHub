@@ -226,6 +226,11 @@ END $$;
 -- 6. No change once paid, delivered or cancelled.
 UPDATE public.orders SET payment_status = 'paid', paid_at = now() WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='momo_order');
 UPDATE public.orders SET status = 'cancelled' WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='cheque_order');
+-- Walk the real fulfilment chain: production's order guard (production-guard-fixture.sql) rejects
+-- jumps such as pending -> delivered.
+UPDATE public.orders SET status = 'accepted' WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='other_order');
+UPDATE public.orders SET status = 'packed' WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='other_order');
+UPDATE public.orders SET status = 'dispatched' WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='other_order');
 UPDATE public.orders SET status = 'delivered' WHERE id = (SELECT v::uuid FROM zz.st_t WHERE k='other_order');
 DO $$
 DECLARE r TEXT; q TEXT := 'SELECT public.change_order_settlement_method(%L, ''bank_transfer'', ''Trying to change it'')::text';

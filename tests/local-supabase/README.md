@@ -54,3 +54,14 @@ Rollback: retain ledger entries and cancellation markers to preserve financial h
 prior RPC/UI definitions only through a reviewed forward migration; do not delete posted release
 entries or drop ledger data. Reverting to the previous order-total exposure calculation changes
 available credit after partial payments and requires explicit financial review.
+
+10. `credit-override.sql` (42 checks) and `credit-override-concurrency.sh`: the one-time over-limit credit
+    override (grant / use once / expire / revoke, suspension still wins, fully audited) and the proof that
+    two simultaneous over-limit orders cannot both consume the same override. Run after `setup.sql` with
+    20261019100000 applied. Negative control: remove the `FOR UPDATE` locks on the credit line AND on
+    the override lookup in `create_marketplace_orders`; the script must then FAIL (exposure 6,400).
+
+11. Running against a production-like schema: install `production-guard-fixture.sql` (production's legacy
+    order lifecycle guard) and re-apply `20261017110000_production_checkout_compatibility.sql`, which
+    patches it. Tests must then walk real status transitions (pending -> accepted -> packed -> dispatched
+    -> delivered) rather than jump; `settlement-method.sql` and `credit-foundation.sql` do.
