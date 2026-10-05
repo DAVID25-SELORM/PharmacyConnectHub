@@ -240,6 +240,16 @@ $old$;
 $new$;
 BEGIN
   definition := replace(pg_get_functiondef('public.create_marketplace_orders(uuid,uuid,jsonb,uuid[],boolean,jsonb)'::regprocedure), E'\r', '');
+  -- SQL Editor / Windows paste may give dollar-quoted fragments CRLF line endings.
+  -- Normalize both sides before exact matching; do not relax the match-count guard.
+  a1_old := replace(a1_old, E'\r', '');
+  a1_new := replace(a1_new, E'\r', '');
+  a2_old := replace(a2_old, E'\r', '');
+  a2_new := replace(a2_new, E'\r', '');
+  a3_old := replace(a3_old, E'\r', '');
+  a3_new := replace(a3_new, E'\r', '');
+  a4_old := replace(a4_old, E'\r', '');
+  a4_new := replace(a4_new, E'\r', '');
   IF strpos(definition, 'credit_overrides') > 0 THEN RETURN; END IF; -- already patched
 
   FOREACH fragment IN ARRAY ARRAY[a1_old, a2_old, a3_old, a4_old] LOOP
