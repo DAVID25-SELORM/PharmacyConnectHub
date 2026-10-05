@@ -65,3 +65,17 @@ available credit after partial payments and requires explicit financial review.
     order lifecycle guard) and re-apply `20261017110000_production_checkout_compatibility.sql`, which
     patches it. Tests must then walk real status transitions (pending -> accepted -> packed -> dispatched
     -> delivered) rather than jump; `settlement-method.sql` and `credit-foundation.sql` do.
+
+12. `credit-effective-date.sql` (45 checks): credit terms that take effect on a future date (scheduled
+    change applied lazily under the same row lock as checkout). Run after 20261020100000.
+
+13. `accounting-registers.sql` (80 checks): the receivables / payables registers - the ageing rule at every
+    boundary, filters, paging, payment register, finance-only access on both sides, cross-organisation
+    isolation. Run after 20261021100000.
+
+14. `credit-account-statements.sql` (61 checks): credit account statements - opening + charges - credits =
+    closing with a running balance on every ledger line (invoices, payments, unallocated payments,
+    reversals, credit notes, debit notes, write-offs), inclusive range boundaries, negative balances,
+    the 2,000-line cap, the ageing block, the counterparty list, finance-only access on both sides and
+    no probing of unrelated businesses. Run after 20261022100000. Mutation check: change the opening
+    balance filter from `< p_from` to `<= p_from` and the one-day-range and truncation checks must fail.

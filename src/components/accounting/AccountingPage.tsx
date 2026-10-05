@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Download, Search, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
+import { StatementPanel } from "@/components/accounting/StatementPanel";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -63,7 +64,7 @@ const PAGE_SIZE = 50;
 const selectClass =
   "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
 
-type View = "invoices" | "payments";
+type View = "invoices" | "payments" | "statements";
 
 export function AccountingPage({ side }: { side: AccountingSide }) {
   const { business } = useSession();
@@ -338,19 +339,21 @@ export function AccountingPage({ side }: { side: AccountingSide }) {
                 Record payments &amp; invoice details
               </Link>
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={exporting}>
-                  <Download className="mr-2 h-4 w-4" aria-hidden="true" />
-                  {exporting ? "Exporting…" : "Export"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => void runExport("csv")}>CSV</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runExport("xlsx")}>Excel</DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void runExport("pdf")}>PDF</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {view !== "statements" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={exporting}>
+                    <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {exporting ? "Exporting…" : "Export"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => void runExport("csv")}>CSV</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void runExport("xlsx")}>Excel</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void runExport("pdf")}>PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
@@ -401,294 +404,301 @@ export function AccountingPage({ side }: { side: AccountingSide }) {
           <TabsList>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="statements">Statements</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {view === "invoices" ? (
-          <Card className="mt-4 p-4">
-            <form
-              role="search"
-              aria-label="Filter invoices"
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-              onSubmit={(event) => event.preventDefault()}
-            >
-              <div className="relative sm:col-span-2">
-                <Label htmlFor="acc-search" className="sr-only">
-                  Search
-                </Label>
-                <Search
-                  className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  id="acc-search"
-                  className="pl-9"
-                  placeholder={`Search ${copy.party.toLowerCase()} or invoice number`}
-                  value={filters.search}
-                  onChange={(event) => setFilter({ search: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-party">{copy.party}</Label>
-                <select
-                  id="acc-party"
-                  className={selectClass}
-                  value={filters.counterpartyId}
-                  onChange={(event) => setFilter({ counterpartyId: event.target.value })}
-                >
-                  <option value="">All</option>
-                  {counterpartyOptions.map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="acc-status">Status</Label>
-                <select
-                  id="acc-status"
-                  className={selectClass}
-                  value={filters.status}
-                  onChange={(event) => setFilter({ status: event.target.value })}
-                >
-                  <option value="">All</option>
-                  <option value="outstanding">Still owed</option>
-                  {Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="acc-bucket">Aging</Label>
-                <select
-                  id="acc-bucket"
-                  className={selectClass}
-                  value={filters.bucket}
-                  onChange={(event) => setFilter({ bucket: event.target.value })}
-                >
-                  <option value="">All</option>
-                  {AGING_BUCKETS.map(({ key, label }) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="acc-due-from">Due from</Label>
-                <Input
-                  id="acc-due-from"
-                  type="date"
-                  value={filters.dueFrom}
-                  onChange={(event) => setFilter({ dueFrom: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-due-to">Due to</Label>
-                <Input
-                  id="acc-due-to"
-                  type="date"
-                  value={filters.dueTo}
-                  onChange={(event) => setFilter({ dueTo: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-inv-from">Invoice from</Label>
-                <Input
-                  id="acc-inv-from"
-                  type="date"
-                  value={filters.invoiceFrom}
-                  onChange={(event) => setFilter({ invoiceFrom: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-inv-to">Invoice to</Label>
-                <Input
-                  id="acc-inv-to"
-                  type="date"
-                  value={filters.invoiceTo}
-                  onChange={(event) => setFilter({ invoiceTo: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-min">Outstanding at least (GHS)</Label>
-                <Input
-                  id="acc-min"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={filters.minOutstanding}
-                  onChange={(event) => setFilter({ minOutstanding: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="acc-max">Outstanding at most (GHS)</Label>
-                <Input
-                  id="acc-max"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={filters.maxOutstanding}
-                  onChange={(event) => setFilter({ maxOutstanding: event.target.value })}
-                />
-              </div>
-              {hasInvoiceFilters(filters) && (
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setFilters(EMPTY_INVOICE_FILTERS);
-                      setPage(0);
-                    }}
-                  >
-                    <X className="mr-1 h-4 w-4" aria-hidden="true" /> Clear filters
-                  </Button>
-                </div>
-              )}
-            </form>
-            {problem && (
-              <p role="alert" className="mt-3 text-sm text-destructive">
-                {problem}
-              </p>
-            )}
-          </Card>
+        {view === "statements" ? (
+          <StatementPanel businessId={business.id} businessName={business.name} side={side} />
         ) : (
-          <Card className="mt-4 p-4">
-            <p className="mb-3 text-sm text-muted-foreground">{copy.paymentsIntro}</p>
-            <form
-              role="search"
-              aria-label="Filter payments"
-              className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-              onSubmit={(event) => event.preventDefault()}
-            >
-              <div>
-                <Label htmlFor="pay-party">{copy.party}</Label>
-                <select
-                  id="pay-party"
-                  className={selectClass}
-                  value={payFilters.counterpartyId}
-                  onChange={(event) => setPayFilter({ counterpartyId: event.target.value })}
+          <>
+            {view === "invoices" ? (
+              <Card className="mt-4 p-4">
+                <form
+                  role="search"
+                  aria-label="Filter invoices"
+                  className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                  onSubmit={(event) => event.preventDefault()}
                 >
-                  <option value="">All</option>
-                  {counterpartyOptions.map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="pay-method">Method</Label>
-                <select
-                  id="pay-method"
-                  className={selectClass}
-                  value={payFilters.method}
-                  onChange={(event) => setPayFilter({ method: event.target.value })}
-                >
-                  <option value="">All</option>
-                  {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="pay-from">Paid from</Label>
-                <Input
-                  id="pay-from"
-                  type="date"
-                  value={payFilters.from}
-                  onChange={(event) => setPayFilter({ from: event.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pay-to">Paid to</Label>
-                <Input
-                  id="pay-to"
-                  type="date"
-                  value={payFilters.to}
-                  onChange={(event) => setPayFilter({ to: event.target.value })}
-                />
-              </div>
-            </form>
-          </Card>
-        )}
-
-        <div className="mt-4" aria-live="polite">
-          {failed ? (
-            <Card className="p-6 text-center text-sm">
-              <p role="alert">We couldn&apos;t load this just now.</p>
-              <Button
-                className="mt-3"
-                variant="outline"
-                onClick={() => {
-                  setFailed(false);
-                  setReloadKey((key) => key + 1);
-                }}
-              >
-                Try again
-              </Button>
-            </Card>
-          ) : loading ? (
-            <div className="space-y-2" role="status" aria-label="Loading">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : view === "invoices" ? (
-            invoices.length === 0 ? (
-              <Card className="p-8 text-center text-sm text-muted-foreground">
-                {hasInvoiceFilters(filters)
-                  ? "No invoices match these filters."
-                  : "No credit invoices yet."}
+                  <div className="relative sm:col-span-2">
+                    <Label htmlFor="acc-search" className="sr-only">
+                      Search
+                    </Label>
+                    <Search
+                      className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      id="acc-search"
+                      className="pl-9"
+                      placeholder={`Search ${copy.party.toLowerCase()} or invoice number`}
+                      value={filters.search}
+                      onChange={(event) => setFilter({ search: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-party">{copy.party}</Label>
+                    <select
+                      id="acc-party"
+                      className={selectClass}
+                      value={filters.counterpartyId}
+                      onChange={(event) => setFilter({ counterpartyId: event.target.value })}
+                    >
+                      <option value="">All</option>
+                      {counterpartyOptions.map(([id, name]) => (
+                        <option key={id} value={id}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-status">Status</Label>
+                    <select
+                      id="acc-status"
+                      className={selectClass}
+                      value={filters.status}
+                      onChange={(event) => setFilter({ status: event.target.value })}
+                    >
+                      <option value="">All</option>
+                      <option value="outstanding">Still owed</option>
+                      {Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-bucket">Aging</Label>
+                    <select
+                      id="acc-bucket"
+                      className={selectClass}
+                      value={filters.bucket}
+                      onChange={(event) => setFilter({ bucket: event.target.value })}
+                    >
+                      <option value="">All</option>
+                      {AGING_BUCKETS.map(({ key, label }) => (
+                        <option key={key} value={key}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-due-from">Due from</Label>
+                    <Input
+                      id="acc-due-from"
+                      type="date"
+                      value={filters.dueFrom}
+                      onChange={(event) => setFilter({ dueFrom: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-due-to">Due to</Label>
+                    <Input
+                      id="acc-due-to"
+                      type="date"
+                      value={filters.dueTo}
+                      onChange={(event) => setFilter({ dueTo: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-inv-from">Invoice from</Label>
+                    <Input
+                      id="acc-inv-from"
+                      type="date"
+                      value={filters.invoiceFrom}
+                      onChange={(event) => setFilter({ invoiceFrom: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-inv-to">Invoice to</Label>
+                    <Input
+                      id="acc-inv-to"
+                      type="date"
+                      value={filters.invoiceTo}
+                      onChange={(event) => setFilter({ invoiceTo: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-min">Outstanding at least (GHS)</Label>
+                    <Input
+                      id="acc-min"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={filters.minOutstanding}
+                      onChange={(event) => setFilter({ minOutstanding: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="acc-max">Outstanding at most (GHS)</Label>
+                    <Input
+                      id="acc-max"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={filters.maxOutstanding}
+                      onChange={(event) => setFilter({ maxOutstanding: event.target.value })}
+                    />
+                  </div>
+                  {hasInvoiceFilters(filters) && (
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setFilters(EMPTY_INVOICE_FILTERS);
+                          setPage(0);
+                        }}
+                      >
+                        <X className="mr-1 h-4 w-4" aria-hidden="true" /> Clear filters
+                      </Button>
+                    </div>
+                  )}
+                </form>
+                {problem && (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    {problem}
+                  </p>
+                )}
               </Card>
             ) : (
-              <InvoiceTable rows={invoices} side={side} />
-            )
-          ) : payments.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-muted-foreground">
-              No payments match these filters.
-            </Card>
-          ) : (
-            <PaymentTable rows={payments} />
-          )}
-        </div>
+              <Card className="mt-4 p-4">
+                <p className="mb-3 text-sm text-muted-foreground">{copy.paymentsIntro}</p>
+                <form
+                  role="search"
+                  aria-label="Filter payments"
+                  className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                  onSubmit={(event) => event.preventDefault()}
+                >
+                  <div>
+                    <Label htmlFor="pay-party">{copy.party}</Label>
+                    <select
+                      id="pay-party"
+                      className={selectClass}
+                      value={payFilters.counterpartyId}
+                      onChange={(event) => setPayFilter({ counterpartyId: event.target.value })}
+                    >
+                      <option value="">All</option>
+                      {counterpartyOptions.map(([id, name]) => (
+                        <option key={id} value={id}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="pay-method">Method</Label>
+                    <select
+                      id="pay-method"
+                      className={selectClass}
+                      value={payFilters.method}
+                      onChange={(event) => setPayFilter({ method: event.target.value })}
+                    >
+                      <option value="">All</option>
+                      {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="pay-from">Paid from</Label>
+                    <Input
+                      id="pay-from"
+                      type="date"
+                      value={payFilters.from}
+                      onChange={(event) => setPayFilter({ from: event.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="pay-to">Paid to</Label>
+                    <Input
+                      id="pay-to"
+                      type="date"
+                      value={payFilters.to}
+                      onChange={(event) => setPayFilter({ to: event.target.value })}
+                    />
+                  </div>
+                </form>
+              </Card>
+            )}
 
-        <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            {view === "invoices" ? invoiceTotal : paymentTotal}{" "}
-            {view === "invoices" ? "invoice" : "payment"}
-            {(view === "invoices" ? invoiceTotal : paymentTotal) === 1 ? "" : "s"}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={currentPage === 0}
-              onClick={() => goPage(currentPage - 1)}
-              aria-label="Previous page"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </Button>
-            <span>
-              Page {currentPage + 1} of {pages}
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={currentPage + 1 >= pages}
-              onClick={() => goPage(currentPage + 1)}
-              aria-label="Next page"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+            <div className="mt-4" aria-live="polite">
+              {failed ? (
+                <Card className="p-6 text-center text-sm">
+                  <p role="alert">We couldn&apos;t load this just now.</p>
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    onClick={() => {
+                      setFailed(false);
+                      setReloadKey((key) => key + 1);
+                    }}
+                  >
+                    Try again
+                  </Button>
+                </Card>
+              ) : loading ? (
+                <div className="space-y-2" role="status" aria-label="Loading">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ) : view === "invoices" ? (
+                invoices.length === 0 ? (
+                  <Card className="p-8 text-center text-sm text-muted-foreground">
+                    {hasInvoiceFilters(filters)
+                      ? "No invoices match these filters."
+                      : "No credit invoices yet."}
+                  </Card>
+                ) : (
+                  <InvoiceTable rows={invoices} side={side} />
+                )
+              ) : payments.length === 0 ? (
+                <Card className="p-8 text-center text-sm text-muted-foreground">
+                  No payments match these filters.
+                </Card>
+              ) : (
+                <PaymentTable rows={payments} />
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                {view === "invoices" ? invoiceTotal : paymentTotal}{" "}
+                {view === "invoices" ? "invoice" : "payment"}
+                {(view === "invoices" ? invoiceTotal : paymentTotal) === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={currentPage === 0}
+                  onClick={() => goPage(currentPage - 1)}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                <span>
+                  Page {currentPage + 1} of {pages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={currentPage + 1 >= pages}
+                  onClick={() => goPage(currentPage + 1)}
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

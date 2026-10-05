@@ -336,3 +336,208 @@ export function paymentExportSheet(rows: PaymentRow[], side: AccountingSide): Ex
 }
 
 export const EXPORT_ROW_LIMIT = 2000;
+
+// ---------------------------------------------------------------------------
+// Credit account statements: the ledger between one wholesaler and one pharmacy over a date range.
+// Every figure comes from credit_account_statement(); nothing is totalled here. These helpers shape
+// the request, the wording of each line, the date presets and the exports.
+// ---------------------------------------------------------------------------
+export type StatementLine = {
+  date: string;
+  entry_type: string;
+  order_id: string | null;
+  order_number: string | null;
+  method: string | null;
+  reference: string | null;
+  note: string | null;
+  reversed_type: string | null;
+  debit: number | string;
+  credit: number | string;
+  balance: number | string;
+};
+
+export type CreditStatement = {
+  side: AccountingSide;
+  business: { id: string; name: string; city: string | null; region: string | null };
+  counterparty: { id: string; name: string; city: string | null; region: string | null };
+  from: string;
+  to: string;
+  opening_balance: number | string;
+  total_charges: number | string;
+  total_credits: number | string;
+  closing_balance: number | string;
+  balance_today: number | string;
+  line_count: number | string;
+  truncated: boolean;
+  aging_as_of: string;
+  aging: AgingSummaryRow[];
+  lines: StatementLine[];
+};
+
+export type CounterpartyOption = { counterparty_id: string; counterparty_name: string };
+
+export const ENTRY_TYPE_LABELS: Record<string, string> = {
+  invoice: "Invoice",
+  payment: "Payment",
+  adjustment: "Adjustment",
+  credit_note: "Credit note",
+  debit_note: "Debit note",
+  write_off: "Write-off",
+  reversal: "Reversal",
+};
+
+export function entryTypeLabel(type: string): string {
+  return ENTRY_TYPE_LABELS[type] ?? type;
+}
+
+/** One plain-language line per ledger entry, e.g. "Payment (Bank transfer) BT-1 — ORD-100". */
+export function statementLineDescription(line: StatementLine): string {
+  const order = line.order_number ? ` — ${line.order_number}` : "";
+  switch (line.entry_type) {
+    case "invoice":
+      return `Invoice${order}`;
+    case "payment": {
+      const method = line.method ? ` (${paymentMethodLabel(line.method)})` : "";
+      const reference = line.reference ? ` ${line.reference}` : "";
+      return `Payment${method}${reference}${line.order_number ? order : " — on account (not matched to an invoice)"}`;
+    }
+    case "reversal":
+      return `Reversal of ${line.reversed_type ? entryTypeLabel(line.reversed_type).toLowerCase() : "an entry"}${order}`;
+    default:
+      return `${entryTypeLabel(line.entry_type)}${order}`;
+  }
+}
+
+export function statementArgs(
+  businessId: string,
+  counterpartyId: string,
+  from: string,
+  to: string,
+) {
+  return {
+    p_business_id: businessId,
+    p_counterparty_id: counterpartyId,
+    p_from: from,
+    p_to: to,
+  };
+}
+
+/** A message when the statement period is unusable, otherwise null. The database checks it again. */
+export function statementPeriodProblem(from: string, to: string): string | null {
+  if (!from || !to) return "Choose both a start and an end date.";
+  if (from > to) return "The start date is after the end date.";
+  const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+  if (days > 1830) return "A statement can cover at most five years.";
+  return null;
+}
+
+const iso = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+export type StatementPreset = "this_month" | "last_month" | "last_90_days" | "this_year";
+
+export const STATEMENT_PRESETS: Array<{ key: StatementPreset; label: string }> = [
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "last_90_days", label: "Last 90 days" },
+  { key: "this_year", label: "This year" },
+];
+
+/** Date range for a preset, in the user's local calendar. `today` is a parameter so it can be tested. */
+export function statementPresetRange(
+  preset: StatementPreset,
+  today: Date = new Date(),
+): { from: string; to: string } {
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  switch (preset) {
+    case "this_month":
+      return { from: iso(new Date(year, month, 1)), to: iso(today) };
+    case "last_month":
+      return { from: iso(new Date(year, month - 1, 1)), to: iso(new Date(year, month, 0)) };
+    case "last_90_days":
+      return { from: iso(new Date(year, month, today.getDate() - 89)), to: iso(today) };
+    case "this_year":
+      return { from: iso(new Date(year, 0, 1)), to: iso(today) };
+  }
+}
+
+/** The filename stem for a statement export, e.g. "statement-good-pharmacy-2026-09-01-to-2026-09-30". */
+export function statementFilenameStem(statement: CreditStatement): string {
+  const party =
+    statement.counterparty.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "account";
+  return `statement-${party}-${statement.from}-to-${statement.to}`;
+}
+
+/** Sheets for an export. The first sheet is the statement itself (opening row, every line, closing
+ * row), so a CSV, which only has one table, is a complete statement. Excel and PDF add the summary
+ * and the ageing. */
+export function statementExportSheets(statement: CreditStatement): ExportSheet[] {
+  const lineCount = num(statement.line_count);
+  const truncatedNote = statement.truncated
+    ? `Showing the first ${statement.lines.length} of ${lineCount} lines. Choose a shorter period to see the rest.`
+    : "";
+  const lines: Array<Array<string | number>> = [
+    [statement.from, "Opening balance", "", "", "", "", num(statement.opening_balance), ""],
+    ...statement.lines.map((line): Array<string | number> => [
+      line.date,
+      entryTypeLabel(line.entry_type),
+      // A payment is identified by its own reference; everything else by the invoice it touches.
+      (line.entry_type === "payment"
+        ? (line.reference ?? line.order_number)
+        : (line.order_number ?? line.reference)) ?? "",
+      statementLineDescription(line),
+      num(line.debit) || "",
+      num(line.credit) || "",
+      num(line.balance),
+      line.note ?? "",
+    ]),
+    [
+      statement.to,
+      "Closing balance",
+      "",
+      "",
+      "",
+      "",
+      num(statement.closing_balance),
+      truncatedNote,
+    ],
+  ];
+  const party = SIDE_COPY[statement.side].party;
+  const summary: Array<Array<string | number>> = [
+    ["Account of", statement.business.name],
+    [party, statement.counterparty.name],
+    ["Period", `${statement.from} to ${statement.to}`],
+    ["Opening balance (GHS)", num(statement.opening_balance)],
+    ["Charges in period (GHS)", num(statement.total_charges)],
+    ["Credits in period (GHS)", num(statement.total_credits)],
+    ["Closing balance (GHS)", num(statement.closing_balance)],
+    ["Balance today (GHS)", num(statement.balance_today)],
+    ["Lines in period", lineCount],
+  ];
+  if (truncatedNote) summary.push(["Note", truncatedNote]);
+  return [
+    {
+      name: "Statement",
+      headers: [
+        "Date",
+        "Type",
+        "Reference",
+        "Description",
+        "Charges (GHS)",
+        "Credits (GHS)",
+        "Balance (GHS)",
+        "Notes",
+      ],
+      rows: lines,
+    },
+    { name: "Summary", headers: ["Item", "Value"], rows: summary },
+    {
+      ...agingExportSheet(statement.aging),
+      name: `Aging as of ${statement.aging_as_of}`.slice(0, 31),
+    },
+  ];
+}

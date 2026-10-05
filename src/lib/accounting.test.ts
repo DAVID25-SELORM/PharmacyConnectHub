@@ -12,8 +12,16 @@ import {
   invoiceRegisterArgs,
   paymentExportSheet,
   paymentRegisterArgs,
+  statementArgs,
+  statementExportSheets,
+  statementFilenameStem,
+  statementLineDescription,
+  statementPeriodProblem,
+  statementPresetRange,
+  type CreditStatement,
   type InvoiceRow,
   type PaymentRow,
+  type StatementLine,
 } from "./accounting";
 
 const invoice: InvoiceRow = {
@@ -231,5 +239,206 @@ describe("exports", () => {
       p_from: "2026-10-01",
       p_to: null,
     });
+  });
+});
+
+const line = (overrides: Partial<StatementLine>): StatementLine => ({
+  date: "2026-09-10",
+  entry_type: "invoice",
+  order_id: "o1",
+  order_number: "ORD-100",
+  method: null,
+  reference: null,
+  note: null,
+  reversed_type: null,
+  debit: 0,
+  credit: 0,
+  balance: 0,
+  ...overrides,
+});
+
+const statement: CreditStatement = {
+  side: "wholesaler",
+  business: { id: "w1", name: "Alpha Wholesale", city: null, region: null },
+  counterparty: { id: "p1", name: "Good Pharmacy", city: null, region: null },
+  from: "2026-09-01",
+  to: "2026-09-30",
+  opening_balance: "500.00",
+  total_charges: "300.00",
+  total_credits: "200.00",
+  closing_balance: "600.00",
+  balance_today: "525.00",
+  line_count: 2,
+  truncated: false,
+  aging_as_of: "2026-10-05",
+  aging: [{ bucket: "d1_30", invoices: 1, outstanding_ghs: "300.00" }],
+  lines: [
+    line({ debit: "300.00", balance: "800.00" }),
+    line({
+      date: "2026-09-12",
+      entry_type: "payment",
+      order_number: null,
+      method: "bank_transfer",
+      reference: "BT-1",
+      credit: "200.00",
+      balance: "600.00",
+      note: "Part payment",
+    }),
+  ],
+};
+
+describe("statement line wording", () => {
+  it("says what each ledger entry is in plain words", () => {
+    expect(statementLineDescription(line({}))).toBe("Invoice — ORD-100");
+    expect(
+      statementLineDescription(
+        line({ entry_type: "payment", method: "cash", reference: "C-1", order_number: "ORD-100" }),
+      ),
+    ).toBe("Payment (Cash) C-1 — ORD-100");
+    expect(statementLineDescription(line({ entry_type: "payment", order_number: null }))).toBe(
+      "Payment — on account (not matched to an invoice)",
+    );
+    expect(
+      statementLineDescription(line({ entry_type: "reversal", reversed_type: "payment" })),
+    ).toBe("Reversal of payment — ORD-100");
+    expect(statementLineDescription(line({ entry_type: "credit_note" }))).toBe(
+      "Credit note — ORD-100",
+    );
+    expect(statementLineDescription(line({ entry_type: "write_off", order_number: null }))).toBe(
+      "Write-off",
+    );
+  });
+});
+
+describe("statement requests and periods", () => {
+  it("sends the party and the period", () => {
+    expect(statementArgs("w1", "p1", "2026-09-01", "2026-09-30")).toEqual({
+      p_business_id: "w1",
+      p_counterparty_id: "p1",
+      p_from: "2026-09-01",
+      p_to: "2026-09-30",
+    });
+  });
+
+  it("catches a missing, backwards or over-long period", () => {
+    expect(statementPeriodProblem("", "2026-09-30")).toMatch(/both/);
+    expect(statementPeriodProblem("2026-10-01", "2026-09-30")).toMatch(/after/);
+    expect(statementPeriodProblem("2015-01-01", "2026-09-30")).toMatch(/five years/);
+    expect(statementPeriodProblem("2026-09-30", "2026-09-30")).toBeNull();
+    expect(statementPeriodProblem("2026-01-01", "2026-12-31")).toBeNull();
+  });
+
+  it("builds the presets from the calendar, including across a year end", () => {
+    const today = new Date(2026, 9, 5); // 5 Oct 2026
+    expect(statementPresetRange("this_month", today)).toEqual({
+      from: "2026-10-01",
+      to: "2026-10-05",
+    });
+    expect(statementPresetRange("last_month", today)).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+    expect(statementPresetRange("last_90_days", today)).toEqual({
+      from: "2026-07-08",
+      to: "2026-10-05",
+    });
+    expect(statementPresetRange("this_year", today)).toEqual({
+      from: "2026-01-01",
+      to: "2026-10-05",
+    });
+    const january = new Date(2027, 0, 15);
+    expect(statementPresetRange("last_month", january)).toEqual({
+      from: "2026-12-01",
+      to: "2026-12-31",
+    });
+  });
+
+  it("names the export file after the party and period", () => {
+    expect(statementFilenameStem(statement)).toBe(
+      "statement-good-pharmacy-2026-09-01-to-2026-09-30",
+    );
+  });
+});
+
+describe("statement exports", () => {
+  it("makes the first sheet a complete statement: opening row, every line, closing row", () => {
+    const [sheet] = statementExportSheets(statement);
+    expect(sheet.headers).toEqual([
+      "Date",
+      "Type",
+      "Reference",
+      "Description",
+      "Charges (GHS)",
+      "Credits (GHS)",
+      "Balance (GHS)",
+      "Notes",
+    ]);
+    expect(sheet.rows).toHaveLength(4);
+    expect(sheet.rows[0]).toEqual(["2026-09-01", "Opening balance", "", "", "", "", 500, ""]);
+    expect(sheet.rows[1]).toEqual([
+      "2026-09-10",
+      "Invoice",
+      "ORD-100",
+      "Invoice — ORD-100",
+      300,
+      "",
+      800,
+      "",
+    ]);
+    expect(sheet.rows[2]).toEqual([
+      "2026-09-12",
+      "Payment",
+      "BT-1",
+      "Payment (Bank transfer) BT-1 — on account (not matched to an invoice)",
+      "",
+      200,
+      600,
+      "Part payment",
+    ]);
+    expect(sheet.rows[3]).toEqual(["2026-09-30", "Closing balance", "", "", "", "", 600, ""]);
+    for (const row of sheet.rows) expect(row).toHaveLength(sheet.headers.length);
+  });
+
+  it("identifies a payment by its own reference even when it is matched to an invoice", () => {
+    const [sheet] = statementExportSheets({
+      ...statement,
+      lines: [
+        line({
+          entry_type: "payment",
+          method: "cash",
+          reference: "C-9",
+          order_number: "ORD-100",
+          credit: "50.00",
+          balance: "450.00",
+        }),
+      ],
+    });
+    expect(sheet.rows[1][2]).toBe("C-9");
+  });
+
+  it("keeps money as numbers and adds a summary and the ageing for Excel and PDF", () => {
+    const sheets = statementExportSheets(statement);
+    expect(sheets.map((sheet) => sheet.name)).toEqual([
+      "Statement",
+      "Summary",
+      "Aging as of 2026-10-05",
+    ]);
+    expect(sheets[1].rows).toContainEqual(["Closing balance (GHS)", 600]);
+    expect(sheets[1].rows).toContainEqual(["Balance today (GHS)", 525]);
+    expect(sheets[1].rows).toContainEqual(["Charges in period (GHS)", 300]);
+    expect(sheets[2].rows[1]).toEqual(["1–30 days overdue", 1, 300]);
+  });
+
+  it("says so in the closing row and the summary when the statement was cut short", () => {
+    const cut = { ...statement, truncated: true, line_count: 2500 };
+    const sheets = statementExportSheets(cut);
+    const closing = sheets[0].rows[sheets[0].rows.length - 1];
+    expect(String(closing[7])).toMatch(/first 2 of 2500 lines/);
+    expect(sheets[1].rows.some((row) => row[0] === "Note")).toBe(true);
+  });
+
+  it("shows the supplier on the pharmacy side", () => {
+    const sheets = statementExportSheets({ ...statement, side: "pharmacy" });
+    expect(sheets[1].rows[1][0]).toBe("Supplier");
   });
 });
