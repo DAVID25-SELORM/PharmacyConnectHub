@@ -7,6 +7,7 @@ describe("notification helpers", () => {
       "new_order",
       "order_status",
       "payment_update",
+      "credit_reminder",
       "return_requested",
       "return_update",
       "delivery_update",

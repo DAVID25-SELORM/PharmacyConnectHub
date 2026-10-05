@@ -48,6 +48,7 @@ import {
   type PaymentRow,
 } from "@/lib/accounting";
 import { formatGHS } from "@/lib/format";
+import { announceNotificationsChanged } from "@/lib/notifications";
 import {
   downloadCsv,
   downloadPdf,
@@ -177,6 +178,18 @@ export function AccountingPage({ side }: { side: AccountingSide }) {
       cancelled = true;
     };
   }, [businessId, allowed, filters.counterpartyId, onRpcError]);
+
+  // Credit due-date reminders: the server creates any that are due for this business (at most once every
+  // 6 hours) and the notification bell is told to refresh if it did. A failure here is never shown.
+  useEffect(() => {
+    if (!businessId || !allowed) return;
+    void db
+      .rpc("refresh_my_credit_reminders", { p_business_id: businessId })
+      .then(({ data }: { data: string | null }) => {
+        if (typeof data === "string" && data.startsWith("ran:") && data !== "ran:0")
+          announceNotificationsChanged();
+      });
+  }, [businessId, allowed]);
 
   // Payment register
   useEffect(() => {

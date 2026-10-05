@@ -24,7 +24,7 @@ export type NotificationGroup =
 
 const GROUP_TYPES: Record<NotificationGroup, string[]> = {
   orders: ["new_order", "order_status"],
-  payments: ["payment_update"],
+  payments: ["payment_update", "credit_reminder"],
   returns: ["return_requested", "return_update"],
   delivery: ["delivery_update"],
   stock: ["low_stock", "expiry_alert"],

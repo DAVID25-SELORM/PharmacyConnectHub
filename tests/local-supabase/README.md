@@ -87,3 +87,13 @@ available credit after partial payments and requires explicit financial review.
     staff only; another pharmacy, a wholesaler and suspended staff are refused). The test lifts production's
     `phase0_order_integrity` trigger only while dating the fixtures. Run after 20261023100000. Mutation
     checks: count cancelled orders, or drop `h.sid` from the `lag()` partition; checks must fail.
+
+16. `credit-reminders.sql` (52 checks): credit due-date reminders - every level boundary (due in 1-3 days,
+    due today, 1-6 / 7-29 / 30+ days overdue), one grouped notification per business per level, each invoice
+    announced once per level and again only on escalation, paid / cancelled / disputed invoices skipped
+    (a lifted dispute is announced), part-paid invoices reminded for what is left, recipients limited to the
+    owner plus active staff who can open Accounting, the wholesaler told only about overdue invoices, no
+    cross-organisation leakage, the generator not callable by users, and the finance-only throttled
+    page-load entry point. Run after 20261024100000. Mutation checks: stop skipping `disputed`, or drop the
+    `credit_reminders_sent` check; checks must fail. (`pg_cron` is not installed locally: the daily schedule
+    is not exercised here.)
