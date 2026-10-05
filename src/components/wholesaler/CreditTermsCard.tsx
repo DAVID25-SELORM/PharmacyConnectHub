@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { validateCreditForm } from "@/lib/credit-terms";
 import { CreditOverrideControls } from "@/components/wholesaler/CreditOverrideControls";
+import { CreditScheduleControls } from "@/components/wholesaler/CreditScheduleControls";
 import { formatReportDate } from "@/lib/reports";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +40,11 @@ type CreditLine = {
   override_max_order_ghs?: number | null;
   override_expires_at?: string | null;
   override_reason?: string | null;
+  starts_on?: string | null;
+  scheduled_credit_limit_ghs?: number | null;
+  scheduled_payment_terms_days?: number | null;
+  scheduled_effective_date?: string | null;
+  scheduled_note?: string | null;
 };
 
 type StatusChange = { line: CreditLine; next: "active" | "suspended" | "blocked" };
@@ -55,6 +61,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   const [limit, setLimit] = useState("");
   const [days, setDays] = useState("30");
   const [note, setNote] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [statusChange, setStatusChange] = useState<StatusChange | null>(null);
   const [statusReason, setStatusReason] = useState("");
@@ -91,6 +98,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     setLimit(line ? String(line.credit_limit_ghs) : "");
     setDays(line ? String(line.payment_terms_days) : "30");
     setNote(line?.internal_note ?? "");
+    setEffectiveDate("");
   };
 
   const save = async () => {
@@ -98,17 +106,40 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     if (!pharmacyId) return toast.error("Choose a pharmacy.");
     const parsed = validateCreditForm({ limit, days });
     if (parsed.error) return toast.error(parsed.error);
+    // A future date schedules the terms (today's terms stay in force until then); no date applies now.
+    const today = new Date().toISOString().slice(0, 10);
+    if (effectiveDate && effectiveDate <= today) {
+      return toast.error(
+        "The effective date must be in the future. Clear it to apply the terms now.",
+      );
+    }
     setSaving(true);
-    const { error: rpcError } = await rpc("set_credit_terms", {
-      p_wholesaler_id: wholesalerId,
-      p_pharmacy_id: pharmacyId,
-      p_credit_limit: parsed.limit,
-      p_payment_terms_days: parsed.days,
-      p_note: note.trim() || null,
-    });
+    const { error: rpcError } = effectiveDate
+      ? await rpc("schedule_credit_terms", {
+          p_wholesaler_id: wholesalerId,
+          p_pharmacy_id: pharmacyId,
+          p_credit_limit: parsed.limit,
+          p_payment_terms_days: parsed.days,
+          p_effective_date: effectiveDate,
+          p_note: note.trim() || null,
+        })
+      : await rpc("set_credit_terms", {
+          p_wholesaler_id: wholesalerId,
+          p_pharmacy_id: pharmacyId,
+          p_credit_limit: parsed.limit,
+          p_payment_terms_days: parsed.days,
+          p_note: note.trim() || null,
+        });
     setSaving(false);
     if (rpcError) return toast.error(rpcError.message || "We couldn't save this credit line.");
-    toast.success(selectedLine ? "Credit terms updated." : "Pharmacy approved as a credit client.");
+    toast.success(
+      effectiveDate
+        ? `Credit terms scheduled from ${formatReportDate(effectiveDate)}.`
+        : selectedLine
+          ? "Credit terms updated."
+          : "Pharmacy approved as a credit client.",
+    );
+    setEffectiveDate("");
     setPharmacyId("");
     setDays("30");
     setLimit("");
@@ -209,6 +240,18 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
           <span className="mb-1 block text-muted-foreground">Note (optional, internal)</span>
           <Input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
         </label>
+        <label className="mt-3 block text-sm">
+          <span className="mb-1 block text-muted-foreground">
+            Takes effect on (optional) — leave empty to apply now; a future date keeps today's terms
+            in force until then
+          </span>
+          <Input
+            type="date"
+            value={effectiveDate}
+            min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)}
+            onChange={(event) => setEffectiveDate(event.target.value)}
+          />
+        </label>
         <Button
           className="mt-4"
           size="sm"
@@ -216,7 +259,13 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
           disabled={saving || loading || error || !pharmacyId}
           onClick={() => void save()}
         >
-          {saving ? "Saving..." : selectedLine ? "Update credit terms" : "Approve credit client"}
+          {saving
+            ? "Saving..."
+            : effectiveDate
+              ? "Schedule credit terms"
+              : selectedLine
+                ? "Update credit terms"
+                : "Approve credit client"}
         </Button>
 
         <div className="mt-6">
@@ -301,6 +350,11 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
                       Revoke
                     </Button>
                   </div>
+                  <CreditScheduleControls
+                    wholesalerId={wholesalerId}
+                    line={line}
+                    onChanged={() => void load()}
+                  />
                   <CreditOverrideControls
                     wholesalerId={wholesalerId}
                     line={line}

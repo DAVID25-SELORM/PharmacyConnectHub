@@ -39,6 +39,10 @@ describe("settlementOptions", () => {
       disabled: true,
       reason: "Only GHS 2,100.00 of approved credit is left.",
     });
+    const scheduled = settlementOptions({ state: "scheduled", startsLabel: "12 Oct 2026" }).find(
+      (o) => o.value === "credit",
+    );
+    expect(scheduled).toMatchObject({ disabled: true, reason: "Credit starts on 12 Oct 2026." });
     for (const state of ["suspended", "blocked"] as const) {
       const option = settlementOptions({ state }).find((o) => o.value === "credit");
       expect(option).toMatchObject({ disabled: true });

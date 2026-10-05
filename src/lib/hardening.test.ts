@@ -87,6 +87,10 @@ describe("audit categories", () => {
     expect(auditCategory("Credit override granted")).toBe("credit");
     expect(auditCategory("Credit override used")).toBe("credit");
     expect(auditCategory("Credit override revoked")).toBe("credit");
+    expect(auditCategory("Credit terms change scheduled")).toBe("credit");
+    expect(auditCategory("Credit line scheduled to start")).toBe("credit");
+    expect(auditCategory("Credit scheduled change cancelled")).toBe("credit");
+    expect(auditCategory("Credit terms change took effect")).toBe("credit");
     expect(auditCategory("Something new")).toBe("other");
     expect(auditCategoryLabel("RFQ created")).toBe("RFQ");
   });

@@ -813,7 +813,20 @@ function PharmacyDashboardContent() {
             productRules={productRules}
             pharmacyId={business.id}
             canRequestCredit={business.staff_role === "owner" || business.staff_role === "manager"}
-            onRefreshCredit={async () => { const { data, error } = await (supabase as any).rpc("get_my_credit_terms", { p_pharmacy_id: business.id }); if (error) { toast.error("Could not refresh credit terms."); return; } setCreditTerms(Object.fromEntries((data ?? []).map((term: CreditTerms) => [term.wholesaler_id, term]))); }}
+            onRefreshCredit={async () => {
+              const { data, error } = await (supabase as any).rpc("get_my_credit_terms", {
+                p_pharmacy_id: business.id,
+              });
+              if (error) {
+                toast.error("Could not refresh credit terms.");
+                return;
+              }
+              setCreditTerms(
+                Object.fromEntries(
+                  (data ?? []).map((term: CreditTerms) => [term.wholesaler_id, term]),
+                ),
+              );
+            }}
             creditTerms={creditTerms}
             productMap={productMap}
             updateQty={updateQty}
@@ -1067,11 +1080,25 @@ function CartSheet({
       ? { state: "none" }
       : creditStatus(wid) === "suspended"
         ? { state: "suspended" }
-        : creditStatus(wid) === "blocked"
-          ? { state: "blocked" }
-          : creditUsable(wid)
-            ? { state: "available" }
-            : { state: "insufficient", availableLabel: formatGHS(creditTerms[wid].available_ghs) };
+        : creditStatus(wid) === "scheduled"
+          ? {
+              state: "scheduled",
+              startsLabel: creditTerms[wid].starts_on
+                ? new Date(creditTerms[wid].starts_on!).toLocaleDateString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })
+                : "a later date",
+            }
+          : creditStatus(wid) === "blocked"
+            ? { state: "blocked" }
+            : creditUsable(wid)
+              ? { state: "available" }
+              : {
+                  state: "insufficient",
+                  availableLabel: formatGHS(creditTerms[wid].available_ghs),
+                };
   const anyCreditBlocked = Object.keys(grouped).some(creditBlocked);
   const setAllCategories = (category: ItemPurchaseCategory) =>
     setItemCategories(Object.fromEntries(items.map((it) => [it.p!.id, category])));
@@ -1278,7 +1305,15 @@ function CartSheet({
                           ))}
                         </SelectContent>
                       </Select>
-                      {canRequestCredit && <PharmacyCreditRequest pharmacyId={pharmacyId} wholesalerId={wid} amount={estimates[wid].total} restricted={creditStatus(wid) !== "active"} onApproved={onRefreshCredit} />}
+                      {canRequestCredit && (
+                        <PharmacyCreditRequest
+                          pharmacyId={pharmacyId}
+                          wholesalerId={wid}
+                          amount={estimates[wid].total}
+                          restricted={creditStatus(wid) !== "active"}
+                          onApproved={onRefreshCredit}
+                        />
+                      )}
                       {methodFor(wid) === "cod" && (
                         <p className="text-muted-foreground">
                           Pay the supplier when the order is delivered.
@@ -1299,18 +1334,23 @@ function CartSheet({
                       {methodFor(wid) === "credit" &&
                         usesOverride(creditTerms[wid], estimates[wid].total) && (
                           <p role="status" className="text-muted-foreground">
-                            This order is above your credit limit. It will use the supplier's one-time
-                            approval (up to {formatGHS(activeOverride(creditTerms[wid])?.maxOrderGhs ?? 0)},
-                            valid until{" "}
-                            {new Date(activeOverride(creditTerms[wid])?.expiresAt ?? "").toLocaleDateString("en-GB")}).
-                            Your next credit order is checked against the normal limit again.
+                            This order is above your credit limit. It will use the supplier's
+                            one-time approval (up to{" "}
+                            {formatGHS(activeOverride(creditTerms[wid])?.maxOrderGhs ?? 0)}, valid
+                            until{" "}
+                            {new Date(
+                              activeOverride(creditTerms[wid])?.expiresAt ?? "",
+                            ).toLocaleDateString("en-GB")}
+                            ). Your next credit order is checked against the normal limit again.
                           </p>
                         )}
                       {creditBlocked(wid) && (
                         <p role="alert" className="text-destructive">
                           {creditStatus(wid) === "active"
                             ? `Only ${formatGHS(creditTerms[wid].available_ghs)} of approved credit is left for this order. Choose another payment method or reduce the order.`
-                            : `This supplier has ${creditStatus(wid)} your credit. Choose another payment method.`}
+                            : creditStatus(wid) === "scheduled"
+                              ? "Credit with this supplier hasn't started yet. Choose another payment method."
+                              : `This supplier has ${creditStatus(wid)} your credit. Choose another payment method.`}
                         </p>
                       )}
                     </div>

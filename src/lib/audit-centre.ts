@@ -45,6 +45,10 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Credit override granted": "Override approved",
   "Credit override used": "Override used",
   "Credit override revoked": "Override revoked",
+  "Credit terms change scheduled": "Terms change scheduled",
+  "Credit line scheduled to start": "Credit line scheduled",
+  "Credit scheduled change cancelled": "Scheduled change cancelled",
+  "Credit terms change took effect": "Terms change took effect",
   "Pharmacy inventory imported": "Inventory imported",
   "Inventory imported": "Catalog imported",
   "Pharmacy inventory item added": "Item added",
@@ -87,6 +91,10 @@ const CREDIT_EVENTS = new Set([
   "Credit override granted",
   "Credit override used",
   "Credit override revoked",
+  "Credit terms change scheduled",
+  "Credit line scheduled to start",
+  "Credit scheduled change cancelled",
+  "Credit terms change took effect",
 ]);
 const INVENTORY_EVENTS = new Set([
   "Pharmacy inventory imported",

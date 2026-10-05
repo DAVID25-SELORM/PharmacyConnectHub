@@ -51,7 +51,8 @@ export type CreditAvailability =
   | { state: "available" }
   | { state: "insufficient"; availableLabel: string }
   | { state: "suspended" }
-  | { state: "blocked" };
+  | { state: "blocked" }
+  | { state: "scheduled"; startsLabel: string };
 
 /**
  * Keep credit discoverable even when unavailable; approval and limit checks still gate selection.
@@ -75,6 +76,10 @@ export function settlementOptions(credit: CreditAvailability): SettlementOption[
   if (creditOption && credit.state === "suspended") {
     creditOption.disabled = true;
     creditOption.reason = "This supplier has suspended your credit.";
+  }
+  if (creditOption && credit.state === "scheduled") {
+    creditOption.disabled = true;
+    creditOption.reason = `Credit starts on ${credit.startsLabel}.`;
   }
   if (creditOption && credit.state === "blocked") {
     creditOption.disabled = true;

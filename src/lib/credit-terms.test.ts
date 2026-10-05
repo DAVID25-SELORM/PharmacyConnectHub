@@ -96,6 +96,17 @@ describe("one-time over-limit override", () => {
     }
   });
 
+  it("a credit line that has not started yet can never be used, with or without an override", () => {
+    const notStarted = {
+      ...withOverride(800),
+      status: "scheduled" as const,
+      starts_on: "2026-10-20",
+    };
+    expect(canUseCredit(notStarted, 100, now)).toBe(false);
+    expect(canUseCredit(notStarted, 600, now)).toBe(false);
+    expect(usesOverride(notStarted, 600, now)).toBe(false);
+  });
+
   it("has no override when the fields are absent or invalid", () => {
     expect(activeOverride(undefined, now)).toBeNull();
     expect(activeOverride(terms, now)).toBeNull();

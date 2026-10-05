@@ -5,7 +5,13 @@ export type CreditTerms = {
   outstanding_ghs: number;
   available_ghs: number;
   /** active | suspended | blocked. Suspended and blocked relationships take no new credit orders. */
-  status?: "active" | "suspended" | "blocked";
+  status?: "active" | "suspended" | "blocked" | "scheduled";
+  /** For a line that has not started: the date it begins. Credit cannot be used before then. */
+  starts_on?: string | null;
+  /** A change to the terms that takes effect later (today's terms stay in force until then). */
+  scheduled_credit_limit_ghs?: number | string | null;
+  scheduled_payment_terms_days?: number | null;
+  scheduled_effective_date?: string | null;
   /** A one-time over-limit approval from the supplier: the largest single order it covers. */
   override_max_order_ghs?: number | string | null;
   override_expires_at?: string | null;
