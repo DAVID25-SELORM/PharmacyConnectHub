@@ -57,6 +57,8 @@ function SignupPage() {
     superintendentPhone: "",
     superintendentEmail: "",
   });
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
 
@@ -87,6 +89,13 @@ function SignupPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (loading) return;
+    if (form.password !== confirmPassword) {
+      toast.error("Passwords do not match. Re-enter your confirmation password.");
+      document.getElementById("confirmPassword")?.focus();
+      return;
+    }
 
     const parsed = getSignupSchema(role).safeParse(form);
     if (!parsed.success) {
@@ -142,6 +151,8 @@ function SignupPage() {
         // Email confirmation is enabled - prompt the user to check inbox
         setEmailSent(true);
       }
+    } catch {
+      toast.error("Unable to complete signup. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -456,7 +467,7 @@ function SignupPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="ownerEmail">Owner email address</Label>
+                    <Label htmlFor="ownerEmail">Owner email address (used to sign in)</Label>
                     <Input
                       id="ownerEmail"
                       type="email"
@@ -471,7 +482,7 @@ function SignupPage() {
                     <Label htmlFor="password">Password</Label>
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
                       placeholder="At least 8 characters"
@@ -479,6 +490,27 @@ function SignupPage() {
                       autoComplete="new-password"
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    placeholder="Re-enter your password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? "Hide passwords" : "Show passwords"}
+                  </Button>
                 </div>
               </section>
 
