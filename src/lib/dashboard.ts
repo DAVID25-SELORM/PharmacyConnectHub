@@ -3,9 +3,10 @@
 // nothing here widens access, it only decides what to show a given staff role.
 
 import type { BusinessStaffRole } from "@/hooks/use-session";
+import { canViewAccounting } from "@/lib/accounting";
 
 export type DashboardAccess = {
-  /** Credit balances, overdue invoices, receivables / payables. */
+  /** Credit balances, overdue invoices, receivables / payables. Exactly who can open Accounting. */
   finance: boolean;
   /** Stock levels and expiry. */
   inventory: boolean;
@@ -20,7 +21,7 @@ const has = (role: BusinessStaffRole | undefined, allowed: BusinessStaffRole[]) 
 
 export function pharmacyDashboardAccess(role: BusinessStaffRole | undefined): DashboardAccess {
   return {
-    finance: has(role, ["owner", "manager", "finance", "accountant"]),
+    finance: canViewAccounting("pharmacy", role),
     inventory: has(role, ["owner", "manager", "cashier", "warehouse"]),
     rfq: has(role, ["owner", "manager", "cashier"]),
     activity: has(role, ["owner", "manager", "accountant"]),
@@ -29,7 +30,7 @@ export function pharmacyDashboardAccess(role: BusinessStaffRole | undefined): Da
 
 export function wholesalerDashboardAccess(role: BusinessStaffRole | undefined): DashboardAccess {
   return {
-    finance: has(role, ["owner", "manager", "finance", "accountant"]),
+    finance: canViewAccounting("wholesaler", role),
     inventory: has(role, ["owner", "manager", "warehouse"]),
     rfq: has(role, ["owner", "manager", "cashier", "warehouse"]),
     activity: has(role, ["owner", "manager", "accountant"]),
@@ -45,11 +46,32 @@ export function daysUntil(date: string, today: Date = new Date()): number {
   return Math.round((new Date(y, m - 1, d).getTime() - start) / DAY_MS);
 }
 
-export type CreditInvoiceRow = {
-  due_date: string | null;
+/** What accounting_overview() returns. Every figure is computed in the database, with the same invoices,
+ * outstanding balances and aging rule as the Accounting registers; nothing here totals money. */
+export type AccountingOverview = {
+  side: "wholesaler" | "pharmacy";
+  as_of: string;
   outstanding_ghs: number | string;
-  status: string;
+  invoice_count: number | string;
+  overdue_ghs: number | string;
+  overdue_count: number | string;
+  due_soon_ghs: number | string;
+  due_soon_count: number | string;
+  disputed_ghs: number | string;
+  disputed_count: number | string;
+  aging: Array<{ bucket: string; invoices: number | string; outstanding_ghs: number | string }>;
+  top_overdue: Array<{
+    counterparty_id: string;
+    counterparty_name: string;
+    overdue_ghs: number | string;
+    invoices: number | string;
+    oldest_days_overdue: number | string;
+  }>;
+  payments_30d: { count: number | string; total_ghs: number | string };
+  on_account: { total_ghs: number | string; parties: number | string };
 };
+
+export type AgingBucket = { label: string; total: number; count: number };
 
 export type CreditSummary = {
   outstanding: number;
@@ -60,63 +82,33 @@ export type CreditSummary = {
   dueSoonTotal: number;
 };
 
-const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-const owed = (row: CreditInvoiceRow) => Number(row.outstanding_ghs) || 0;
-
-function isOverdue(row: CreditInvoiceRow, today: Date) {
-  if (row.status === "overdue") return true;
-  return row.due_date !== null && daysUntil(row.due_date, today) < 0;
-}
-
-/** Totals for the rows list_credit_invoices returns with status "outstanding" (everything still
- * owed, including disputed invoices). "Due soon" means due within the next 7 days. */
-export function summariseCredit(rows: CreditInvoiceRow[], today: Date = new Date()): CreditSummary {
-  const summary: CreditSummary = {
-    outstanding: 0,
-    invoiceCount: 0,
-    overdueCount: 0,
-    overdueTotal: 0,
-    dueSoonCount: 0,
-    dueSoonTotal: 0,
+/** The headline figures as plain numbers. "Due soon" is due from today up to 7 days ahead and not yet overdue. */
+export function overviewSummary(overview: AccountingOverview): CreditSummary {
+  return {
+    outstanding: Number(overview.outstanding_ghs),
+    invoiceCount: Number(overview.invoice_count),
+    overdueCount: Number(overview.overdue_count),
+    overdueTotal: Number(overview.overdue_ghs),
+    dueSoonCount: Number(overview.due_soon_count),
+    dueSoonTotal: Number(overview.due_soon_ghs),
   };
-  for (const row of rows) {
-    const amount = owed(row);
-    if (amount <= 0) continue;
-    summary.outstanding += amount;
-    summary.invoiceCount += 1;
-    if (isOverdue(row, today)) {
-      summary.overdueCount += 1;
-      summary.overdueTotal += amount;
-    } else if (row.due_date !== null && daysUntil(row.due_date, today) <= 7) {
-      summary.dueSoonCount += 1;
-      summary.dueSoonTotal += amount;
-    }
-  }
-  summary.outstanding = money(summary.outstanding);
-  summary.overdueTotal = money(summary.overdueTotal);
-  summary.dueSoonTotal = money(summary.dueSoonTotal);
-  return summary;
 }
 
-export type AgingBucket = { label: string; total: number; count: number };
+/** Short labels for the chart's axis (days past the due date); the five buckets are defined once, in the database. */
+const CHART_BUCKETS: Array<{ key: string; label: string }> = [
+  { key: "current", label: "Not yet due" },
+  { key: "d1_30", label: "1–30 days" },
+  { key: "d31_60", label: "31–60 days" },
+  { key: "d61_90", label: "61–90 days" },
+  { key: "d90_plus", label: "Over 90" },
+];
 
-/** Outstanding balances grouped by how late they are. Invoices with no due date count as not yet due. */
-export function agingBuckets(rows: CreditInvoiceRow[], today: Date = new Date()): AgingBucket[] {
-  const buckets: AgingBucket[] = [
-    { label: "Not yet due", total: 0, count: 0 },
-    { label: "1–30 days late", total: 0, count: 0 },
-    { label: "31–60 days late", total: 0, count: 0 },
-    { label: "Over 60 days late", total: 0, count: 0 },
-  ];
-  for (const row of rows) {
-    const amount = owed(row);
-    if (amount <= 0) continue;
-    const late = row.due_date ? -daysUntil(row.due_date, today) : 0;
-    const index = late <= 0 ? 0 : late <= 30 ? 1 : late <= 60 ? 2 : 3;
-    buckets[index].total += amount;
-    buckets[index].count += 1;
-  }
-  return buckets.map((bucket) => ({ ...bucket, total: money(bucket.total) }));
+/** The aging chart's bars from the overview: always all five buckets, zero where nothing is owed. */
+export function overviewAging(overview: AccountingOverview | null | undefined): AgingBucket[] {
+  return CHART_BUCKETS.map(({ key, label }) => {
+    const row = overview?.aging.find((item) => item.bucket === key);
+    return { label, total: Number(row?.outstanding_ghs ?? 0), count: Number(row?.invoices ?? 0) };
+  });
 }
 
 export type InventoryRow = {

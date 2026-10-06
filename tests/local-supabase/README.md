@@ -97,3 +97,10 @@ available credit after partial payments and requires explicit financial review.
     page-load entry point. Run after 20261024100000. Mutation checks: stop skipping `disputed`, or drop the
     `credit_reminders_sent` check; checks must fail. (`pg_cron` is not installed locally: the daily schedule
     is not exercised here.)
+
+17. `accounting-overview.sql` (42 checks): the numbers behind the finance part of the dashboard - totals,
+    overdue, due-soon (today..+7 days), disputed, the five aging buckets (checked against
+    `credit_aging_summary` AND the Credit tab's own `wholesaler_ar_summary` / `pharmacy_ap_summary`, so every
+    screen uses one aging rule), top overdue counterparties, payments in the last 30 days, money on account
+    not matched to an invoice, both sides, finance-only access and isolation. Run after 20261025100000.
+    Mutation checks: widen the due-soon window, or widen the payments window; checks must fail.

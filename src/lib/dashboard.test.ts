@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  agingBuckets,
   daysUntil,
   inventoryCounts,
+  overviewAging,
+  overviewSummary,
   pharmacyDashboardAccess,
   rfqsClosingSoon,
   sortAttention,
-  summariseCredit,
   wholesalerDashboardAccess,
+  type AccountingOverview,
   type AttentionItem,
 } from "./dashboard";
 
@@ -21,58 +22,63 @@ describe("daysUntil", () => {
   });
 });
 
-describe("summariseCredit", () => {
-  it("separates overdue, due within 7 days, and later; ignores settled rows", () => {
-    const summary = summariseCredit(
-      [
-        { due_date: "2026-09-20", outstanding_ghs: "100.00", status: "overdue" },
-        { due_date: "2026-10-05", outstanding_ghs: 50, status: "due_soon" },
-        { due_date: "2026-11-30", outstanding_ghs: 25.5, status: "not_due" },
-        { due_date: "2026-09-01", outstanding_ghs: 0, status: "paid" },
-      ],
-      today,
-    );
-    expect(summary).toEqual({
-      outstanding: 175.5,
-      invoiceCount: 3,
-      overdueCount: 1,
-      overdueTotal: 100,
-      dueSoonCount: 1,
-      dueSoonTotal: 50,
+const overview: AccountingOverview = {
+  side: "wholesaler",
+  as_of: "2026-10-02",
+  outstanding_ghs: "1050.00",
+  invoice_count: 9,
+  overdue_ghs: "800.00",
+  overdue_count: 6,
+  due_soon_ghs: "200.00",
+  due_soon_count: 2,
+  disputed_ghs: "100.00",
+  disputed_count: 1,
+  aging: [
+    { bucket: "current", invoices: 3, outstanding_ghs: "250.00" },
+    { bucket: "d1_30", invoices: 4, outstanding_ghs: "500.00" },
+    { bucket: "d31_60", invoices: 1, outstanding_ghs: "200.00" },
+    { bucket: "d61_90", invoices: 0, outstanding_ghs: "0.00" },
+    { bucket: "d90_plus", invoices: 1, outstanding_ghs: "100.00" },
+  ],
+  top_overdue: [],
+  payments_30d: { count: 1, total_ghs: "150.00" },
+  on_account: { total_ghs: "100.00", parties: 1 },
+};
+
+describe("overviewSummary", () => {
+  it("turns the database's figures into plain numbers without recalculating anything", () => {
+    expect(overviewSummary(overview)).toEqual({
+      outstanding: 1050,
+      invoiceCount: 9,
+      overdueCount: 6,
+      overdueTotal: 800,
+      dueSoonCount: 2,
+      dueSoonTotal: 200,
     });
-  });
-  it("treats a past due date as overdue even if the status string says otherwise", () => {
-    expect(
-      summariseCredit([{ due_date: "2026-10-01", outstanding_ghs: 10, status: "disputed" }], today)
-        .overdueCount,
-    ).toBe(1);
-  });
-  it("counts an invoice due today as due soon, not overdue", () => {
-    const s = summariseCredit(
-      [{ due_date: "2026-10-02", outstanding_ghs: 10, status: "due_today" }],
-      today,
-    );
-    expect(s).toMatchObject({ overdueCount: 0, dueSoonCount: 1 });
-  });
-  it("is all zeros for no rows", () => {
-    expect(summariseCredit([], today).outstanding).toBe(0);
   });
 });
 
-describe("agingBuckets", () => {
-  it("groups outstanding balances by lateness", () => {
-    const buckets = agingBuckets(
-      [
-        { due_date: "2026-11-01", outstanding_ghs: 10, status: "not_due" },
-        { due_date: null, outstanding_ghs: 5, status: "not_due" },
-        { due_date: "2026-09-22", outstanding_ghs: 20, status: "overdue" }, // 10 late
-        { due_date: "2026-08-20", outstanding_ghs: 30, status: "overdue" }, // 43 late
-        { due_date: "2026-06-01", outstanding_ghs: 40, status: "overdue" }, // 123 late
-      ],
-      today,
-    );
-    expect(buckets.map((b) => b.total)).toEqual([15, 20, 30, 40]);
-    expect(buckets.map((b) => b.count)).toEqual([2, 1, 1, 1]);
+describe("overviewAging", () => {
+  it("always returns the five buckets, in order, from the database's figures", () => {
+    const buckets = overviewAging(overview);
+    expect(buckets.map((b) => b.label)).toEqual([
+      "Not yet due",
+      "1–30 days",
+      "31–60 days",
+      "61–90 days",
+      "Over 90",
+    ]);
+    expect(buckets.map((b) => b.total)).toEqual([250, 500, 200, 0, 100]);
+    expect(buckets.map((b) => b.count)).toEqual([3, 4, 1, 0, 1]);
+  });
+  it("is five empty buckets while nothing has loaded, or when a bucket is missing", () => {
+    expect(overviewAging(null).map((b) => b.total)).toEqual([0, 0, 0, 0, 0]);
+    expect(
+      overviewAging({
+        ...overview,
+        aging: [{ bucket: "d90_plus", invoices: 2, outstanding_ghs: 30 }],
+      }).map((b) => b.total),
+    ).toEqual([0, 0, 0, 0, 30]);
   });
 });
 
@@ -136,6 +142,16 @@ describe("dashboard access", () => {
     expect(pharmacyDashboardAccess("accountant").finance).toBe(true);
     expect(pharmacyDashboardAccess("cashier").finance).toBe(false);
     expect(pharmacyDashboardAccess("assistant").finance).toBe(false);
+  });
+  it("shows finance to exactly the roles that can open Accounting, on each side", () => {
+    for (const role of ["owner", "manager", "finance", "accountant"] as const)
+      expect(wholesalerDashboardAccess(role).finance).toBe(true);
+    for (const role of ["cashier", "assistant", "warehouse"] as const)
+      expect(wholesalerDashboardAccess(role).finance).toBe(false);
+    for (const role of ["owner", "manager", "accountant"] as const)
+      expect(pharmacyDashboardAccess(role).finance).toBe(true);
+    for (const role of ["finance", "cashier", "assistant", "warehouse"] as const)
+      expect(pharmacyDashboardAccess(role).finance).toBe(false);
   });
   it("shows inventory to stock-handling roles and not to finance-only roles", () => {
     expect(pharmacyDashboardAccess("warehouse").inventory).toBe(true);

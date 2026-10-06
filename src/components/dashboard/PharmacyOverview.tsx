@@ -8,6 +8,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AccountsPanel } from "@/components/dashboard/AccountsPanel";
 import {
   ActionsCard,
   AgingChart,
@@ -21,13 +22,13 @@ import { ReportTrendChart, type TrendPoint } from "@/components/reports/ReportTr
 import type { Business } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  agingBuckets,
   inventoryCounts,
+  overviewAging,
+  overviewSummary,
   pharmacyDashboardAccess,
   rfqsClosingSoon,
-  summariseCredit,
+  type AccountingOverview,
   type AttentionItem,
-  type CreditInvoiceRow,
   type InventoryRow,
   type RfqLite,
 } from "@/lib/dashboard";
@@ -63,7 +64,7 @@ export function PharmacyOverview({
 }) {
   const access = pharmacyDashboardAccess(business.staff_role);
   const [spend, setSpend] = useState<Section<Spend>>(loading);
-  const [credit, setCredit] = useState<Section<CreditInvoiceRow[]>>(loading);
+  const [credit, setCredit] = useState<Section<AccountingOverview>>(loading);
   const [rfqs, setRfqs] = useState<Section<RfqData>>(loading);
   const [stock, setStock] = useState<Section<InventoryRow[]>>(loading);
 
@@ -98,12 +99,9 @@ export function PharmacyOverview({
 
     if (access.finance) {
       run(setCredit, async () => {
-        const { data, error } = await db.rpc("list_credit_invoices", {
-          p_pharmacy_id: business.id,
-          p_status: "outstanding",
-        });
-        if (error) throw error;
-        return (data ?? []) as CreditInvoiceRow[];
+        const { data, error } = await db.rpc("accounting_overview", { p_business_id: business.id });
+        if (error || !data) throw error ?? new Error("No overview");
+        return data as AccountingOverview;
       });
     }
 
@@ -155,7 +153,7 @@ export function PharmacyOverview({
     };
   }, [business.id, access.finance, access.rfq, access.inventory]);
 
-  const creditSummary = credit.state === "ready" ? summariseCredit(credit.data) : null;
+  const creditSummary = credit.state === "ready" ? overviewSummary(credit.data) : null;
   const stockCounts = stock.state === "ready" ? inventoryCounts(stock.data) : null;
   const rfqData = rfqs.state === "ready" ? rfqs.data : null;
 
@@ -166,8 +164,7 @@ export function PharmacyOverview({
       detail: creditSummary ? `${formatGHS(creditSummary.overdueTotal)} past its due date` : "",
       count: creditSummary?.overdueCount ?? 0,
       tone: "danger",
-      to: "/pharmacy",
-      search: { tab: "credit" },
+      to: "/pharmacy/accounting",
     },
     {
       key: "due-soon",
@@ -175,8 +172,7 @@ export function PharmacyOverview({
       detail: creditSummary ? `${formatGHS(creditSummary.dueSoonTotal)} due within 7 days` : "",
       count: creditSummary?.dueSoonCount ?? 0,
       tone: "warning",
-      to: "/pharmacy",
-      search: { tab: "credit" },
+      to: "/pharmacy/accounting",
     },
     {
       key: "out-of-stock",
@@ -265,10 +261,9 @@ export function PharmacyOverview({
     ...(access.finance
       ? [
           {
-            title: "View credit",
-            description: "Balances and invoices owed to suppliers.",
-            to: "/pharmacy",
-            search: { tab: "credit" },
+            title: "Open accounting",
+            description: "Payables, aging, payments and statements.",
+            to: "/pharmacy/accounting",
           },
         ]
       : []),
@@ -360,8 +355,7 @@ export function PharmacyOverview({
                   : "Not available right now."
               }
               icon={<Wallet className="h-4 w-4" />}
-              to="/pharmacy"
-              search={{ tab: "credit" }}
+              to="/pharmacy/accounting"
             />
             <MetricCard
               label="Overdue invoices"
@@ -371,8 +365,7 @@ export function PharmacyOverview({
               }
               icon={<AlertTriangle className="h-4 w-4" />}
               tone={creditSummary && creditSummary.overdueCount > 0 ? "danger" : undefined}
-              to="/pharmacy"
-              search={{ tab: "credit" }}
+              to="/pharmacy/accounting"
             />
           </>
         )}
@@ -393,11 +386,20 @@ export function PharmacyOverview({
         {access.finance && (
           <AgingChart
             title="Credit owed, by how late"
-            buckets={credit.state === "ready" ? agingBuckets(credit.data) : agingBuckets([])}
+            buckets={overviewAging(credit.state === "ready" ? credit.data : null)}
             loading={credit.state === "loading"}
           />
         )}
       </div>
+
+      {access.finance && (
+        <AccountsPanel
+          side="pharmacy"
+          overview={credit.state === "ready" ? credit.data : null}
+          loading={credit.state === "loading"}
+          failed={credit.state === "error"}
+        />
+      )}
 
       <div className={`grid gap-6 ${access.activity ? "lg:grid-cols-[1.4fr,0.9fr]" : ""}`}>
         {recentOrders}

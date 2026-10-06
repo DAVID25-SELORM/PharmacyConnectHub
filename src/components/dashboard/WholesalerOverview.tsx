@@ -1,5 +1,6 @@
 import { AlertTriangle, FileQuestion, Receipt, TrendingUp, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AccountsPanel } from "@/components/dashboard/AccountsPanel";
 import {
   ActionsCard,
   AgingChart,
@@ -13,11 +14,11 @@ import { ReportTrendChart, type TrendPoint } from "@/components/reports/ReportTr
 import type { Business } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  agingBuckets,
-  summariseCredit,
+  overviewAging,
+  overviewSummary,
   wholesalerDashboardAccess,
+  type AccountingOverview,
   type AttentionItem,
-  type CreditInvoiceRow,
 } from "@/lib/dashboard";
 import { formatGHS } from "@/lib/format";
 
@@ -48,7 +49,7 @@ export function WholesalerOverview({
 }) {
   const access = wholesalerDashboardAccess(business.staff_role);
   const [sales, setSales] = useState<Section<Sales>>(loading);
-  const [credit, setCredit] = useState<Section<CreditInvoiceRow[]>>(loading);
+  const [credit, setCredit] = useState<Section<AccountingOverview>>(loading);
   const [rfqs, setRfqs] = useState<Section<number>>(loading);
 
   useEffect(() => {
@@ -81,12 +82,9 @@ export function WholesalerOverview({
         };
       });
       run(setCredit, async () => {
-        const { data, error } = await db.rpc("list_credit_invoices", {
-          p_wholesaler_id: business.id,
-          p_status: "outstanding",
-        });
-        if (error) throw error;
-        return (data ?? []) as CreditInvoiceRow[];
+        const { data, error } = await db.rpc("accounting_overview", { p_business_id: business.id });
+        if (error || !data) throw error ?? new Error("No overview");
+        return data as AccountingOverview;
       });
     }
 
@@ -120,7 +118,7 @@ export function WholesalerOverview({
     };
   }, [business.id, access.finance, access.rfq]);
 
-  const creditSummary = credit.state === "ready" ? summariseCredit(credit.data) : null;
+  const creditSummary = credit.state === "ready" ? overviewSummary(credit.data) : null;
   const awaitingQuote = rfqs.state === "ready" ? rfqs.data : null;
 
   const attention: AttentionItem[] = [
@@ -132,8 +130,7 @@ export function WholesalerOverview({
         : "",
       count: creditSummary?.overdueCount ?? 0,
       tone: "danger",
-      to: "/wholesaler",
-      search: { tab: "credit" },
+      to: "/wholesaler/accounting",
     },
     {
       key: "pending",
@@ -159,8 +156,7 @@ export function WholesalerOverview({
       detail: creditSummary ? `${formatGHS(creditSummary.dueSoonTotal)} due within 7 days` : "",
       count: creditSummary?.dueSoonCount ?? 0,
       tone: "info",
-      to: "/wholesaler",
-      search: { tab: "credit" },
+      to: "/wholesaler/accounting",
     },
     {
       key: "rfqs",
@@ -203,10 +199,9 @@ export function WholesalerOverview({
     ...(access.finance
       ? [
           {
-            title: "View receivables",
-            description: "Credit balances owed by pharmacies.",
-            to: "/wholesaler",
-            search: { tab: "credit" },
+            title: "Open accounting",
+            description: "Receivables, aging, payments and statements.",
+            to: "/wholesaler/accounting",
           },
         ]
       : []),
@@ -241,8 +236,7 @@ export function WholesalerOverview({
                   : "Not available right now."
               }
               icon={<Wallet className="h-4 w-4" />}
-              to="/wholesaler"
-              search={{ tab: "credit" }}
+              to="/wholesaler/accounting"
             />
             <MetricCard
               label="Overdue receivables"
@@ -252,8 +246,7 @@ export function WholesalerOverview({
               }
               icon={<AlertTriangle className="h-4 w-4" />}
               tone={creditSummary && creditSummary.overdueCount > 0 ? "danger" : undefined}
-              to="/wholesaler"
-              search={{ tab: "credit" }}
+              to="/wholesaler/accounting"
             />
           </>
         )}
@@ -295,10 +288,19 @@ export function WholesalerOverview({
           />
           <AgingChart
             title="Receivables, by how late"
-            buckets={credit.state === "ready" ? agingBuckets(credit.data) : agingBuckets([])}
+            buckets={overviewAging(credit.state === "ready" ? credit.data : null)}
             loading={credit.state === "loading"}
           />
         </div>
+      )}
+
+      {access.finance && (
+        <AccountsPanel
+          side="wholesaler"
+          overview={credit.state === "ready" ? credit.data : null}
+          loading={credit.state === "loading"}
+          failed={credit.state === "error"}
+        />
       )}
 
       <div className={`grid gap-6 ${access.activity ? "lg:grid-cols-[1.4fr,0.9fr]" : ""}`}>

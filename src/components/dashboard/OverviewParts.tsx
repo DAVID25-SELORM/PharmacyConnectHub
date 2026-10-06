@@ -184,10 +184,11 @@ export function AgingChart({
   loading: boolean;
 }) {
   const fills = [
-    "hsl(var(--primary))",
-    "hsl(var(--warning))",
-    "hsl(var(--destructive) / 0.75)",
-    "hsl(var(--destructive))",
+    "var(--primary)",
+    "var(--warning)",
+    "color-mix(in oklab, var(--destructive) 55%, transparent)",
+    "color-mix(in oklab, var(--destructive) 80%, transparent)",
+    "var(--destructive)",
   ];
   const empty = buckets.every((b) => b.total === 0);
   return (
