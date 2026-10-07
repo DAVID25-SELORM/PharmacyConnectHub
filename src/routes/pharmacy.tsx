@@ -46,6 +46,7 @@ import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
+import type { PartyDetails } from "@/lib/order-documents";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
@@ -187,18 +188,24 @@ type OrderRow = {
   payment_confirmed_at: string | null;
   receipt_sent_at: string | null;
   receipt_sent_to: string | null;
-  wholesaler: { name: string } | null;
+  wholesaler: { name: string; city?: string | null; region?: string | null } | null;
   order_items: {
     id?: string;
     product_name: string;
     quantity: number;
     unit_price_ghs: number;
+    base_unit_price_ghs?: number | null;
     purchase_category?: PurchaseCategory | null;
   }[];
   item_count?: number;
   unit_count?: number;
   settlement_method?: string | null;
   is_credit_order?: boolean | null;
+  subtotal_ghs?: number | null;
+  discount_amount_ghs?: number | null;
+  delivery_fee_ghs?: number | null;
+  credit_due_date?: string | null;
+  credit_terms_days?: number | null;
   purchase_category?: PurchaseCategory | null;
   procurement_id?: string | null;
   procurement_reference?: string | null;
@@ -959,6 +966,7 @@ function PharmacyDashboardContent() {
               loadOrders={loadOrders}
               loadOrderDetail={loadOrderDetail}
               wholesalers={approvedWholesalers}
+              pharmacy={business}
               onReorder={canOrder ? reorderFromOrder : undefined}
               onRequestReturn={
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
@@ -1763,7 +1771,9 @@ function OrdersView({
   onRequestReturn,
   canReclassify = false,
   canChangePayment = false,
+  pharmacy = null,
 }: {
+  pharmacy?: PartyDetails | null;
   canReclassify?: boolean;
   canChangePayment?: boolean;
   onRequestReturn?: (orderId: string, orderLabel: string) => void;
@@ -2160,9 +2170,7 @@ function OrdersView({
                   )}
                 </div>
 
-                <OrderPrintActions
-                  order={{ ...o, wholesaler: o.wholesaler ? { name: o.wholesaler.name } : null }}
-                />
+                <OrderPrintActions order={{ ...o, pharmacy, wholesaler: o.wholesaler ?? null }} />
 
                 <div className="mt-4 divide-y divide-border rounded-xl border border-border">
                   {o.order_items.map((it, i) => (

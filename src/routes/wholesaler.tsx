@@ -58,6 +58,7 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
+import type { PartyDetails } from "@/lib/order-documents";
 import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
 import { announceNotificationsChanged } from "@/lib/notifications";
@@ -109,6 +110,11 @@ type OrderRow = {
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
   settlement_method?: string | null;
   is_credit_order?: boolean | null;
+  subtotal_ghs?: number | null;
+  discount_amount_ghs?: number | null;
+  delivery_fee_ghs?: number | null;
+  credit_due_date?: string | null;
+  credit_terms_days?: number | null;
   accepted_at: string | null;
   picking_started_at: string | null;
   packed_at: string | null;
@@ -122,11 +128,18 @@ type OrderRow = {
   cancelled_at: string | null;
   cancellation_reason: string | null;
   purchase_category?: PurchaseCategory | null;
-  pharmacy: { name: string; city: string | null } | null;
+  pharmacy: {
+    name: string;
+    city: string | null;
+    address?: string | null;
+    region?: string | null;
+    phone?: string | null;
+  } | null;
   order_items: {
     product_name: string;
     quantity: number;
     unit_price_ghs: number;
+    base_unit_price_ghs?: number | null;
     purchase_category?: PurchaseCategory | null;
   }[];
 };
@@ -183,7 +196,7 @@ function WholesalerDashboardContent() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,settlement_method,is_credit_order,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address),order_items(product_id,product_name,quantity,unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,settlement_method,is_credit_order,subtotal_ghs,discount_amount_ghs,delivery_fee_ghs,credit_due_date,credit_terms_days,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address,region,phone),order_items(product_id,product_name,quantity,unit_price_ghs,base_unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
@@ -410,7 +423,7 @@ function WholesalerDashboardContent() {
               confirmingPaymentOrderId={confirmingPaymentOrderId}
               sendReceiptEmail={sendReceiptEmail}
               sendingReceiptOrderId={sendingReceiptOrderId}
-              wholesalerName={business.name}
+              wholesaler={business}
             />
           </TabsContent>
           <TabsContent value="products">
@@ -452,7 +465,7 @@ function OrdersInbox({
   confirmingPaymentOrderId,
   sendReceiptEmail,
   sendingReceiptOrderId,
-  wholesalerName,
+  wholesaler,
 }: {
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
@@ -463,7 +476,7 @@ function OrdersInbox({
   confirmingPaymentOrderId: string | null;
   sendReceiptEmail: (id: string) => Promise<void>;
   sendingReceiptOrderId: string | null;
-  wholesalerName: string;
+  wholesaler: PartyDetails;
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -634,7 +647,7 @@ function OrdersInbox({
 
             <OrderPrintActions
               wholesaler
-              order={{ ...o, wholesaler: { name: wholesalerName } }}
+              order={{ ...o, wholesaler }}
             />
 
             <div className="mt-4 divide-y divide-border rounded-xl border border-border">
@@ -714,7 +727,7 @@ function OrdersInbox({
             <PrintableOrderDocument
               key={order.id}
               mode="pick-pack"
-              order={{ ...order, wholesaler: { name: wholesalerName } }}
+              order={{ ...order, wholesaler }}
             />
           ))}
         </div>
