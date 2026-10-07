@@ -339,7 +339,7 @@ export function DashboardHeader({
                   Inventory
                 </Link>
               )}
-              {showInventoryLink && (
+              {showInventoryLink && showAccountingLink && (
                 <Link
                   to="/pharmacy"
                   search={{ tab: "credit" }}

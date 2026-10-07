@@ -39,6 +39,7 @@ import {
 import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
+import { canViewAccounting } from "@/lib/accounting";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
@@ -890,7 +891,7 @@ function PharmacyDashboardContent() {
               tab === "lists" ||
               tab === "returns" ||
               tab === "statements" ||
-              tab === "credit"
+              (tab === "credit" && canViewAccounting("pharmacy", business.staff_role))
               ? tab
               : "catalog";
           })()}
@@ -905,7 +906,9 @@ function PharmacyDashboardContent() {
             <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="returns">Returns</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
-            <TabsTrigger value="credit">Credit</TabsTrigger>
+            {canViewAccounting("pharmacy", business.staff_role) && (
+              <TabsTrigger value="credit">Credit</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="catalog">
@@ -944,9 +947,11 @@ function PharmacyDashboardContent() {
           <TabsContent value="statements">
             <PharmacyStatements pharmacyId={business.id} wholesalers={approvedWholesalers} />
           </TabsContent>
-          <TabsContent value="credit">
-            <CreditPayablesPanel pharmacyId={business.id} />
-          </TabsContent>
+          {canViewAccounting("pharmacy", business.staff_role) && (
+            <TabsContent value="credit">
+              <CreditPayablesPanel pharmacyId={business.id} />
+            </TabsContent>
+          )}
           <TabsContent value="orders">
             <OrdersView
               orders={orders}

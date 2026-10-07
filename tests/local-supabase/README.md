@@ -104,3 +104,11 @@ available credit after partial payments and requires explicit financial review.
     screen uses one aging rule), top overdue counterparties, payments in the last 30 days, money on account
     not matched to an invoice, both sides, finance-only access and isolation. Run after 20261025100000.
     Mutation checks: widen the due-soon window, or widen the payments window; checks must fail.
+
+18. `credit-reads-finance-only.sql` (44 checks): the older Credit-tab readers (`list_credit_invoices`,
+    `get_credit_invoice`, `wholesaler_ar_summary`, `pharmacy_ap_summary`) now require `can_view_accounting()`:
+    finance roles are served and get the same data as before; cashiers, assistants, warehouse users, suspended
+    staff and other organisations are refused on both sides; the payment writer keeps its own rules. Run after
+    20261026100000. Mutation check: put `get_credit_invoice` back on `can_act_for_business(..., 'read')` and
+    the cashier / warehouse / assistant checks must fail. The migration patches the live function bodies in
+    place and fails closed (no change) if a fragment does not match exactly once; it is safe to re-run.
