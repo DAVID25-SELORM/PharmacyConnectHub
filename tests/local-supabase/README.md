@@ -122,3 +122,13 @@ available credit after partial payments and requires explicit financial review.
     backdate fixtures. Mutation checks: stop clearing the due date, or count from the order date; checks must
     fail. After this migration the older credit suites (foundation, override, effective-date, settlement,
     registers, reminders, overview, reads, statements) were re-run and match their previous counts.
+
+20. `production-stock-test.sql`: documents how production's stock mechanism behaves (checkout deduction + evidence +
+    movement, plain stock changes recorded as admin adjustments, insert-only order lines, cancellation restore
+    exactly once, legacy orders refused). Needs `production-guard-fixture.sql` and `production-stock-fixture.sql`
+    installed first (and the checkout compatibility migration 20261017110000 re-applied). Run after 20261029100000
+    to see the classification change work under production's order-line guard.
+
+21. `order-amendments-foundation.sql`: Phase 1 of order amendments - `orders.effective_total_ghs` (the immutable
+    `total_ghs` is untouched), the append-only `order_events` log (RLS, no direct writes), `order_timeline()`
+    (access rules, actor labels, ordering) and the credit-ledger idempotency markers. Run after 20261028100000.

@@ -46,6 +46,7 @@ import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
+import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import type { PartyDetails } from "@/lib/order-documents";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
@@ -2145,6 +2146,7 @@ function OrdersView({
             {open && (
               <>
                 <OrderTimeline o={o} />
+                <OrderActivityTimeline orderId={o.id} />
 
                 <ReceiptStatusPanel order={o} />
 

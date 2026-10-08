@@ -58,6 +58,7 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
+import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import type { PartyDetails } from "@/lib/order-documents";
 import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
@@ -639,6 +640,7 @@ function OrdersInbox({
 
             {open && <>
             <OrderTimeline o={o} />
+            <OrderActivityTimeline orderId={o.id} />
 
             <ReceiptStatusPanel order={o} />
 
