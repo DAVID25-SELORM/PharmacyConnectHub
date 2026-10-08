@@ -71,6 +71,7 @@ function AddBusinessPage() {
   const { loading, user, business, businesses, refresh, setActiveBusiness } = useSession();
   const [type, setType] = useState<"pharmacy" | "wholesaler">("pharmacy");
   const [form, setForm] = useState<Form>(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -87,6 +88,8 @@ function AddBusinessPage() {
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (saving) return;
+    setSaveError(null);
 
     if (form.name.trim().length < 2) return toast.error("Business name is required");
     if (form.license.trim().length < 3) return toast.error("License number is required");
@@ -127,11 +130,12 @@ function AddBusinessPage() {
 
       if (error) {
         // Rule messages raised by the function (SQLSTATE P0001) are written for users.
-        toast.error(
+        const message =
           error.code === "P0001" && error.message
             ? error.message
-            : "We could not add this business right now. Please try again.",
-        );
+            : `We could not add this business. Please contact support with error code ${error.code || "unknown"}.`;
+        setSaveError(message);
+        toast.error(message);
         return;
       }
 
@@ -139,6 +143,10 @@ function AddBusinessPage() {
       if (typeof data === "string") setActiveBusiness(data);
       toast.success("Business added. Upload its documents to start verification.");
       navigate({ to: "/onboarding" });
+    } catch {
+      setSaveError(
+        "Could not complete the request. Check your business list before retrying, then check your connection.",
+      );
     } finally {
       setSaving(false);
     }
@@ -157,6 +165,14 @@ function AddBusinessPage() {
         </p>
 
         <Card className="mt-6 p-6">
+          {saveError && (
+            <p
+              role="alert"
+              className="mb-4 rounded-lg border border-destructive/30 p-3 text-sm text-destructive"
+            >
+              {saveError}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
             {(["pharmacy", "wholesaler"] as const).map((option) => (
               <button
