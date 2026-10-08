@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { Pill } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/use-session";
@@ -19,7 +19,8 @@ export function WorkspaceGate({
 }) {
   const navigate = useNavigate();
   const { loading, user, roles, business, businesses, loadError, refresh } = useSession();
-  const wasAllowed = useRef(false);
+  const allowedWorkspace = useRef<string | null>(null);
+  const workspaceKey = JSON.stringify([user?.id ?? null, business?.id ?? null]);
 
   const decision = resolveWorkspaceAccess({
     loading,
@@ -33,17 +34,20 @@ export function WorkspaceGate({
 
   useEffect(() => {
     if (decision.kind === "allow") {
-      wasAllowed.current = true;
-    } else if (decision.kind === "redirect") {
-      wasAllowed.current = false;
-      navigate({ to: decision.to, replace: true });
+      allowedWorkspace.current = workspaceKey;
+    } else if (decision.kind !== "loading") {
+      allowedWorkspace.current = null;
+      if (decision.kind === "redirect") navigate({ to: decision.to, replace: true });
     }
-  }, [decision, navigate]);
+  }, [decision, navigate, workspaceKey]);
 
   // Background session refreshes briefly report `loading`; keep an already-approved
   // workspace mounted so carts and forms are not lost.
-  if (decision.kind === "allow" || (decision.kind === "loading" && wasAllowed.current)) {
-    return <>{children}</>;
+  if (
+    decision.kind === "allow" ||
+    (decision.kind === "loading" && allowedWorkspace.current === workspaceKey)
+  ) {
+    return <Fragment key={workspaceKey}>{children}</Fragment>;
   }
 
   if (decision.kind === "error") {

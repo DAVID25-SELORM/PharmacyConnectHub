@@ -26,6 +26,20 @@ BEGIN
  EXCEPTION WHEN raise_exception THEN
   IF SQLERRM <> 'Not authorized to update this business.' THEN RAISE; END IF;
  END;
+ -- FAP-style setup: one login, wholesale + retail, identical public details.
+ PERFORM set_config('request.jwt.claim.sub',owner_uid::text,true);
+ SELECT public.create_additional_business('pharmacy',b.name,b.license_number,b.city,b.region,b.phone,b.public_email,b.address,b.working_hours,b.location_description)
+ INTO new_id FROM public.businesses b WHERE b.id=bid;
+ IF new_id=bid OR NOT EXISTS(
+   SELECT 1 FROM public.businesses retail JOIN public.businesses wholesale ON wholesale.id=bid
+   WHERE retail.id=new_id AND retail.type='pharmacy' AND wholesale.type='wholesaler'
+     AND retail.owner_id=wholesale.owner_id AND retail.name=wholesale.name
+     AND retail.public_email=wholesale.public_email AND retail.phone=wholesale.phone
+     AND retail.verification_status='pending' AND wholesale.verification_status='approved'
+ ) THEN RAISE EXCEPTION 'Same-detail wholesale/retail registration failed'; END IF;
+ IF (SELECT count(*) FROM public.business_staff WHERE user_id=owner_uid AND business_id IN (bid,new_id) AND status='active' AND role='owner') <> 2 THEN
+   RAISE EXCEPTION 'Both workspaces must be accessible to the owner';
+ END IF;
  -- An unrelated user's contacts must not fill an account with no owner details.
  UPDATE public.profiles SET full_name=NULL,phone=NULL WHERE id=(SELECT id FROM zz.u WHERE k='nobody');
  PERFORM set_config('request.jwt.claim.sub',(SELECT id::text FROM zz.u WHERE k='nobody'),true);
