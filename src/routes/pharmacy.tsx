@@ -1,3 +1,4 @@
+import { CartQuantityInput } from "@/components/pharmacy/CartQuantityInput";
 import { PharmacyCreditRequest } from "@/components/credit/CreditAccountRequests";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -1218,15 +1219,21 @@ function CartSheet({
                               variant="outline"
                               size="icon"
                               className="h-7 w-7"
+                              aria-label={`Decrease quantity for ${it.p!.name}`}
                               onClick={() => updateQty(it.p!.id, it.qty - 1)}
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
-                            <span className="w-6 text-center text-sm font-medium">{it.qty}</span>
+                            <CartQuantityInput
+                              quantity={it.qty}
+                              productName={it.p!.name}
+                              onChange={(quantity) => updateQty(it.p!.id, quantity)}
+                            />
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-7 w-7"
+                              aria-label={`Increase quantity for ${it.p!.name}`}
                               onClick={() => updateQty(it.p!.id, it.qty + 1)}
                             >
                               <Plus className="h-3 w-3" />
@@ -1348,8 +1355,11 @@ function CartSheet({
                       )}
                       {methodFor(wid) === "credit" && creditUsable(wid) && (
                         <p className="text-muted-foreground">
-                          {dueInText(creditTerms[wid].payment_terms_days, creditTerms[wid].due_basis)} ·{" "}
-                          {formatGHS(creditTerms[wid].available_ghs)} available
+                          {dueInText(
+                            creditTerms[wid].payment_terms_days,
+                            creditTerms[wid].due_basis,
+                          )}{" "}
+                          · {formatGHS(creditTerms[wid].available_ghs)} available
                         </p>
                       )}
                       {methodFor(wid) === "credit" &&
