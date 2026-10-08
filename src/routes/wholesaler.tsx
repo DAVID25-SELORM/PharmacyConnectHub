@@ -114,6 +114,7 @@ type OrderRow = {
   discount_amount_ghs?: number | null;
   delivery_fee_ghs?: number | null;
   credit_due_date?: string | null;
+  credit_due_basis?: string | null;
   credit_terms_days?: number | null;
   accepted_at: string | null;
   picking_started_at: string | null;
@@ -196,7 +197,7 @@ function WholesalerDashboardContent() {
     const { data } = await supabase
       .from("orders")
       .select(
-        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,settlement_method,is_credit_order,subtotal_ghs,discount_amount_ghs,delivery_fee_ghs,credit_due_date,credit_terms_days,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address,region,phone),order_items(product_id,product_name,quantity,unit_price_ghs,base_unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
+        "id,order_number,status,total_ghs,created_at,payment_method,payment_status,settlement_method,is_credit_order,subtotal_ghs,discount_amount_ghs,delivery_fee_ghs,credit_due_date,credit_due_basis,credit_terms_days,accepted_at,picking_started_at,packed_at,ready_for_dispatch_at,dispatched_at,delivered_at,paid_at,payment_confirmed_at,receipt_sent_at,receipt_sent_to,cancelled_at,cancellation_reason,purchase_category,pharmacy:businesses!orders_pharmacy_id_fkey(name,city,address,region,phone),order_items(product_id,product_name,quantity,unit_price_ghs,base_unit_price_ghs,purchase_category,products(form,pack_size,warehouse,zone,rack,shelf,bin))",
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });

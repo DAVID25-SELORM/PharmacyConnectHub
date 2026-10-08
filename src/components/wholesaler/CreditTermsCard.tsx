@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
-import { validateCreditForm } from "@/lib/credit-terms";
+import { termsLabel, validateCreditForm, type DueBasis } from "@/lib/credit-terms";
 import { CreditOverrideControls } from "@/components/wholesaler/CreditOverrideControls";
 import { CreditScheduleControls } from "@/components/wholesaler/CreditScheduleControls";
 import { formatReportDate } from "@/lib/reports";
@@ -30,6 +30,7 @@ type CreditLine = {
   pharmacy_name: string;
   credit_limit_ghs: number;
   payment_terms_days: number;
+  due_basis?: DueBasis;
   outstanding_ghs: number;
   available_ghs: number;
   internal_note: string | null;
@@ -57,6 +58,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
   const [lines, setLines] = useState<CreditLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [dueBasis, setDueBasis] = useState<DueBasis>("order_date");
   const [pharmacyId, setPharmacyId] = useState("");
   const [limit, setLimit] = useState("");
   const [days, setDays] = useState("30");
@@ -97,6 +99,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
     setPharmacyId(id);
     setLimit(line ? String(line.credit_limit_ghs) : "");
     setDays(line ? String(line.payment_terms_days) : "30");
+    setDueBasis(line?.due_basis ?? "order_date");
     setNote(line?.internal_note ?? "");
     setEffectiveDate("");
   };
@@ -130,8 +133,26 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
           p_payment_terms_days: parsed.days,
           p_note: note.trim() || null,
         });
+    if (rpcError) {
+      setSaving(false);
+      return toast.error(rpcError.message || "We couldn't save this credit line.");
+    }
+    // The payment-clock choice is its own change (audited, applies to new orders), made only when it differs.
+    if (dueBasis !== (selectedLine?.due_basis ?? "order_date")) {
+      const { error: basisError } = await rpc("set_credit_due_basis", {
+        p_wholesaler_id: wholesalerId,
+        p_pharmacy_id: pharmacyId,
+        p_basis: dueBasis,
+      });
+      if (basisError) {
+        setSaving(false);
+        void load();
+        return toast.error(
+          basisError.message || "The terms were saved, but we couldn't change the payment clock.",
+        );
+      }
+    }
     setSaving(false);
-    if (rpcError) return toast.error(rpcError.message || "We couldn't save this credit line.");
     toast.success(
       effectiveDate
         ? `Credit terms scheduled from ${formatReportDate(effectiveDate)}.`
@@ -236,6 +257,24 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
             />
           </label>
         </div>
+        <label className="mt-3 block text-sm md:max-w-md">
+          <span className="mb-1 block text-muted-foreground">Payment clock starts on</span>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+            value={dueBasis}
+            disabled={saving}
+            onChange={(event) => setDueBasis(event.target.value as DueBasis)}
+          >
+            <option value="order_date">The order date</option>
+            <option value="delivery_date">The delivery date</option>
+          </select>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {dueBasis === "delivery_date"
+              ? "A new credit order has no due date until it is delivered; then it is due the payment terms after delivery."
+              : "A new credit order is due the payment terms after the day it is placed."}{" "}
+            This applies to new orders from now on; invoices already issued keep their due dates.
+          </span>
+        </label>
         <label className="mt-3 block text-sm">
           <span className="mb-1 block text-muted-foreground">Note (optional, internal)</span>
           <Input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
@@ -295,7 +334,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
                     <div className="font-medium">{line.pharmacy_name}</div>
                     <div className="text-muted-foreground">
                       {formatGHS(line.outstanding_ghs)} owed of {formatGHS(line.credit_limit_ghs)} ·{" "}
-                      {line.payment_terms_days}-day terms · updated{" "}
+                      {termsLabel(line.payment_terms_days, line.due_basis)} · updated{" "}
                       {formatReportDate(line.updated_at)}
                       {line.internal_note ? ` · ${line.internal_note}` : ""}
                     </div>

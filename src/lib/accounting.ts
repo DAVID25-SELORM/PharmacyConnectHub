@@ -283,7 +283,7 @@ export function invoiceExportSheet(rows: InvoiceRow[], side: AccountingSide): Ex
       row.counterparty_name,
       row.order_number,
       row.invoice_date,
-      row.due_date ?? "",
+      row.due_date ?? "On delivery",
       num(row.invoice_ghs),
       num(row.paid_ghs),
       num(row.outstanding_ghs),

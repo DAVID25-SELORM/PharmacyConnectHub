@@ -91,6 +91,8 @@ describe("audit categories", () => {
     expect(auditCategory("Credit line scheduled to start")).toBe("credit");
     expect(auditCategory("Credit scheduled change cancelled")).toBe("credit");
     expect(auditCategory("Credit terms change took effect")).toBe("credit");
+    expect(auditCategory("Credit due-date basis changed")).toBe("credit");
+    expect(auditCategory("Credit due date set on delivery")).toBe("credit");
     expect(auditCategory("Something new")).toBe("other");
     expect(auditCategoryLabel("RFQ created")).toBe("RFQ");
   });

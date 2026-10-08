@@ -112,3 +112,13 @@ available credit after partial payments and requires explicit financial review.
     20261026100000. Mutation check: put `get_credit_invoice` back on `can_act_for_business(..., 'read')` and
     the cashier / warehouse / assistant checks must fail. The migration patches the live function bodies in
     place and fails closed (no change) if a fragment does not match exactly once; it is safe to re-run.
+
+19. `delivery-due-dates.sql` (41 checks): delivery-based credit due dates - the per-customer setting
+    (owner/manager only, validated, audited, notifies the pharmacy), no due date at checkout (not overdue,
+    "current" aging, no reminders), the due date set on delivery = delivery date + terms (checked against an
+    order backdated 10 days), the basis copied onto each order so later switches affect only new orders,
+    other creation paths (direct credit insert, as an RFQ award does), cancelled orders, cash orders, the
+    audit entries and the extended readers. Run after 20261027100000. It lifts production's order guard only to
+    backdate fixtures. Mutation checks: stop clearing the due date, or count from the order date; checks must
+    fail. After this migration the older credit suites (foundation, override, effective-date, settlement,
+    registers, reminders, overview, reads, statements) were re-run and match their previous counts.

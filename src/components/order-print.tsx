@@ -29,6 +29,7 @@ export type PrintableOrder = {
   settlement_method?: string | null;
   is_credit_order?: boolean | null;
   credit_due_date?: string | null;
+  credit_due_basis?: string | null;
   credit_terms_days?: number | null;
   paystack_reference?: string | null;
   purchase_category?: PurchaseCategory | null;
@@ -161,11 +162,16 @@ export function PrintableOrderDocument({
               <span>
                 Payment terms: <b>{terms}</b>
               </span>
-              {order.credit_due_date && (
+              {order.credit_due_date ? (
                 <span>
                   Due date: <b>{formatReportDate(order.credit_due_date)}</b>
                 </span>
-              )}
+              ) : order.credit_due_basis === "delivery_date" ? (
+                <span>
+                  Due date:{" "}
+                  <b>{order.credit_terms_days ?? "—"} days after delivery (set on delivery)</b>
+                </span>
+              ) : null}
               {order.procurement_reference && (
                 <span>
                   Procurement ref: <b>{order.procurement_reference}</b>

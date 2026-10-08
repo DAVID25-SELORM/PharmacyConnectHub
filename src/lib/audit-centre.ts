@@ -49,6 +49,8 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Credit line scheduled to start": "Credit line scheduled",
   "Credit scheduled change cancelled": "Scheduled change cancelled",
   "Credit terms change took effect": "Terms change took effect",
+  "Credit due-date basis changed": "Payment clock changed",
+  "Credit due date set on delivery": "Due date set on delivery",
   "Pharmacy inventory imported": "Inventory imported",
   "Inventory imported": "Catalog imported",
   "Pharmacy inventory item added": "Item added",
@@ -95,6 +97,8 @@ const CREDIT_EVENTS = new Set([
   "Credit line scheduled to start",
   "Credit scheduled change cancelled",
   "Credit terms change took effect",
+  "Credit due-date basis changed",
+  "Credit due date set on delivery",
 ]);
 const INVENTORY_EVENTS = new Set([
   "Pharmacy inventory imported",

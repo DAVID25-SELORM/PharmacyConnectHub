@@ -3,6 +3,8 @@ import {
   activeOverride,
   canUseCredit,
   creditSummary,
+  dueInText,
+  termsLabel,
   usesOverride,
   validateCreditForm,
   type CreditTerms,
@@ -116,5 +118,23 @@ describe("one-time over-limit override", () => {
         now,
       ),
     ).toBeNull();
+  });
+});
+
+describe("when the payment clock starts", () => {
+  it("words the terms for each basis, defaulting to the order date", () => {
+    expect(termsLabel(30, "order_date")).toBe("30-day terms");
+    expect(termsLabel(30, undefined)).toBe("30-day terms");
+    expect(termsLabel(30, "delivery_date")).toBe("30-day terms from delivery");
+    expect(dueInText(15, "order_date")).toBe("Due in 15 days");
+    expect(dueInText(15, null)).toBe("Due in 15 days");
+    expect(dueInText(15, "delivery_date")).toBe("Due 15 days after delivery");
+  });
+
+  it("carries the basis into the one-line summary", () => {
+    expect(creditSummary({ ...terms, due_basis: "delivery_date" })).toMatch(
+      /15-day terms from delivery$/,
+    );
+    expect(creditSummary(terms)).toMatch(/15-day terms$/);
   });
 });

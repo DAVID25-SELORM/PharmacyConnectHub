@@ -50,7 +50,13 @@ import type { PartyDetails } from "@/lib/order-documents";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
 import { makePriceOf, type ProductRule } from "@/lib/product-discounts";
-import { activeOverride, canUseCredit, usesOverride, type CreditTerms } from "@/lib/credit-terms";
+import {
+  activeOverride,
+  canUseCredit,
+  dueInText,
+  usesOverride,
+  type CreditTerms,
+} from "@/lib/credit-terms";
 import {
   SETTLEMENT_LABELS,
   canChangeSettlement,
@@ -205,6 +211,7 @@ type OrderRow = {
   discount_amount_ghs?: number | null;
   delivery_fee_ghs?: number | null;
   credit_due_date?: string | null;
+  credit_due_basis?: string | null;
   credit_terms_days?: number | null;
   purchase_category?: PurchaseCategory | null;
   procurement_id?: string | null;
@@ -1340,7 +1347,7 @@ function CartSheet({
                       )}
                       {methodFor(wid) === "credit" && creditUsable(wid) && (
                         <p className="text-muted-foreground">
-                          Due in {creditTerms[wid].payment_terms_days} days ·{" "}
+                          {dueInText(creditTerms[wid].payment_terms_days, creditTerms[wid].due_basis)} ·{" "}
                           {formatGHS(creditTerms[wid].available_ghs)} available
                         </p>
                       )}

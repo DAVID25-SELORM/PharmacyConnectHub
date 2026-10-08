@@ -27,6 +27,7 @@ export type DocumentOrder = {
   payment_method?: string | null;
   payment_status?: string | null;
   credit_due_date?: string | null;
+  credit_due_basis?: string | null;
   credit_terms_days?: number | null;
   status?: string | null;
 };
@@ -96,8 +97,11 @@ export function paymentTermsLine(
   const method = effectiveSettlementMethod(order);
   const parts: string[] = [SETTLEMENT_LABELS[method]];
   if (method === "credit") {
-    if (order.credit_terms_days) parts.push(`${order.credit_terms_days} days`);
+    const afterDelivery = order.credit_due_basis === "delivery_date";
+    if (order.credit_terms_days)
+      parts.push(`${order.credit_terms_days} days${afterDelivery ? " after delivery" : ""}`);
     if (order.credit_due_date) parts.push(`due ${formatDate(order.credit_due_date)}`);
+    else if (afterDelivery) parts.push("due date set on delivery");
   }
   const status = (order.payment_status ?? "unpaid") as PaymentStatusLike;
   parts.push(PAYMENT_STATE[status] ?? String(order.payment_status));

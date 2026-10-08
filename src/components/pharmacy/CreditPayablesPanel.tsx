@@ -216,7 +216,7 @@ export function CreditPayablesPanel({ pharmacyId }: { pharmacyId: string }) {
                         <div className="text-muted-foreground">
                           {invoice.wholesaler_name} · {formatGHS(invoice.outstanding_ghs)} outstanding
                           of {formatGHS(invoice.invoice_ghs)}
-                          {invoice.due_date ? ` · due ${formatReportDate(invoice.due_date)}` : ""}
+                          {invoice.due_date ? ` · due ${formatReportDate(invoice.due_date)}` : " · due date set on delivery"}
                         </div>
                       </div>
                       <Button

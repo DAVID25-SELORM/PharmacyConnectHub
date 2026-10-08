@@ -269,7 +269,7 @@ export function CreditPaymentsPanel({
                       <div className="text-muted-foreground">
                         {invoice.pharmacy_name} · {formatGHS(invoice.outstanding_ghs)} outstanding of{" "}
                         {formatGHS(invoice.invoice_ghs)}
-                        {invoice.due_date ? ` · due ${formatReportDate(invoice.due_date)}` : ""}
+                        {invoice.due_date ? ` · due ${formatReportDate(invoice.due_date)}` : " · due date set on delivery"}
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

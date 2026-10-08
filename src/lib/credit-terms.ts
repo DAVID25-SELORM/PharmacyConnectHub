@@ -1,7 +1,22 @@
+/** When the payment clock starts: the order date (the default) or the date the order is delivered. */
+export type DueBasis = "order_date" | "delivery_date";
+
+/** "30-day terms" (from the order date) or "30-day terms from delivery". */
+export function termsLabel(days: number, basis: DueBasis | null | undefined): string {
+  return basis === "delivery_date" ? `${days}-day terms from delivery` : `${days}-day terms`;
+}
+
+/** What a pharmacy is told at checkout: "Due in 30 days" or "Due 30 days after delivery". */
+export function dueInText(days: number, basis: DueBasis | null | undefined): string {
+  return basis === "delivery_date" ? `Due ${days} days after delivery` : `Due in ${days} days`;
+}
+
 export type CreditTerms = {
   wholesaler_id: string;
   credit_limit_ghs: number;
   payment_terms_days: number;
+  /** When the payment clock starts for new orders. Absent on older responses = the order date. */
+  due_basis?: DueBasis;
   outstanding_ghs: number;
   available_ghs: number;
   /** active | suspended | blocked. Suspended and blocked relationships take no new credit orders. */
@@ -76,7 +91,7 @@ const money = (value: number) =>
   `GHS ${Number(value).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function creditSummary(terms: CreditTerms) {
-  return `${money(terms.available_ghs)} available of ${money(terms.credit_limit_ghs)} · ${terms.payment_terms_days}-day terms`;
+  return `${money(terms.available_ghs)} available of ${money(terms.credit_limit_ghs)} · ${termsLabel(terms.payment_terms_days, terms.due_basis)}`;
 }
 
 /** Validates the wholesaler's credit-terms form. The database repeats every check. */

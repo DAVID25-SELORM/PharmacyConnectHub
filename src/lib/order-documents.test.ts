@@ -89,6 +89,35 @@ describe("paymentTermsLine", () => {
     ).toBe("Credit · 30 days · due D(2026-11-12) · payment pending");
   });
 
+  it("says the clock starts on delivery, and that the date is set then, until the order is delivered", () => {
+    expect(
+      paymentTermsLine(
+        {
+          total_ghs: 1,
+          settlement_method: "credit",
+          credit_due_basis: "delivery_date",
+          credit_terms_days: 30,
+          credit_due_date: null,
+          payment_status: "unpaid",
+        },
+        date,
+      ),
+    ).toBe("Credit · 30 days after delivery · due date set on delivery · payment pending");
+    expect(
+      paymentTermsLine(
+        {
+          total_ghs: 1,
+          settlement_method: "credit",
+          credit_due_basis: "delivery_date",
+          credit_terms_days: 30,
+          credit_due_date: "2026-11-12",
+          payment_status: "unpaid",
+        },
+        date,
+      ),
+    ).toBe("Credit · 30 days after delivery · due D(2026-11-12) · payment pending");
+  });
+
   it("does not show a due date for a non-credit order", () => {
     expect(
       paymentTermsLine(

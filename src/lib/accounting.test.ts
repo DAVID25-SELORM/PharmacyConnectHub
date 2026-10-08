@@ -179,6 +179,11 @@ describe("exports", () => {
     ]);
   });
 
+  it("says an invoice with no due date yet is due on delivery", () => {
+    const sheet = invoiceExportSheet([{ ...invoice, due_date: null }], "wholesaler");
+    expect(sheet.rows[0][3]).toBe("On delivery");
+  });
+
   it("exports an aging sheet with all five buckets, zero where nothing is owed", () => {
     const sheet = agingExportSheet([
       { bucket: "d31_60", invoices: "3", outstanding_ghs: "2200.00" },

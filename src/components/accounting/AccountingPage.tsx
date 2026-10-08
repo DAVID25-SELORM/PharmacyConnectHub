@@ -764,7 +764,7 @@ function InvoiceTable({ rows, side }: { rows: InvoiceRow[]; side: AccountingSide
                 <td className="p-3">{row.order_number}</td>
                 <td className="p-3 whitespace-nowrap">{formatReportDate(row.invoice_date)}</td>
                 <td className="p-3 whitespace-nowrap">
-                  {row.due_date ? formatReportDate(row.due_date) : "—"}
+                  {row.due_date ? formatReportDate(row.due_date) : "On delivery"}
                 </td>
                 <td className="p-3 text-right">{formatGHS(Number(row.invoice_ghs))}</td>
                 <td className="p-3 text-right">{formatGHS(Number(row.paid_ghs))}</td>
@@ -795,7 +795,7 @@ function InvoiceTable({ rows, side }: { rows: InvoiceRow[]; side: AccountingSide
               <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <dt className="text-muted-foreground">Due</dt>
                 <dd className="text-right">
-                  {row.due_date ? formatReportDate(row.due_date) : "—"}
+                  {row.due_date ? formatReportDate(row.due_date) : "On delivery"}
                 </dd>
                 <dt className="text-muted-foreground">Original</dt>
                 <dd className="text-right">{formatGHS(Number(row.invoice_ghs))}</dd>
