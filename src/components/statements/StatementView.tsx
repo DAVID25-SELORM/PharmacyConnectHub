@@ -214,7 +214,8 @@ export function StatementView({
           )}
           <p className="text-xs text-muted-foreground">
             Charges are orders as placed; payments are recorded when the wholesaler confirms
-            payment. Cancelled and refunded orders are not included.
+            payment, and a supply change both sides agreed appears as a credit on the date it was
+            accepted. Cancelled and refunded orders are not included.
           </p>
         </>
       ) : null}

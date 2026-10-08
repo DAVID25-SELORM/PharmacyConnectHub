@@ -238,3 +238,26 @@ Order event log and timeline reader, `orders.effective_total_ghs`, the ledger id
 **Not yet adopted (Phase 6, and the reason Phases 2 and 6 must ship together):** receipt emails and the confirm-payment endpoint (`api/orders/*`), reports, dashboards, statements, accounting overview, and `list_pharmacy_order_history` still read the placed total. Credit orders are already correct everywhere that reads the ledger.
 
 **Verified:** SQL suite 163/163, concurrency script 13/13, mutation checks, browser run through propose, question, reply, accept for both roles, mobile width (375 px) with no horizontal overflow, 371 unit tests, `tsc` clean.
+
+## 16. Phase 6 status (readers adopt the effective total; built locally, not deployed)
+
+**Migration:** `20261101100000_effective_total_readers.sql`. Every reader below is patched in place from its LIVE definition, must match the expected number of occurrences, and otherwise stops the migration without changing anything; it is safe to re-run. **A read-only dry run against the production catalog (9 Oct 2026) matched 36 of 36 patches** (34 of the original 35, after dropping `list_wholesaler_order_queue`, plus the two for `get_order_print`).
+
+| Area | What changed |
+|---|---|
+| Wholesaler, pharmacy and platform-admin reports (overview, sales, orders, customers, supplier spend, GMV, payments, pharmacy activity) | totals use `COALESCE(effective_total_ghs, total_ghs)`; an amended order's row shows goods as supplied and no order-level discount; reports stay on the original order date |
+| Units and line values (product, purchase and customer reports, stock velocity, customer detail) | `order_item_supplied_qty()` instead of the ordered quantity |
+| Pharmacy order list | returns `effective_total_ghs` beside `total_ghs`, sorts by what is owed, counts supplied units |
+| Customer statement | the placed order stays at its placed amount on its own date; each accepted reduction is a separate dated "adjustment" line, so an issued statement never changes retroactively; a cash order's payment line is the effective amount |
+| Returns | `get_returnable_items` and `request_order_return` cap at what was supplied |
+| Receipts | `confirm-payment` and `send-receipt` read `order_receipt_supply()` for an amended order and print supplied quantities and the effective total; if that cannot be read they stop before changing or sending anything |
+| Dashboards | the order summaries use the effective total |
+| Production-only | `get_order_print` (exists only in production, nothing in the repository calls it) is patched the same way and skipped where absent |
+
+**Deliberately unchanged:** `pharmacy_price_history*` (the unit price paid is never changed by an amendment), `get_order_reorder_lines` (reordering what was ordered is the useful default), `get_credit_invoice` / `credit_invoice_status` (ledger based; the credit note is already there), `list_wholesaler_order_queue` (no screen calls it and its production definition differs from the repository's, so it could not be patched with confidence).
+
+**Found on the way, not caused by this work:** `admin_report_wholesaler_performance` sums each order's total once per line item (an order with three lines counts three times). A separate task was raised to fix it; this migration does not touch that behaviour.
+
+**Also granted:** the reports run as the signed-in user, so `order_item_supplied_qty` is now executable by signed-in users. It returns one integer for an order-line id the caller already holds; ids are random UUIDs.
+
+**Verified:** `order-effective-total-readers.sql` 57/57, mutation checks, twelve legacy suites re-run with production's order guards off (they cannot run with them on) and all unchanged, 377 unit tests, `tsc` clean, browser check of the wholesaler dashboard (sales 3470, receivables 1850 from the ledger), customers list and statement.

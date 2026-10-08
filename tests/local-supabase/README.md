@@ -145,3 +145,17 @@ available credit after partial payments and requires explicit financial review.
     20261030120000. Mutation checks: unpatch the cancel-restore, `credit_invoice_status`, `confirm_order_picks`, or
     drop the dispatch trigger, and the suite fails; remove the order/proposal locks and the concurrency replay check
     fails (the unique constraints still stop the double effects).
+
+23. `order-effective-total-readers.sql` (57 checks): Phase 6. Seven orders, two of them amended through the real
+    propose/accept flow, then every patched reader is checked against hand-worked figures: wholesaler, pharmacy and
+    platform-admin reports (totals, units, order rows, product / customer / supplier tables, inventory velocity),
+    customers list and detail, the pharmacy order list (placed + effective total, sort, unit count), the customer
+    statement (placed order unchanged, accepted reduction as its own "adjustment" line, cash payment at the
+    effective amount, same balance for both sides), returns capped at what was supplied, receipt data access, and the
+    patch helper (idempotent, fail-closed, skips missing functions). Run after 20261101100000. Mutation checks: put
+    `wholesaler_report_overview`, `request_order_return` or `customer_statement` back and the suite fails.
+    The legacy suites whose fixtures edit order lines (reports, order-returns, inventory-insights, reorder-lists,
+    pharmacy-price-history, order-history-filters, credit-terms, fulfillment-status-expansion, notifications,
+    order-deliveries, purchase-reports, customer-statement-credit-ledger) were re-run with production's order
+    guards switched off (they cannot run with the guards on) and all pass: the reader patches change nothing for
+    orders that were never amended.

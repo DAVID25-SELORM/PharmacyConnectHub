@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { wholesalerDashboardAccess } from "@/lib/dashboard";
 import { formatGHS, timeAgo } from "@/lib/format";
+import { shownTotal } from "@/lib/order-supply";
 import { useSession, type Business } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/dashboard")({
@@ -30,6 +31,7 @@ type PharmacyOrderSummary = {
   payment_method: "cod" | "paystack";
   payment_status: PaymentStatus;
   total_ghs: number;
+  effective_total_ghs?: number | null;
   created_at: string;
   receipt_sent_at: string | null;
   wholesaler: { name: string } | null;
@@ -42,6 +44,7 @@ type WholesalerOrderSummary = {
   payment_method: "cod" | "paystack";
   payment_status: PaymentStatus;
   total_ghs: number;
+  effective_total_ghs?: number | null;
   created_at: string;
   receipt_sent_at: string | null;
   pharmacy: { name: string } | null;
@@ -107,7 +110,7 @@ async function loadPharmacyOrderSummaries(
   const primary = await supabase
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,effective_total_ghs,created_at,receipt_sent_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
     )
     .eq("pharmacy_id", businessId)
     .order("created_at", { ascending: false });
@@ -115,7 +118,7 @@ async function loadPharmacyOrderSummaries(
   if (!primary.error) {
     return {
       legacyReceiptTracking: false,
-      rows: (primary.data ?? []) as PharmacyOrderSummary[],
+      rows: (primary.data ?? []) as unknown as PharmacyOrderSummary[],
     };
   }
 
@@ -126,7 +129,7 @@ async function loadPharmacyOrderSummaries(
   const fallback = await supabase
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,effective_total_ghs,created_at,wholesaler:businesses!orders_wholesaler_id_fkey(name)",
     )
     .eq("pharmacy_id", businessId)
     .order("created_at", { ascending: false });
@@ -137,7 +140,7 @@ async function loadPharmacyOrderSummaries(
 
   return {
     legacyReceiptTracking: true,
-    rows: ((fallback.data ?? []) as Omit<PharmacyOrderSummary, "receipt_sent_at">[]).map(
+    rows: ((fallback.data ?? []) as unknown as Omit<PharmacyOrderSummary, "receipt_sent_at">[]).map(
       (order) => ({
         ...order,
         receipt_sent_at: null,
@@ -152,7 +155,7 @@ async function loadWholesalerOrderSummaries(
   const primary = await supabase
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,receipt_sent_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,effective_total_ghs,created_at,receipt_sent_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
     )
     .eq("wholesaler_id", businessId)
     .order("created_at", { ascending: false });
@@ -160,7 +163,7 @@ async function loadWholesalerOrderSummaries(
   if (!primary.error) {
     return {
       legacyReceiptTracking: false,
-      rows: (primary.data ?? []) as WholesalerOrderSummary[],
+      rows: (primary.data ?? []) as unknown as WholesalerOrderSummary[],
     };
   }
 
@@ -171,7 +174,7 @@ async function loadWholesalerOrderSummaries(
   const fallback = await supabase
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,created_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,effective_total_ghs,created_at,pharmacy:businesses!orders_pharmacy_id_fkey(name)",
     )
     .eq("wholesaler_id", businessId)
     .order("created_at", { ascending: false });
@@ -182,12 +185,12 @@ async function loadWholesalerOrderSummaries(
 
   return {
     legacyReceiptTracking: true,
-    rows: ((fallback.data ?? []) as Omit<WholesalerOrderSummary, "receipt_sent_at">[]).map(
-      (order) => ({
-        ...order,
-        receipt_sent_at: null,
-      }),
-    ),
+    rows: (
+      (fallback.data ?? []) as unknown as Omit<WholesalerOrderSummary, "receipt_sent_at">[]
+    ).map((order) => ({
+      ...order,
+      receipt_sent_at: null,
+    })),
   };
 }
 
@@ -323,7 +326,7 @@ function WorkspaceDashboardContent() {
           receiptsSent: wholesalerOrders.filter((order) => Boolean(order.receipt_sent_at)).length,
           collectedRevenue: wholesalerOrders
             .filter((order) => order.payment_status === "paid")
-            .reduce((sum, order) => sum + Number(order.total_ghs), 0),
+            .reduce((sum, order) => sum + shownTotal(order), 0),
           recentOrders: wholesalerOrders.slice(0, 5),
         };
 
@@ -636,7 +639,7 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-semibold">{formatGHS(order.total_ghs)}</div>
+                <div className="font-semibold">{formatGHS(shownTotal(order))}</div>
                 <div className="text-xs text-muted-foreground">
                   {order.receipt_sent_at ? "Receipt emailed" : "Receipt pending"}
                 </div>
@@ -686,7 +689,7 @@ function RecentWholesalerOrdersCard({ orders }: { orders: WholesalerOrderSummary
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-semibold">{formatGHS(order.total_ghs)}</div>
+                <div className="font-semibold">{formatGHS(shownTotal(order))}</div>
                 <div className="text-xs text-muted-foreground">
                   {order.receipt_sent_at ? "Receipt sent" : "Receipt not sent"}
                 </div>

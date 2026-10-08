@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { sendOrderReceiptEmail } from "../_order-receipts.js";
+import { receiptFigures, type ReceiptSupply } from "../_order-supply.js";
 
 type OrderStatus = "pending" | "accepted" | "packed" | "dispatched" | "delivered" | "cancelled";
 type PaymentStatus = "unpaid" | "paid" | "refunded" | "failed";
@@ -12,6 +13,7 @@ type ManagedOrder = {
   payment_method: "cod" | "paystack";
   payment_status: PaymentStatus;
   total_ghs: number;
+  effective_total_ghs: number | null;
   subtotal_ghs: number | null;
   discount_amount_ghs: number | null;
   delivered_at: string | null;
@@ -33,6 +35,7 @@ type ManagedOrder = {
     region: string | null;
   } | null;
   order_items: {
+    id: string;
     product_name: string;
     quantity: number;
     unit_price_ghs: number;
@@ -74,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { data: orderData, error: orderErr } = await admin
     .from("orders")
     .select(
-      "id,order_number,status,payment_method,payment_status,total_ghs,subtotal_ghs,discount_amount_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(product_name,quantity,unit_price_ghs)",
+      "id,order_number,status,payment_method,payment_status,total_ghs,effective_total_ghs,subtotal_ghs,discount_amount_ghs,delivered_at,paid_at,receipt_sent_at,receipt_sent_to,pharmacy_id,wholesaler_id,pharmacy:businesses!orders_pharmacy_id_fkey(owner_id,name,city,region),wholesaler:businesses!orders_wholesaler_id_fkey(owner_id,name,city,region),order_items(id,product_name,quantity,unit_price_ghs)",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -138,22 +141,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "The pharmacy account does not have an email address" });
   }
 
+  // An order whose supply was reduced is receipted at what was supplied. Stop before sending if that cannot be read.
+  let supply: ReceiptSupply = null;
+  if (order.effective_total_ghs !== null) {
+    const { data: supplyData, error: supplyErr } = await admin.rpc("order_receipt_supply", {
+      p_order_id: order.id,
+    });
+    if (supplyErr || !supplyData) {
+      return res.status(500).json({
+        error:
+          "This order's supply was changed and its receipt figures could not be loaded. Nothing was sent; please try again.",
+      });
+    }
+    supply = supplyData as ReceiptSupply;
+  }
+  const figures = receiptFigures(order, supply);
+
   const emailResult = await sendOrderReceiptEmail({
     toEmail: pharmacyOwner.email,
     toName: order.pharmacy.name,
     order: {
       orderId: order.id,
       orderNumber: order.order_number,
-      totalGhs: Number(order.total_ghs),
-      deliveryFeeGhs: Math.max(0, Math.round((Number(order.total_ghs) - (Number(order.subtotal_ghs ?? order.total_ghs) - Number(order.discount_amount_ghs ?? 0))) * 100) / 100),
+      totalGhs: figures.totalGhs,
+      deliveryFeeGhs: figures.deliveryFeeGhs,
       deliveredAt: order.delivered_at,
       paidAt: order.paid_at,
       paymentMethod: order.payment_method,
-      items: order.order_items.map((item) => ({
-        productName: item.product_name,
-        quantity: item.quantity,
-        unitPriceGhs: Number(item.unit_price_ghs),
-      })),
+      items: figures.items,
       parties: {
         pharmacy: {
           name: order.pharmacy.name,

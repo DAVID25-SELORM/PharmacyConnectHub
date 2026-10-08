@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   escapeHtml,
+  lineDescription,
   statementPrintHtml,
   statementRange,
   statementToCsv,
@@ -51,6 +52,19 @@ describe("statement helpers", () => {
     );
     expect(statementRange("2026-09-30", "2026-09-01")).toBeNull();
     expect(statementRange("", "2026-09-01")).toBeNull();
+  });
+
+  it("describes each kind of statement line, including an agreed supply change", () => {
+    expect(lineDescription({ kind: "order", order_number: "ORD-1" })).toBe("Order ORD-1");
+    expect(lineDescription({ kind: "payment", order_number: "ORD-1" })).toBe(
+      "Payment received for ORD-1",
+    );
+    expect(lineDescription({ kind: "return", order_number: "ORD-1" })).toBe(
+      "Return credited ORD-1",
+    );
+    expect(lineDescription({ kind: "adjustment", order_number: "ORD-1" })).toBe(
+      "Supply change agreed on ORD-1",
+    );
   });
 
   it("writes opening, lines and closing to CSV with the expected rows", () => {
