@@ -19,6 +19,8 @@ export type PartyDetails = {
 
 export type DocumentOrder = {
   total_ghs: number | string;
+  /** Set once an order has been amended (partial supply accepted); the total to use from then on. */
+  effective_total_ghs?: number | string | null;
   subtotal_ghs?: number | string | null;
   discount_amount_ghs?: number | string | null;
   delivery_fee_ghs?: number | string | null;
@@ -34,6 +36,8 @@ export type DocumentOrder = {
 
 export type DocumentLine = {
   quantity: number;
+  /** What the wholesaler is committed to supply, once the order has been amended. Absent = as ordered. */
+  supplied_quantity?: number | null;
   unit_price_ghs?: number | string | null;
   base_unit_price_ghs?: number | string | null;
 };
@@ -50,13 +54,39 @@ export type DocumentTotals = {
   discount: number;
   delivery: number | null;
   total: number;
+  /** True when the order was amended: the figures describe what is supplied, not what was first ordered. */
+  amended: boolean;
+  /** The total as first placed; only meaningful when amended. */
+  originalTotal: number;
 };
+
+/** The quantity a line is supplied in: the amended quantity when there is one, otherwise what was ordered. */
+export function suppliedQuantity(
+  line: Pick<DocumentLine, "quantity" | "supplied_quantity">,
+): number {
+  return line.supplied_quantity ?? line.quantity;
+}
+
+/** An order whose supply or total was changed by an accepted proposal. */
+export function isAmended(
+  order: Pick<DocumentOrder, "effective_total_ghs">,
+  lines: Array<Pick<DocumentLine, "quantity" | "supplied_quantity">> = [],
+): boolean {
+  return (
+    (order.effective_total_ghs !== null && order.effective_total_ghs !== undefined) ||
+    lines.some((line) => suppliedQuantity(line) !== line.quantity)
+  );
+}
 
 /** The totals block. The delivery fee is the stored fee when the order has one; otherwise it is whatever
  * is left of the total after the subtotal and discounts (an older order that did not store it). With no
- * stored subtotal there is nothing to split, so only the total is shown. */
+ * stored subtotal there is nothing to split, so only the total is shown. An amended order shows the goods as
+ * supplied (the total less the unchanged delivery fee) and no order-level discount row, because the discount
+ * was granted on the quantities first ordered; each line still shows its own list price and saving. */
 export function documentTotals(order: DocumentOrder): DocumentTotals {
-  const total = money(toNumber(order.total_ghs) ?? 0);
+  const originalTotal = money(toNumber(order.total_ghs) ?? 0);
+  const effective = toNumber(order.effective_total_ghs);
+  const total = effective === null ? originalTotal : money(effective);
   const subtotal = toNumber(order.subtotal_ghs);
   const discount = money(toNumber(order.discount_amount_ghs) ?? 0);
   const stored = toNumber(order.delivery_fee_ghs);
@@ -64,14 +94,31 @@ export function documentTotals(order: DocumentOrder): DocumentTotals {
     stored !== null
       ? money(stored)
       : subtotal !== null
-        ? money(Math.max(0, total - (subtotal - discount)))
+        ? money(Math.max(0, originalTotal - (subtotal - discount)))
         : null;
-  return { subtotal: subtotal === null ? null : money(subtotal), discount, delivery, total };
+  if (effective !== null) {
+    return {
+      subtotal: delivery === null ? null : money(Math.max(0, total - delivery)),
+      discount: 0,
+      delivery,
+      total,
+      amended: true,
+      originalTotal,
+    };
+  }
+  return {
+    subtotal: subtotal === null ? null : money(subtotal),
+    discount,
+    delivery,
+    total,
+    amended: false,
+    originalTotal,
+  };
 }
 
-/** Quantity times the price actually charged (after any discount), rounded to the pesewa. */
+/** Quantity supplied times the price actually charged (after any discount), rounded to the pesewa. */
 export function lineAmount(line: DocumentLine): number {
-  return money((toNumber(line.unit_price_ghs) ?? 0) * line.quantity);
+  return money((toNumber(line.unit_price_ghs) ?? 0) * suppliedQuantity(line));
 }
 
 /** A line that was discounted below its list price: the list price and the saving per unit, otherwise null. */

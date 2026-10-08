@@ -64,6 +64,12 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Order classification recorded": "Order classified",
   "Order classification changed": "Classification changed",
   "Order payment method changed": "Payment method changed",
+  "Order supply change proposed": "Supply change proposed",
+  "Order supply change withdrawn": "Supply change withdrawn",
+  "Order supply change accepted": "Supply change accepted",
+  "Order supply change rejected": "Supply change rejected",
+  "Order supply change question asked": "Supply change question",
+  "Order supply change applied": "Supply change applied",
 };
 
 export function auditActivityLabel(activity: string) {
@@ -119,6 +125,12 @@ const ORDER_EVENTS = new Set([
   "Order classification recorded",
   "Order classification changed",
   "Order payment method changed",
+  "Order supply change proposed",
+  "Order supply change withdrawn",
+  "Order supply change accepted",
+  "Order supply change rejected",
+  "Order supply change question asked",
+  "Order supply change applied",
 ]);
 
 export function auditCategory(activity: string): AuditCategory {

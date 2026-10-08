@@ -39,6 +39,8 @@ describe("event labels and categories", () => {
     expect(auditCategoryLabel("Pharmacy inventory item added")).toBe("Inventory");
     expect(auditCategoryLabel("Pharmacy inventory stock adjusted")).toBe("Inventory");
     expect(auditCategoryLabel("Business approved")).toBe("Verification");
+    expect(auditCategoryLabel("Order supply change accepted")).toBe("Order");
+    expect(auditActivityLabel("Order supply change proposed")).toBe("Supply change proposed");
     expect(auditCategoryLabel("Mystery")).toBe("Other");
   });
 });
@@ -89,11 +91,7 @@ describe("filters and URL state", () => {
 
   it("changes the filter key when any filter changes (pagination reset trigger)", () => {
     const base = auditFilterKey(EMPTY_AUDIT_FILTERS);
-    for (const change of [
-      { q: "ab" },
-      { recordType: "rfq" },
-      { range: "today" as const },
-    ]) {
+    for (const change of [{ q: "ab" }, { recordType: "rfq" }, { range: "today" as const }]) {
       expect(auditFilterKey({ ...EMPTY_AUDIT_FILTERS, ...change })).not.toBe(base);
     }
   });

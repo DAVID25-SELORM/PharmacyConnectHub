@@ -48,6 +48,8 @@ import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-sta
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
+import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
+import { loadOrderSupply, shownTotal, withSupply, type SupplyMap } from "@/lib/order-supply";
 import type { PartyDetails } from "@/lib/order-documents";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
@@ -181,6 +183,8 @@ type OrderRow = {
     | "delivered"
     | "cancelled";
   total_ghs: number;
+  effective_total_ghs?: number | null;
+  has_open_amendment?: boolean;
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
@@ -199,8 +203,10 @@ type OrderRow = {
   wholesaler: { name: string; city?: string | null; region?: string | null } | null;
   order_items: {
     id?: string;
+    product_id?: string | null;
     product_name: string;
     quantity: number;
+    supplied_quantity?: number | null;
     unit_price_ghs: number;
     base_unit_price_ghs?: number | null;
     purchase_category?: PurchaseCategory | null;
@@ -986,6 +992,7 @@ function PharmacyDashboardContent() {
               canChangePayment={["owner", "manager", "cashier", "accountant"].includes(
                 business?.staff_role ?? "",
               )}
+              canRespondToSupply={["owner", "manager", "cashier"].includes(business?.staff_role ?? "")}
             />
           </TabsContent>
         </Tabs>
@@ -1789,8 +1796,10 @@ function OrdersView({
   onRequestReturn,
   canReclassify = false,
   canChangePayment = false,
+  canRespondToSupply = false,
   pharmacy = null,
 }: {
+  canRespondToSupply?: boolean;
   pharmacy?: PartyDetails | null;
   canReclassify?: boolean;
   canChangePayment?: boolean;
@@ -1803,6 +1812,18 @@ function OrdersView({
   wholesalers: WholesalerSummary[];
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [supply, setSupply] = useState<SupplyMap>({});
+  const [supplyTick, setSupplyTick] = useState(0);
+  const orderIdsKey = orders.map((order) => order.id).join(",");
+  useEffect(() => {
+    let cancelled = false;
+    void loadOrderSupply(orderIdsKey ? orderIdsKey.split(",") : []).then((map) => {
+      if (!cancelled) setSupply(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderIdsKey, supplyTick]);
   const [classifyTarget, setClassifyTarget] = useState<ClassificationTarget | null>(null);
   const [settlementTarget, setSettlementTarget] = useState<SettlementTarget | null>(null);
   const [query, setQuery] = useState("");
@@ -2073,9 +2094,10 @@ function OrdersView({
           )}
         </Card>
       )}
-      {pageOrders.map((o) => {
+      {pageOrders.map((raw) => {
+        const o = withSupply(raw, supply);
         const open = openOrderId === o.id;
-        const units = o.order_items.reduce((total, item) => total + item.quantity, 0);
+        const units = o.order_items.reduce((total, item) => total + (item.supplied_quantity ?? item.quantity), 0);
         return (
           <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2105,7 +2127,13 @@ function OrdersView({
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
+                <div className="font-display text-xl font-bold">{formatGHS(shownTotal(o))}</div>
+                {o.effective_total_ghs != null && (
+                  <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>
+                )}
+                {o.has_open_amendment && (
+                  <div className="text-xs font-medium text-amber-600">Needs your decision</div>
+                )}
                 <div className="text-xs text-muted-foreground">
                   {o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)
                 </div>
@@ -2156,6 +2184,17 @@ function OrdersView({
             {open && (
               <>
                 <OrderTimeline o={o} />
+                <SupplyChangePanel
+                  orderId={o.id}
+                  orderStatus={o.status}
+                  paymentStatus={o.payment_status}
+                  side="pharmacy"
+                  canAct={canRespondToSupply}
+                  onChanged={() => {
+                    setSupplyTick((value) => value + 1);
+                    void loadOrderDetail(o.id);
+                  }}
+                />
                 <OrderActivityTimeline orderId={o.id} />
 
                 <ReceiptStatusPanel order={o} />
@@ -2197,7 +2236,10 @@ function OrdersView({
                       <div className="min-w-0">
                         <div className="font-medium">{it.product_name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {formatGHS(it.unit_price_ghs)} × {it.quantity}
+                          {formatGHS(it.unit_price_ghs)} × {it.supplied_quantity ?? it.quantity}
+                          {it.supplied_quantity != null && it.supplied_quantity !== it.quantity
+                            ? ` (ordered ${it.quantity})`
+                            : ""}
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <Badge className={purchaseCategoryBadgeClass(it.purchase_category)}>

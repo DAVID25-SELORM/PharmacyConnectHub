@@ -5,7 +5,7 @@
 --   * order_timeline merges placement + status history + events, with actors shown by email on your own side and by
 --     business name on the other side, and is refused to everyone outside the order;
 --   * the ledger markers allow at most one credit note / debit note per amendment and one invoice per shipment.
--- Run after setup.sql + migrations (through 20261028100000_order_amendments_foundation.sql), with the production
+-- Run after setup.sql + migrations (through 20261030120000; the ledger markers reference real proposals), with the production
 -- guard and stock fixtures installed.
 -- Successful create_marketplace_orders calls are top-level statements (ON COMMIT DROP temp tables).
 GRANT USAGE ON SCHEMA zz TO authenticated;
@@ -195,6 +195,9 @@ DO $$
 DECLARE o UUID := (SELECT order_id FROM zz.af_orders WHERE label = 'o1'); a UUID := gen_random_uuid(); s UUID := gen_random_uuid();
   w UUID := (SELECT alpha FROM zz.af); g UUID := (SELECT good FROM zz.af);
 BEGIN
+  -- Since phase 2 the marker points at a real proposal (foreign key), so make one.
+  INSERT INTO public.order_amendments(id, order_id, version, kind, reason, proposed_by, original_total_ghs, proposed_total_ghs, delta_ghs, request_id)
+  VALUES (a, o, 1, 'partial_fulfilment', 'marker test', (SELECT u_wo FROM zz.af), 500, 450, -50, gen_random_uuid());
   INSERT INTO public.credit_ledger_entries(wholesaler_id, pharmacy_id, order_id, entry_type, direction, amount_ghs, amendment_id, note)
   VALUES (w, g, o, 'credit_note', 'credit', 50, a, 'amendment credit note');
   PERFORM zz.check('one credit note per amendment is accepted', TRUE);

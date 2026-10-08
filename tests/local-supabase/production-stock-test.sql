@@ -66,8 +66,10 @@ DO $$
 BEGIN
   PERFORM zz.check('a stock change with no context row is recorded as an "admin_adjustment" (+3)',
     EXISTS (SELECT 1 FROM public.inventory_movements WHERE product_id = (SELECT p_item FROM zz.ps) AND movement_type = 'admin_adjustment' AND quantity_delta = 3));
-  PERFORM zz.check('and the movement CHECK only allows the nine known movement types',
-    NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_movements_movement_type_check' AND pg_get_constraintdef(oid) LIKE '%order_amendment_release%'));
+  PERFORM zz.check('and the movement CHECK allows the nine production types plus order_amendment_release (phase 2)',
+    (SELECT count(*) = 10 FROM pg_constraint c, regexp_matches(pg_get_constraintdef(c.oid), '''[a-z_]+''', 'g') m
+     WHERE c.conname = 'inventory_movements_movement_type_check') AND
+    EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'inventory_movements_movement_type_check' AND pg_get_constraintdef(oid) LIKE '%order_amendment_release%'));
 END $$;
 UPDATE public.products SET stock = stock - 3 WHERE id = (SELECT p_item FROM zz.ps);
 

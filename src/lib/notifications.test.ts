@@ -6,6 +6,7 @@ describe("notification helpers", () => {
     const types = [
       "new_order",
       "order_status",
+      "order_amendment",
       "payment_update",
       "credit_reminder",
       "return_requested",

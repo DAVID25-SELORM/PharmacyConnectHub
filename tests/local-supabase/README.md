@@ -132,3 +132,16 @@ available credit after partial payments and requires explicit financial review.
 21. `order-amendments-foundation.sql`: Phase 1 of order amendments - `orders.effective_total_ghs` (the immutable
     `total_ghs` is untouched), the append-only `order_events` log (RLS, no direct writes), `order_timeline()`
     (access rules, actor labels, ordering) and the credit-ledger idempotency markers. Run after 20261028100000.
+
+22. `order-partial-fulfilment.sql` (163 checks) and `order-partial-fulfilment-concurrency.sh` (13 checks): partial
+    fulfilment. Roles on both sides (warehouse/manager/cashier propose; finance, pharmacy, other businesses and
+    admins refused; only the pharmacy's owner/manager/cashier respond), every validation, idempotent replays,
+    the dispatch block, clarification and rejection, acceptance (effective total, one credit note, stock release /
+    write-off, inventory ledger movement, batch reconciliation, audit, events, notifications), legacy orders (no
+    stock write), a paid cash order refused, a credit order with a payment (invoice status nets the credit note),
+    sequential amendments, cancellation restoring only what is still deducted, withdrawal, the 24-hour reminder,
+    append-only records. The `.sh` runs real overlapping sessions: two simultaneous acceptances, an acceptance racing
+    a cancellation, a proposal racing a dispatch. Needs the production guard + stock fixtures and migrations through
+    20261030120000. Mutation checks: unpatch the cancel-restore, `credit_invoice_status`, `confirm_order_picks`, or
+    drop the dispatch trigger, and the suite fails; remove the order/proposal locks and the concurrency replay check
+    fails (the unique constraints still stop the double effects).

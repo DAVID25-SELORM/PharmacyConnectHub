@@ -15,15 +15,10 @@ export function announceNotificationsChanged() {
 }
 
 export type NotificationGroup =
-  | "orders"
-  | "payments"
-  | "returns"
-  | "delivery"
-  | "stock"
-  | "account";
+  "orders" | "payments" | "returns" | "delivery" | "stock" | "account";
 
 const GROUP_TYPES: Record<NotificationGroup, string[]> = {
-  orders: ["new_order", "order_status"],
+  orders: ["new_order", "order_status", "order_amendment"],
   payments: ["payment_update", "credit_reminder"],
   returns: ["return_requested", "return_update"],
   delivery: ["delivery_update"],

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   canPrintInvoice,
   documentTotals,
+  isAmended,
   lineAmount,
   lineDiscount,
   partyLines,
   paymentTermsLine,
+  suppliedQuantity,
 } from "./order-documents";
 
 const date = (iso: string) => `D(${iso})`;
@@ -19,7 +21,14 @@ describe("documentTotals", () => {
         discount_amount_ghs: "60.00",
         delivery_fee_ghs: "50.00",
       }),
-    ).toEqual({ subtotal: 1100, discount: 60, delivery: 50, total: 1090 });
+    ).toEqual({
+      subtotal: 1100,
+      discount: 60,
+      delivery: 50,
+      total: 1090,
+      amended: false,
+      originalTotal: 1090,
+    });
   });
 
   it("works the delivery fee out of an older order that did not store one", () => {
@@ -43,6 +52,8 @@ describe("documentTotals", () => {
       discount: 0,
       delivery: null,
       total: 250,
+      amended: false,
+      originalTotal: 250,
     });
   });
 
@@ -50,6 +61,63 @@ describe("documentTotals", () => {
     expect(
       documentTotals({ total_ghs: 100, subtotal_ghs: 100, delivery_fee_ghs: 0 }).delivery,
     ).toBe(0);
+  });
+});
+
+describe("amended orders", () => {
+  it("shows the goods as supplied, the unchanged delivery fee and the effective total", () => {
+    // Ordered 10 @ 100 + 20 @ 50 + 5 @ 20 = 2100, plus a 50 delivery fee = 2150; 550 taken off by agreement.
+    expect(
+      documentTotals({
+        total_ghs: 2150,
+        effective_total_ghs: 1600,
+        subtotal_ghs: 2100,
+        discount_amount_ghs: 0,
+        delivery_fee_ghs: 50,
+      }),
+    ).toEqual({
+      subtotal: 1550,
+      discount: 0,
+      delivery: 50,
+      total: 1600,
+      amended: true,
+      originalTotal: 2150,
+    });
+  });
+
+  it("drops the order-level discount row, because that discount was granted on the quantities first ordered", () => {
+    const totals = documentTotals({
+      total_ghs: 1090,
+      effective_total_ghs: 790,
+      subtotal_ghs: 1100,
+      discount_amount_ghs: 60,
+      delivery_fee_ghs: 50,
+    });
+    expect(totals.discount).toBe(0);
+    expect(totals.subtotal).toBe(740);
+    expect(totals.subtotal! + totals.delivery!).toBe(totals.total);
+  });
+
+  it("an order that was never amended is described exactly as before", () => {
+    expect(
+      documentTotals({ total_ghs: 100, effective_total_ghs: null, subtotal_ghs: 100 }).amended,
+    ).toBe(false);
+  });
+
+  it("lines are priced on what is supplied", () => {
+    expect(lineAmount({ quantity: 10, supplied_quantity: 7, unit_price_ghs: 100 })).toBe(700);
+    expect(lineAmount({ quantity: 10, unit_price_ghs: 100 })).toBe(1000);
+    expect(suppliedQuantity({ quantity: 10, supplied_quantity: 0 })).toBe(0);
+    expect(suppliedQuantity({ quantity: 10 })).toBe(10);
+  });
+
+  it("recognises an amended order by its effective total or by a changed line", () => {
+    expect(isAmended({ effective_total_ghs: 5 })).toBe(true);
+    expect(isAmended({}, [{ quantity: 10, supplied_quantity: 8 }])).toBe(true);
+    expect(
+      isAmended({ effective_total_ghs: null }, [{ quantity: 10, supplied_quantity: 10 }]),
+    ).toBe(false);
+    expect(isAmended({})).toBe(false);
   });
 });
 

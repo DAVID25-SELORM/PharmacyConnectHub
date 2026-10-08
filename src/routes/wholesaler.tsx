@@ -59,6 +59,8 @@ import {
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
+import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
+import { loadOrderSupply, shownTotal, withSupply } from "@/lib/order-supply";
 import type { PartyDetails } from "@/lib/order-documents";
 import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
@@ -106,6 +108,8 @@ type OrderRow = {
   order_number: string;
   status: OrderStatus;
   total_ghs: number;
+  effective_total_ghs?: number | null;
+  has_open_amendment?: boolean;
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
@@ -138,8 +142,10 @@ type OrderRow = {
     phone?: string | null;
   } | null;
   order_items: {
+    product_id?: string | null;
     product_name: string;
     quantity: number;
+    supplied_quantity?: number | null;
     unit_price_ghs: number;
     base_unit_price_ghs?: number | null;
     purchase_category?: PurchaseCategory | null;
@@ -202,7 +208,9 @@ function WholesalerDashboardContent() {
       )
       .eq("wholesaler_id", business.id)
       .order("created_at", { ascending: false });
-    setOrders((data as unknown as OrderRow[]) ?? []);
+    const rows = (data as unknown as OrderRow[]) ?? [];
+    const supply = await loadOrderSupply(rows.map((row) => row.id));
+    setOrders(rows.map((row) => withSupply(row, supply)));
   });
 
   useEffect(() => {
@@ -340,7 +348,7 @@ function WholesalerDashboardContent() {
   const pending = orders.filter((o) => o.status === "pending").length;
   const revenue = orders
     .filter((o) => o.status === "delivered")
-    .reduce((s, o) => s + Number(o.total_ghs), 0);
+    .reduce((s, o) => s + shownTotal(o), 0);
 
   const stats = [
     { label: "Pending orders", value: pending, icon: ShoppingBag, color: "text-warning" },
@@ -426,6 +434,7 @@ function WholesalerDashboardContent() {
               sendReceiptEmail={sendReceiptEmail}
               sendingReceiptOrderId={sendingReceiptOrderId}
               wholesaler={business}
+              onOrderChanged={() => void loadOrders()}
             />
           </TabsContent>
           <TabsContent value="products">
@@ -468,7 +477,9 @@ function OrdersInbox({
   sendReceiptEmail,
   sendingReceiptOrderId,
   wholesaler,
+  onOrderChanged,
 }: {
+  onOrderChanged: () => void;
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
   cancelOrder: (id: string, reason: string) => Promise<void>;
@@ -526,8 +537,8 @@ function OrdersInbox({
       .filter((o) => statusFilter === "all" || o.status === statusFilter)
       .filter((o) => !normalized || `${o.order_number} ${o.pharmacy?.name ?? ""} ${o.pharmacy?.city ?? ""} ${o.order_items.map((i) => i.product_name).join(" ")}`.toLowerCase().includes(normalized))
       .sort((a, b) => {
-        if (sort === "highest") return Number(b.total_ghs) - Number(a.total_ghs);
-        if (sort === "lowest") return Number(a.total_ghs) - Number(b.total_ghs);
+        if (sort === "highest") return shownTotal(b) - shownTotal(a);
+        if (sort === "lowest") return shownTotal(a) - shownTotal(b);
         if (sort === "pharmacy") return (a.pharmacy?.name ?? "").localeCompare(b.pharmacy?.name ?? "");
         const result = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         return sort === "newest" ? -result : result;
@@ -591,7 +602,7 @@ function OrdersInbox({
       {pagedOrders.map((o) => {
         const next = nextStatus[o.status];
         const open = openOrderId === o.id;
-        const totalUnits = o.order_items.reduce((sum, item) => sum + item.quantity, 0);
+        const totalUnits = o.order_items.reduce((sum, item) => sum + (item.supplied_quantity ?? item.quantity), 0);
         return (
           <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -627,19 +638,29 @@ function OrdersInbox({
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-display text-xl font-bold">{formatGHS(o.total_ghs)}</div>
+                <div className="font-display text-xl font-bold">{formatGHS(shownTotal(o))}</div>
+                {o.effective_total_ghs != null && <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>}
+                {o.has_open_amendment && <div className="text-xs font-medium text-amber-600">Supply change awaiting the pharmacy</div>}
                 <div className="text-xs text-muted-foreground">{o.order_items.length} line(s) · {totalUnits} unit(s)</div>
               </div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-              {canUpdateStatus && next && <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
+              {canUpdateStatus && next && <Button variant="hero" size="sm" disabled={Boolean(o.has_open_amendment) && (next === "dispatched" || next === "delivered")} title={o.has_open_amendment && (next === "dispatched" || next === "delivered") ? "A supply change is waiting for the pharmacy's decision" : undefined} onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
               {o.status === "pending" || o.status === "accepted" || o.status === "picking" || o.status === "packed" || o.status === "ready_for_dispatch" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
               <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
             </div>
 
             {open && <>
             <OrderTimeline o={o} />
+            <SupplyChangePanel
+              orderId={o.id}
+              orderStatus={o.status}
+              paymentStatus={o.payment_status}
+              side="wholesaler"
+              canAct={canUpdateStatus}
+              onChanged={onOrderChanged}
+            />
             <OrderActivityTimeline orderId={o.id} />
 
             <ReceiptStatusPanel order={o} />
@@ -659,11 +680,12 @@ function OrdersInbox({
                   <div>
                     <div className="font-medium">{it.product_name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {formatGHS(it.unit_price_ghs)} × {it.quantity}
+                      {formatGHS(it.unit_price_ghs)} × {it.supplied_quantity ?? it.quantity}
+                      {it.supplied_quantity != null && it.supplied_quantity !== it.quantity ? ` (ordered ${it.quantity})` : ""}
                     </div>
                   </div>
                   <div className="font-medium">
-                    {formatGHS(Number(it.unit_price_ghs) * it.quantity)}
+                    {formatGHS(Number(it.unit_price_ghs) * (it.supplied_quantity ?? it.quantity))}
                   </div>
                 </div>
               ))}

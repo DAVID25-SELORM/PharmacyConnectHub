@@ -5,10 +5,12 @@ import { formatGHS } from "@/lib/format";
 import {
   canPrintInvoice,
   documentTotals,
+  isAmended,
   lineAmount,
   lineDiscount,
   partyLines,
   paymentTermsLine,
+  suppliedQuantity,
   type PartyDetails,
 } from "@/lib/order-documents";
 import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-category";
@@ -20,6 +22,8 @@ export type PrintableOrder = {
   order_number: string;
   created_at: string;
   total_ghs: number;
+  /** Set once a partial supply has been accepted; the total to charge and collect. */
+  effective_total_ghs?: number | null;
   subtotal_ghs?: number | null;
   discount_amount_ghs?: number | null;
   delivery_fee_ghs?: number | null;
@@ -39,6 +43,8 @@ export type PrintableOrder = {
   order_items: Array<{
     product_name: string;
     quantity: number;
+    /** What the wholesaler is committed to supply once the order has been amended. Absent = as ordered. */
+    supplied_quantity?: number | null;
     unit_price_ghs?: number;
     base_unit_price_ghs?: number | null;
     strength?: string | null;
@@ -140,6 +146,7 @@ export function PrintableOrderDocument({
   const items = mode === "pick-pack" ? sortPrintableItems(order.order_items) : order.order_items;
   const showLineCategory = priced && order.purchase_category === "mixed";
   const totals = documentTotals(order);
+  const amended = isAmended(order, items);
   const terms = paymentTermsLine(order, formatReportDate);
   return (
     <article className="print-document hidden print:block">
@@ -222,6 +229,12 @@ export function PrintableOrderDocument({
           </div>
         )}
       </header>
+      {amended && operational && (
+        <p className="mb-3 border-2 border-black p-2 text-sm font-bold">
+          SUPPLY AMENDED: pick and dispatch the Supply quantity, not the Ordered quantity. The
+          remaining quantity was cancelled by agreement with the pharmacy.
+        </p>
+      )}
       <table className="w-full border-collapse text-sm">
         <thead className="[&]:table-header-group">
           <tr className="border-b-2 border-black text-left">
@@ -229,7 +242,8 @@ export function PrintableOrderDocument({
             {mode === "pick-pack" && <th className="p-2">Location</th>}
             <th className="p-2">Product</th>
             <th className="p-2">Details</th>
-            <th className="p-2">{mode === "invoice" ? "Qty" : "Ordered"}</th>
+            <th className="p-2">{amended || mode !== "invoice" ? "Ordered" : "Qty"}</th>
+            {amended && <th className="p-2">{mode === "invoice" ? "Qty supplied" : "Supply"}</th>}
             {priced && (
               <>
                 <th className="p-2">Unit</th>
@@ -269,7 +283,14 @@ export function PrintableOrderDocument({
                     .filter(Boolean)
                     .join(" / ") || "—"}
                 </td>
-                <td className="p-3 text-lg font-bold">{item.quantity}</td>
+                {amended ? (
+                  <>
+                    <td className="p-3 text-lg">{item.quantity}</td>
+                    <td className="p-3 text-lg font-bold">{suppliedQuantity(item)}</td>
+                  </>
+                ) : (
+                  <td className="p-3 text-lg font-bold">{item.quantity}</td>
+                )}
                 {priced && (
                   <>
                     <td className="p-3">
@@ -301,12 +322,25 @@ export function PrintableOrderDocument({
       </table>
       {priced && (
         <div className="mt-6 ml-auto w-72 space-y-1 text-right text-sm">
-          {totals.subtotal !== null && <div>Subtotal: {formatGHS(totals.subtotal)}</div>}
-          {totals.subtotal !== null && <div>Discounts: {formatGHS(totals.discount)}</div>}
+          {totals.subtotal !== null && (
+            <div>
+              {totals.amended ? "Goods as supplied" : "Subtotal"}: {formatGHS(totals.subtotal)}
+            </div>
+          )}
+          {totals.subtotal !== null && !totals.amended && (
+            <div>Discounts: {formatGHS(totals.discount)}</div>
+          )}
           {totals.delivery !== null && <div>Delivery fee: {formatGHS(totals.delivery)}</div>}
           <div className="border-t border-black pt-2 text-lg font-bold">
             {mode === "invoice" ? "Invoice total" : "Grand total"}: {formatGHS(totals.total)}
           </div>
+          {totals.amended && (
+            <div className="text-xs">
+              Order total as first placed: {formatGHS(totals.originalTotal)}
+              <br />
+              Reduced by agreement (supply change accepted)
+            </div>
+          )}
           {mode === "pharmacy" && <div>Payment: {order.payment_status}</div>}
           {order.paystack_reference && <div>Reference: {order.paystack_reference}</div>}
         </div>
@@ -315,6 +349,8 @@ export function PrintableOrderDocument({
         <p className="mt-6 text-xs">
           Amounts are in Ghana cedis (GHS). Prices are those charged on the order, after any
           discounts.
+          {amended &&
+            " Quantities supplied differ from those ordered because a reduced supply was agreed with the pharmacy; the remaining quantity was cancelled."}
         </p>
       )}
       {operational && (
