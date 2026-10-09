@@ -1,3 +1,4 @@
+import { authDiagnostic } from "@/lib/auth-diagnostics";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,10 +33,11 @@ function LoginPage() {
     setLoading(true);
     setLoginError(null);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
+      authDiagnostic("login.password", error, { hasSession: Boolean(data.session) });
       if (error) {
         const message =
           error.code === "email_not_confirmed"

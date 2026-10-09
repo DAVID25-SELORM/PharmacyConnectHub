@@ -112,3 +112,9 @@ describe("resolveWorkspaceAccess with several businesses", () => {
     });
   });
 });
+
+it("does not redirect a recoverable session-restoration error to login", () => {
+  expect(resolveWorkspaceAccess({ ...base, hasUser: false, loadError: true })).toEqual({
+    kind: "error",
+  });
+});

@@ -1,3 +1,4 @@
+import { authDiagnostic } from "@/lib/auth-diagnostics";
 import { useNavigate } from "@tanstack/react-router";
 import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { Pill } from "lucide-react";
@@ -33,6 +34,9 @@ export function WorkspaceGate({
   });
 
   useEffect(() => {
+    authDiagnostic("guard.workspace", undefined, {
+      decision: decision.kind === "redirect" ? decision.to : decision.kind,
+    });
     if (decision.kind === "allow") {
       allowedWorkspace.current = workspaceKey;
     } else if (decision.kind !== "loading") {
@@ -61,7 +65,8 @@ export function WorkspaceGate({
           <Button
             variant="outline"
             onClick={async () => {
-              await supabase.auth.signOut();
+              authDiagnostic("signout.intentional.WorkspaceGate");
+              await supabase.auth.signOut({ scope: "local" });
               navigate({ to: "/login" });
             }}
           >

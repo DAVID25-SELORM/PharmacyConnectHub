@@ -24,8 +24,8 @@ export type WorkspaceAccessDecision =
  */
 export function resolveWorkspaceAccess(input: WorkspaceAccessInput): WorkspaceAccessDecision {
   if (input.loading) return { kind: "loading" };
-  if (!input.hasUser) return { kind: "redirect", to: "/login" };
   if (input.loadError) return { kind: "error" };
+  if (!input.hasUser) return { kind: "redirect", to: "/login" };
 
   if (!input.business) {
     if (input.businessCount > 1) {

@@ -1,3 +1,4 @@
+import { authDiagnostic } from "@/lib/auth-diagnostics";
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   Bell,
@@ -230,7 +231,8 @@ export function DashboardHeader({
   const canSwitchWorkspaces = businesses.length > 1 && business;
 
   const onSignOut = async () => {
-    await supabase.auth.signOut();
+    authDiagnostic("signout.intentional.DashboardShell");
+    await supabase.auth.signOut({ scope: "local" });
     toast.success("Signed out");
     navigate({ to: "/" });
   };

@@ -32,11 +32,7 @@ type UploadFeedback = {
   tone?: UploadTone;
 };
 type AccessState =
-  | "checking"
-  | "none"
-  | "pending-business"
-  | "pending-platform"
-  | "active-platform";
+  "checking" | "none" | "pending-business" | "pending-platform" | "active-platform";
 
 function workspaceRoute(type: "pharmacy" | "wholesaler") {
   return type === "wholesaler" ? "/wholesaler" : "/pharmacy";
@@ -58,11 +54,11 @@ function OnboardingPage() {
   const [resubmitting, setResubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/login" });
-  }, [loading, user, navigate]);
+    if (!loading && !loadError && !user) navigate({ to: "/login" });
+  }, [loading, loadError, user, navigate]);
 
   useEffect(() => {
-    if (loading || !user) {
+    if (loading || !user || loadError) {
       return;
     }
 
@@ -124,7 +120,7 @@ function OnboardingPage() {
     return () => {
       cancelled = true;
     };
-  }, [loading, user, business, businesses.length, roles]);
+  }, [loading, loadError, user, business, businesses.length, roles]);
 
   useEffect(() => {
     if (!business) return;
@@ -296,7 +292,7 @@ function OnboardingPage() {
     }
   };
 
-  if (loading || !user) {
+  if (loading || (!user && !loadError)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         <Pill className="h-5 w-5 animate-pulse" /> <span className="ml-2">Loading...</span>

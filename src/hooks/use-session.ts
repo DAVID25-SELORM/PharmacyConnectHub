@@ -1,16 +1,11 @@
+import { authDiagnostic, withAuthTimeout } from "@/lib/auth-diagnostics";
 import { useSyncExternalStore } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole = "admin" | "pharmacy" | "wholesaler";
 export type BusinessStaffRole =
-  | "owner"
-  | "manager"
-  | "cashier"
-  | "assistant"
-  | "warehouse"
-  | "finance"
-  | "accountant";
+  "owner" | "manager" | "cashier" | "assistant" | "warehouse" | "finance" | "accountant";
 
 export type Business = {
   id: string;
@@ -32,6 +27,8 @@ export type Business = {
 };
 
 export type SessionState = {
+  authStatus?: "loading" | "authenticated" | "unauthenticated" | "recoverable-error";
+  authorizationStatus?: "loading" | "authorized" | "unauthorized" | "recoverable-error";
   loading: boolean;
   session: Session | null;
   user: User | null;
@@ -64,7 +61,6 @@ type WorkspaceQueryResult = {
   business: Business | null;
   businesses: Business[];
   roles: AppRole[];
-  unauthorized: boolean;
   failed: boolean;
 };
 
@@ -78,6 +74,8 @@ type BusinessMembershipRow = {
 const ACTIVE_BUSINESS_STORAGE_KEY = "pharmahub.active_business_id";
 
 const initialState: SessionState = {
+  authStatus: "loading",
+  authorizationStatus: "loading",
   loading: true,
   session: null,
   user: null,
@@ -101,6 +99,21 @@ function emitSessionState() {
 
 function setSessionState(next: SessionState | ((current: SessionState) => SessionState)) {
   sessionState = typeof next === "function" ? next(sessionState) : next;
+  sessionState.authStatus = sessionState.session
+    ? "authenticated"
+    : sessionState.loading
+      ? "loading"
+      : sessionState.loadError
+        ? "recoverable-error"
+        : "unauthenticated";
+  sessionState.authorizationStatus = sessionState.loading
+    ? "loading"
+    : sessionState.loadError
+      ? "recoverable-error"
+      : sessionState.business?.verification_status === "approved" ||
+          sessionState.roles.includes("admin")
+        ? "authorized"
+        : "unauthorized";
   emitSessionState();
 }
 
@@ -189,25 +202,16 @@ function chooseActiveBusiness(businesses: Business[]) {
   return null;
 }
 
-function isUnauthorizedError(error: QueryError | null) {
-  if (!error) return false;
-
-  const description =
-    `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
-  return (
-    error.status === 401 ||
-    error.code === "PGRST301" ||
-    description.includes("401") ||
-    description.includes("unauthorized") ||
-    description.includes("jwt") ||
-    description.includes("invalid token") ||
-    description.includes("not authenticated")
-  );
-}
-
 function isSessionExpiring(session: Session) {
   if (!session.expires_at) return false;
   return session.expires_at <= Math.floor(Date.now() / 1000) + 30;
+}
+
+class SessionRefreshError {
+  constructor(
+    readonly session: Session,
+    readonly cause: unknown,
+  ) {}
 }
 
 async function resolveSession(
@@ -215,7 +219,14 @@ async function resolveSession(
   forceRefresh = false,
 ): Promise<Session | null> {
   const currentSession =
-    preferredSession ?? (await supabase.auth.getSession()).data.session ?? null;
+    preferredSession !== undefined
+      ? preferredSession
+      : await (async () => {
+          const { data, error } = await supabase.auth.getSession();
+          authDiagnostic("session.restore", error, { hasSession: Boolean(data.session) });
+          if (error) throw error;
+          return data.session;
+        })();
 
   if (!currentSession) {
     return null;
@@ -231,22 +242,23 @@ async function resolveSession(
 
   pendingSessionRefresh = (async () => {
     const { data, error } = await supabase.auth.refreshSession();
-    if (error) {
-      return null;
-    }
-
+    authDiagnostic("session.refresh", error, { hasSession: Boolean(data.session) });
+    if (error) throw error;
+    if (!data.session) throw { code: "refresh_session_missing" };
     return data.session;
   })();
 
   try {
     return await pendingSessionRefresh;
+  } catch (error) {
+    throw new SessionRefreshError(currentSession, error);
   } finally {
     pendingSessionRefresh = null;
   }
 }
 
 async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQueryResult> {
-  const { data, error } = await supabase
+  const { data, error, status } = await supabase
     .from("businesses")
     .select(
       "id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,phone,address,public_email,working_hours,location_description,verification_status,rejection_reason",
@@ -254,6 +266,9 @@ async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQuer
     .eq("owner_id", userId)
     .order("created_at", { ascending: false });
 
+  authDiagnostic("workspace.owner_lookup", error ? { ...error, status } : undefined, {
+    count: data?.length ?? 0,
+  });
   if (error) {
     return {
       businesses: [],
@@ -278,7 +293,7 @@ async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQuer
 }
 
 async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryResult> {
-  const { data, error } = await supabase
+  const { data, error, status } = await supabase
     .from("business_staff")
     .select(
       "role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,phone,address,public_email,working_hours,location_description,verification_status,rejection_reason)",
@@ -286,6 +301,9 @@ async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryR
     .eq("user_id", userId)
     .eq("status", "active");
 
+  authDiagnostic("workspace.memberships", error ? { ...error, status } : undefined, {
+    count: data?.length ?? 0,
+  });
   if (error) {
     return {
       businesses: [],
@@ -322,7 +340,7 @@ async function loadBusinessContexts(userId: string): Promise<BusinessesQueryResu
     return membershipResult;
   }
 
-  if (ownerFallbackResult.error && membershipResult.businesses.length === 0) {
+  if (ownerFallbackResult.error) {
     return ownerFallbackResult;
   }
 
@@ -345,8 +363,14 @@ async function loadBusinessContexts(userId: string): Promise<BusinessesQueryResu
 }
 
 async function loadRoles(userId: string): Promise<RolesQueryResult> {
-  const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  const { data, error, status } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
 
+  authDiagnostic("workspace.roles", error ? { ...error, status } : undefined, {
+    count: data?.length ?? 0,
+  });
   return {
     error,
     roles: (data ?? []).map((row) => row.role as AppRole),
@@ -359,41 +383,12 @@ async function loadWorkspace(userId: string): Promise<WorkspaceQueryResult> {
     loadBusinessContexts(userId),
   ]);
 
-  const unauthorized =
-    isUnauthorizedError(rolesResult.error) || isUnauthorizedError(businessesResult.error);
-
-  if (rolesResult.error && !isUnauthorizedError(rolesResult.error)) {
-    console.error("Failed to load user roles.", rolesResult.error);
-  }
-
-  if (businessesResult.error && !isUnauthorizedError(businessesResult.error)) {
-    console.error("Failed to load business contexts.", businessesResult.error);
-  }
-
   return {
-    business: chooseActiveBusiness(businessesResult.businesses),
+    business: null,
     businesses: businessesResult.businesses,
     roles: rolesResult.roles,
-    unauthorized,
     failed: Boolean(rolesResult.error || businessesResult.error),
   };
-}
-
-async function clearBrokenSession(loadId: number) {
-  if (loadId !== hydrationSequence) {
-    return;
-  }
-
-  setSessionState({
-    loading: false,
-    session: null,
-    user: null,
-    roles: [],
-    business: null,
-    businesses: [],
-  });
-
-  await supabase.auth.signOut().catch(() => undefined);
 }
 
 function applyLoadedSession(loadId: number, session: Session, workspace: WorkspaceQueryResult) {
@@ -406,7 +401,7 @@ function applyLoadedSession(loadId: number, session: Session, workspace: Workspa
     session,
     user: session.user,
     roles: workspace.roles,
-    business: workspace.business,
+    business: workspace.failed ? null : chooseActiveBusiness(workspace.businesses),
     businesses: workspace.businesses,
     loadError: workspace.failed,
   });
@@ -417,113 +412,70 @@ async function hydrateSessionState(
   forceRefresh = false,
 ): Promise<void> {
   const loadId = ++hydrationSequence;
-  const resolvedSession = await resolveSession(preferredSession, forceRefresh);
-
-  if (loadId !== hydrationSequence) {
-    return;
-  }
-
-  if (!resolvedSession?.user) {
-    setSessionState({
-      loading: false,
-      session: null,
-      user: null,
-      roles: [],
-      business: null,
-      businesses: [],
-    });
-    return;
-  }
-
-  const workspace = await loadWorkspace(resolvedSession.user.id);
-
-  if (loadId !== hydrationSequence) {
-    return;
-  }
-
-  if (!workspace.unauthorized) {
+  let resolvedSession = preferredSession ?? sessionState.session;
+  try {
+    resolvedSession = await withAuthTimeout(resolveSession(preferredSession, forceRefresh));
+    if (loadId !== hydrationSequence) return;
+    authDiagnostic("session.established", undefined, { hasSession: Boolean(resolvedSession) });
+    if (!resolvedSession?.user) {
+      setSessionState({ ...initialState, loading: false });
+      return;
+    }
+    // Authentication is established independently of authorization lookup success.
+    setSessionState((current) => ({
+      ...(current.user?.id === resolvedSession!.user.id ? current : initialState),
+      loading: true,
+      session: resolvedSession,
+      user: resolvedSession!.user,
+    }));
+    const workspace = await withAuthTimeout(loadWorkspace(resolvedSession.user.id));
     applyLoadedSession(loadId, resolvedSession, workspace);
-    return;
+  } catch (error) {
+    if (loadId !== hydrationSequence) return;
+    if (error instanceof SessionRefreshError) resolvedSession = error.session;
+    authDiagnostic(
+      "session.recoverable_error",
+      error instanceof SessionRefreshError ? error.cause : error,
+      { hasSession: Boolean(resolvedSession) },
+    );
+    setSessionState({
+      ...initialState,
+      loading: false,
+      session: resolvedSession,
+      user: resolvedSession?.user ?? null,
+      loadError: true,
+    });
   }
-
-  if (forceRefresh) {
-    await clearBrokenSession(loadId);
-    return;
-  }
-
-  const refreshedSession = await resolveSession(resolvedSession, true);
-
-  if (loadId !== hydrationSequence) {
-    return;
-  }
-
-  if (!refreshedSession?.user) {
-    await clearBrokenSession(loadId);
-    return;
-  }
-
-  const refreshedWorkspace = await loadWorkspace(refreshedSession.user.id);
-
-  if (refreshedWorkspace.unauthorized) {
-    await clearBrokenSession(loadId);
-    return;
-  }
-
-  applyLoadedSession(loadId, refreshedSession, refreshedWorkspace);
 }
 
 function initializeSessionStore() {
-  if (hasInitializedSessionStore || typeof window === "undefined") {
-    return;
-  }
-
+  if (hasInitializedSessionStore || typeof window === "undefined") return;
   hasInitializedSessionStore = true;
-
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
+    const eventSequence = ++hydrationSequence;
+    authDiagnostic(`auth.event.${event}`, undefined, { hasSession: Boolean(session) });
     if (!session) {
-      setSessionState({
-        loading: false,
-        session: null,
-        user: null,
-        roles: [],
-        business: null,
-        businesses: [],
-      });
+      setSessionState({ ...initialState, loading: false });
       return;
     }
-
     setSessionState((current) => ({
-      ...current,
+      ...(current.user?.id === session.user.id ? current : initialState),
       loading: true,
       session,
+      user: session.user,
     }));
-
+    // Leave the Supabase auth callback before issuing database requests.
     setTimeout(() => {
-      void hydrateSessionState(session);
+      if (eventSequence === hydrationSequence) void hydrateSessionState(session);
     }, 0);
   });
-
-  void (async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      setSessionState((current) => ({
-        ...current,
-        loading: true,
-        session: data.session,
-      }));
-    }
-
-    await hydrateSessionState(data.session);
-  })();
+  void hydrateSessionState();
 }
 
 async function refreshSessionState() {
-  setSessionState((current) => ({
-    ...current,
-    loading: true,
-  }));
-
-  await hydrateSessionState(undefined, true);
+  setSessionState((current) => ({ ...current, loading: true }));
+  // Retry authorization without needlessly rotating a healthy session's refresh token.
+  await hydrateSessionState();
 }
 
 function setActiveBusinessSelection(businessId: string | null) {
