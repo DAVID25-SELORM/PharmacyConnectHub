@@ -281,3 +281,28 @@ Order event log and timeline reader, `orders.effective_total_ghs`, the ledger id
 **Not in this phase:** cash-order back-orders; batch allocation for back-order shipments (stock is deducted, but batch numbers are not recorded on them); per-shipment due dates in the credit registers (they still age per order); delivery reconciliation by the pharmacy (Phase 5).
 
 **Verified:** `order-backorders.sql` 130/130; the earlier amendment suites (updated for the direct-edit guard and the new movement type) still pass; concurrency script 14/14 with a negative control; mutation checks; browser run for both roles (prepare, pack, dispatch, accept with a back-order, cancel remaining); 388 unit tests; `tsc` clean. A read-only check of the production catalog found the three fragments the new patches depend on in the expected form.
+
+## 18. Phase 5 status (delivery reconciliation; built locally, not deployed)
+
+**What it does:** after a delivery (the main one, or a back-order shipment), the pharmacy counts what arrived. It either confirms "received in full" or reports, per product, how many units were **missing, damaged or rejected**, with a reason. The report is a **claim**: it changes nothing in stock or in the amount owed. The wholesaler's **owner or a manager** then decides each problem:
+
+| Problem | Outcomes the wholesaler can choose |
+|---|---|
+| Missing | Credit it, or reject the claim |
+| Damaged / rejected | Take the goods back (opens a normal return), credit it, or reject the claim |
+
+- **Credit** posts ONE credit note on the credit ledger (at the agreed unit price), lowers the order's effective total, and never touches stock. On an order already paid in cash, a credit is refused (no cash refunds yet).
+- **Take the goods back** opens an approved return for the units, which then goes through the existing return inspection. Stock and money follow that return, not the claim.
+- **Reject** needs a written note to the pharmacy. If every problem is rejected the report ends as "not accepted" and the pharmacy may report again.
+- No automatic stock reversal and no automatic credit note ever happens without the wholesaler's decision.
+- A pharmacy can withdraw a report until it is decided. Only one live report exists per delivery; reports can be made within 30 days of delivery. Units under a claim cannot also be returned separately.
+
+**Gap closed (D9):** until now, resolving a return as refund or credit reduced the customer statement but never the credit ledger, so the two disagreed. A return resolved as refund or credit on a credit order now posts one ledger credit note linked to the return, and `credit_invoice_status` nets those notes against the invoice.
+
+**Migrations (after Phase 3):** `20261103100000_delivery_reconciliation_schema.sql` (report, line and decision tables; ledger/return link columns; reconciled-quantity function), `20261103110000_delivery_reconciliation_patches.sql` (fail-closed patches to `resolve_order_return`, `credit_invoice_status`, the returnable-quantity functions and `customer_statement`), `20261103120000_delivery_reconciliation_workflow.sql` (submit, withdraw, resolve and read functions). **Apply order for production: Phase 2, Phase 6, Phase 3, then Phase 5**: the Phase 5 patches depend on functions the earlier phases create.
+
+**Screens:** a "Delivery check" panel on each order for both sides (the pharmacy's "Check this delivery" dialog; the wholesaler's "Check and decide" dialog, which shows the credit that would result). Delivery problems appear in the order's activity, the audit centre, and the customer statement (dated credit line). The wholesaler's owner and managers are notified of a report.
+
+**Not in this phase:** returns that were already resolved before this migration are **not back-filled** into the ledger; a returned item does not reduce the order's effective total (only a credit does); the return restock is still tagged `admin_adjustment`; no "send again / redeliver" outcome; no cash refunds; no reminders for reports nobody has decided.
+
+**Verified:** `delivery-reconciliation.sql` 104/104; concurrency script 11/11 with a negative control; mutation checks; 420 unit tests; `tsc`, lint (new files) and build clean; browser run for both roles (report, decision validation, credit + return + reject outcome, ledger/total checked in the database). The Phase 5 patch fragments can only be dry-run against production once the earlier phases are applied there.

@@ -172,3 +172,15 @@ available credit after partial payments and requires explicit financial review.
     together exceed the credit limit (exactly one goes out), a shipment prepared while the rest is cancelled. Needs migrations
     through 20261102120000 and the production fixtures. Mutation checks: wrong invoice amount, dropped total guard, renamed statement
     line and skipped stock deduction each fail the suite; removing the credit-line lock fails concurrency scenario 2.
+
+25. `delivery-reconciliation.sql` (104 checks) and `delivery-reconciliation-concurrency.sh` (11 checks): Phase 5, the pharmacy's
+    delivery check. Permissions (pharmacy owner/manager/cashier report, assistants and other pharmacies cannot; only wholesaler
+    owner/manager decide), validation (delivered orders only, 30-day window, one live report per delivery, counts add up, a reason
+    for every problem, units already in a return or claim), "received in full", withdrawing, decision validation (every discrepancy
+    decided, a note for a rejection), credit (one credit note, the effective total lowered, stock untouched), returns opened for
+    damaged / rejected goods, replay of a decision, immutability of the records, cash orders (an already-paid order refuses a
+    credit), a disputed claim, shipment reports, and the read function. Also covers the returns-to-ledger gap (D9): a return resolved
+    as refund or credit on a credit order now posts one credit note. The `.sh` runs real overlapping sessions: two submissions for
+    the same delivery, two simultaneous decisions (one credit note, one return), and a withdrawal racing a decision. Needs migrations
+    through 20261103120000 and the production fixtures. Mutation checks: a dropped credit note, a double credit note and a skipped
+    lock each fail; removing the order lock in `submit_delivery_report` fails concurrency scenario 1.

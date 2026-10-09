@@ -49,6 +49,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
+import { DeliveryCheckPanel } from "@/components/orders/DeliveryCheckPanel";
 import {
   forDocument,
   loadOrderSupply,
@@ -2205,6 +2206,17 @@ function OrdersView({
                   side="pharmacy"
                   canAct={canRespondToSupply}
                   printable={forDocument({ ...o, pharmacy, wholesaler: o.wholesaler ?? null })}
+                  onChanged={() => {
+                    setSupplyTick((value) => value + 1);
+                    void loadOrderDetail(o.id);
+                  }}
+                />
+                <DeliveryCheckPanel
+                  orderId={o.id}
+                  orderStatus={o.status}
+                  side="pharmacy"
+                  canAct={canRespondToSupply}
+                  refreshKey={supplyTick}
                   onChanged={() => {
                     setSupplyTick((value) => value + 1);
                     void loadOrderDetail(o.id);

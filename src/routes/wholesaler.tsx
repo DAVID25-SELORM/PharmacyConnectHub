@@ -60,6 +60,7 @@ import {
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
+import { DeliveryCheckPanel } from "@/components/orders/DeliveryCheckPanel";
 import { forDocument, loadOrderSupply, shownTotal, withSupply } from "@/lib/order-supply";
 import { backorderBadge } from "@/lib/order-backorder";
 import type { BackorderState } from "@/lib/order-backorder";
@@ -432,6 +433,7 @@ function WholesalerDashboardContent() {
               updateStatus={updateOrderStatus}
               cancelOrder={cancelOrder}
               canUpdateStatus={canUpdateStatus}
+              canDecideDeliveries={canManageProducts}
               canConfirmPayment={canConfirmPayment}
               confirmPaymentReceived={confirmPaymentReceived}
               confirmingPaymentOrderId={confirmingPaymentOrderId}
@@ -475,6 +477,7 @@ function OrdersInbox({
   updateStatus,
   cancelOrder,
   canUpdateStatus,
+  canDecideDeliveries,
   canConfirmPayment,
   confirmPaymentReceived,
   confirmingPaymentOrderId,
@@ -484,6 +487,7 @@ function OrdersInbox({
   onOrderChanged,
 }: {
   onOrderChanged: () => void;
+  canDecideDeliveries: boolean;
   orders: OrderRow[];
   updateStatus: (id: string, status: OrderStatus) => void;
   cancelOrder: (id: string, reason: string) => Promise<void>;
@@ -667,6 +671,7 @@ function OrdersInbox({
               printable={forDocument({ ...o, wholesaler })}
               onChanged={onOrderChanged}
             />
+            <DeliveryCheckPanel orderId={o.id} orderStatus={o.status} side="wholesaler" canAct={canDecideDeliveries} onChanged={onOrderChanged} />
             <OrderActivityTimeline orderId={o.id} />
 
             <ReceiptStatusPanel order={o} />

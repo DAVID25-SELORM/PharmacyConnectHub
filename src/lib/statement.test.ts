@@ -68,6 +68,9 @@ describe("statement helpers", () => {
     expect(lineDescription({ kind: "shipment", order_number: "ORD-1" })).toBe(
       "Back-order shipment for ORD-1",
     );
+    expect(lineDescription({ kind: "delivery_credit", order_number: "ORD-1" })).toBe(
+      "Delivery problem credited on ORD-1",
+    );
   });
 
   it("writes opening, lines and closing to CSV with the expected rows", () => {
