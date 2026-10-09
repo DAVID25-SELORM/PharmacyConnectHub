@@ -668,6 +668,7 @@ function OrdersInbox({
               paymentStatus={o.payment_status}
               side="wholesaler"
               canAct={canUpdateStatus}
+              canProposePrices={canDecideDeliveries}
               printable={forDocument({ ...o, wholesaler })}
               onChanged={onOrderChanged}
             />

@@ -13,6 +13,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { BackorderPanel } from "@/components/orders/BackorderPanel";
+import { PriceChangeSection } from "@/components/orders/PriceChangeSection";
 import { TextDialog } from "@/components/orders/TextDialog";
 import type { PrintableOrder } from "@/components/order-print";
 import { backorderConsequence } from "@/lib/order-backorder";
@@ -37,6 +38,7 @@ import {
   type DraftLine,
   type OrderAmendmentsView,
 } from "@/lib/order-amendments";
+import { hasPriceChangeContent } from "@/lib/price-amendment";
 import { formatReportDate } from "@/lib/reports";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,6 +61,7 @@ export function SupplyChangePanel({
   paymentStatus,
   side,
   canAct,
+  canProposePrices = false,
   printable = null,
   onChanged,
 }: {
@@ -70,6 +73,8 @@ export function SupplyChangePanel({
   printable?: PrintableOrder | null;
   /** Whether this user may propose / respond (the database enforces it; this only hides buttons). */
   canAct: boolean;
+  /** Wholesaler side: may this user propose price changes (owner or manager)? Pharmacy side ignores it. */
+  canProposePrices?: boolean;
   onChanged?: () => void;
 }) {
   const [view, setView] = useState<OrderAmendmentsView | null>(null);
@@ -135,10 +140,19 @@ export function SupplyChangePanel({
   if (!view) return null;
 
   const open = openAmendment(view);
-  const history = view.amendments.filter((amendment) => !isOpenAmendment(amendment));
+  const history = view.amendments.filter(
+    (amendment) => amendment.kind === "partial_fulfilment" && !isOpenAmendment(amendment),
+  );
+  const priceContent = hasPriceChangeContent(
+    view,
+    side,
+    canProposePrices,
+    orderStatus,
+    paymentStatus,
+  );
   const canPropose =
     side === "wholesaler" && canAct && canProposeSupplyChange(view, orderStatus, paymentStatus);
-  if (!open && history.length === 0 && !canPropose && !view.amended) return null;
+  if (!open && history.length === 0 && !canPropose && !view.amended && !priceContent) return null;
 
   return (
     <section
@@ -199,6 +213,21 @@ export function SupplyChangePanel({
           onWithdraw={() => setWithdrawing(true)}
         />
       )}
+
+      <PriceChangeSection
+        orderId={orderId}
+        orderStatus={orderStatus}
+        paymentStatus={paymentStatus}
+        view={view}
+        side={side}
+        canPropose={canProposePrices}
+        canRespond={canAct}
+        onChanged={async () => {
+          setTick((value) => value + 1);
+          await load();
+          onChanged?.();
+        }}
+      />
 
       {history.length > 0 && (
         <details className="mt-3 text-sm">

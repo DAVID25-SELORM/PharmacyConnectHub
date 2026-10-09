@@ -42,6 +42,7 @@ describe("event labels and categories", () => {
     expect(auditCategoryLabel("Order supply change accepted")).toBe("Order");
     expect(auditActivityLabel("Order supply change proposed")).toBe("Supply change proposed");
     expect(auditActivityLabel("Delivery report decided")).toBe("Delivery report decided");
+    expect(auditActivityLabel("Order price change accepted")).toBe("Price change approved");
     expect(auditCategoryLabel("Mystery")).toBe("Other");
   });
 });

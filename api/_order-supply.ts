@@ -4,7 +4,13 @@
 export type ReceiptSupply = {
   effective_total_ghs: number | string;
   delivery_fee_ghs: number | string | null;
-  lines: Array<{ order_item_id: string; product_name: string; supplied_qty: number }>;
+  lines: Array<{
+    order_item_id: string;
+    product_name: string;
+    supplied_qty: number;
+    /** The unit price now in force (after an approved price change). */
+    unit_price_ghs?: number | string;
+  }>;
 } | null;
 
 type OrderForReceipt = {
@@ -50,6 +56,13 @@ export function receiptFigures(order: OrderForReceipt, supply: ReceiptSupply): R
     };
   }
   const supplied = new Map(supply.lines.map((line) => [line.order_item_id, line.supplied_qty]));
+  const prices = new Map(
+    supply.lines.flatMap((line) =>
+      line.unit_price_ghs === undefined
+        ? []
+        : [[line.order_item_id, Number(line.unit_price_ghs)] as const],
+    ),
+  );
   const fee =
     supply.delivery_fee_ghs === null || supply.delivery_fee_ghs === undefined
       ? placedFee
@@ -62,7 +75,10 @@ export function receiptFigures(order: OrderForReceipt, supply: ReceiptSupply): R
         productName: item.product_name,
         quantity:
           item.id && supplied.has(item.id) ? (supplied.get(item.id) as number) : item.quantity,
-        unitPriceGhs: Number(item.unit_price_ghs),
+        unitPriceGhs:
+          item.id && prices.has(item.id)
+            ? (prices.get(item.id) as number)
+            : Number(item.unit_price_ghs),
       }))
       .filter((item) => item.quantity > 0),
   };

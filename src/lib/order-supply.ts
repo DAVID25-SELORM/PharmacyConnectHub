@@ -18,6 +18,8 @@ export type SupplySummary = {
     product_id: string;
     ordered_qty: number;
     supplied_qty: number;
+    /** The unit price now in force (differs from the placed price after an approved price change). */
+    unit_price_ghs?: number;
   }>;
 };
 
@@ -37,7 +39,11 @@ export async function loadOrderSupply(orderIds: string[]): Promise<SupplyMap> {
 type WithItems = {
   id: string;
   total_ghs: number | string;
-  order_items: Array<{ product_id?: string | null; quantity: number }>;
+  order_items: Array<{
+    product_id?: string | null;
+    quantity: number;
+    unit_price_ghs?: number | string | null;
+  }>;
 };
 
 /** The order as it should be shown or printed: effective total and supplied quantities when it has been amended. */
@@ -46,7 +52,13 @@ export function withSupply<T extends WithItems>(
   supply: SupplyMap,
 ): T & {
   effective_total_ghs?: number | null;
-  order_items: Array<T["order_items"][number] & { supplied_quantity?: number | null }>;
+  order_items: Array<
+    T["order_items"][number] & {
+      supplied_quantity?: number | null;
+      /** The price as placed, when a price change has since been approved. */
+      placed_unit_price_ghs?: number | string | null;
+    }
+  >;
   has_open_amendment?: boolean;
   main_total_ghs?: number;
   backorder_state?: BackorderState;
@@ -54,6 +66,13 @@ export function withSupply<T extends WithItems>(
   const summary = supply[order.id];
   if (!summary) return order as never;
   const byProduct = new Map(summary.lines.map((line) => [line.product_id, line.supplied_qty]));
+  const priceByProduct = new Map(
+    summary.lines.flatMap((line) =>
+      line.unit_price_ghs === undefined
+        ? []
+        : [[line.product_id, Number(line.unit_price_ghs)] as const],
+    ),
+  );
   const amendedTotal = Number(summary.current_total_ghs);
   return {
     ...order,
@@ -64,10 +83,15 @@ export function withSupply<T extends WithItems>(
     ...("unit_count" in order
       ? { unit_count: summary.lines.reduce((sum, line) => sum + line.supplied_qty, 0) }
       : {}),
-    order_items: order.order_items.map((item) => ({
-      ...item,
-      supplied_quantity: item.product_id ? (byProduct.get(item.product_id) ?? null) : null,
-    })),
+    order_items: order.order_items.map((item) => {
+      const price = item.product_id ? priceByProduct.get(item.product_id) : undefined;
+      const repriced = price !== undefined && price !== Number(item.unit_price_ghs);
+      return {
+        ...item,
+        supplied_quantity: item.product_id ? (byProduct.get(item.product_id) ?? null) : null,
+        ...(repriced ? { unit_price_ghs: price, placed_unit_price_ghs: item.unit_price_ghs } : {}),
+      };
+    }),
   } as never;
 }
 

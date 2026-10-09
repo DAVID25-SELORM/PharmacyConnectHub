@@ -184,3 +184,18 @@ available credit after partial payments and requires explicit financial review.
     the same delivery, two simultaneous decisions (one credit note, one return), and a withdrawal racing a decision. Needs migrations
     through 20261103120000 and the production fixtures. Mutation checks: a dropped credit note, a double credit note and a skipped
     lock each fail; removing the order lock in `submit_delivery_report` fails concurrency scenario 1.
+
+26. `price-amendments.sql` (123 checks) and `price-amendments-concurrency.sh` (13 checks): Phase 4, price amendments. Who may
+    propose (owner / manager only), validation (reason, lines, price format, zero / same price refused), a paid cash order refused,
+    the proposal itself (prices at the time and proposed, quantities untouched, nothing applied), one open proposal per order and no
+    dispatch while one is open, questions and replies, approval (credit limit and a one-time override for an increase, blocked and
+    closed credit lines, one debit note or credit note per amendment, effective total, price in force, stock untouched), replay,
+    stacking a second amendment on the price in force (a net-zero change moves no money), rejection, withdrawal, cancelling the order,
+    cash orders (effective total, no ledger; paid in the meantime refused), a stale proposal refused, legacy orders, price changes
+    with a back-order (the shortage and the shipment are valued at the price in force), later readers (delivery reports, returns,
+    reports, price history, statement) using the price in force, and append-only records. The `.sh` runs real overlapping sessions:
+    the same proposal approved twice (one debit note), approval racing withdrawal, two proposals at once (one open), and two
+    increases that together exceed the credit limit (exactly one applied). Needs migrations through 20261104120000 and the production
+    fixtures. Mutation checks: a doubled debit note, a removed stale check, a removed credit-limit check, a widened role and a removed
+    paid-order check each fail the suite; removing the credit-line lock fails concurrency scenario 4, and removing the order and
+    proposal locks fails scenario 1.

@@ -14,6 +14,8 @@ export type AmendmentLine = {
   supplied_qty: number;
   short_qty: number;
   unit_price_ghs: number;
+  /** Set on the lines of a price proposal: the price being proposed. */
+  proposed_unit_price_ghs?: number | null;
   note: string | null;
   /** Only sent to the wholesaler's side. */
   stock_treatment: "none" | "release" | "write_off" | null;
@@ -83,9 +85,16 @@ export function isOpenAmendment(amendment: Pick<Amendment, "status">): boolean {
   return amendment.status === "proposed" || amendment.status === "clarification_requested";
 }
 
-export function openAmendment(view: OrderAmendmentsView | null): Amendment | null {
+/** The open proposal of one kind (supply changes by default; price changes have their own section). */
+export function openAmendment(
+  view: OrderAmendmentsView | null,
+  kind: Amendment["kind"] = "partial_fulfilment",
+): Amendment | null {
   if (!view) return null;
-  return view.amendments.find(isOpenAmendment) ?? null;
+  return (
+    view.amendments.find((amendment) => amendment.kind === kind && isOpenAmendment(amendment)) ??
+    null
+  );
 }
 
 /** Can the wholesaler start a new supply change on this order right now? */

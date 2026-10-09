@@ -77,6 +77,12 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Delivery problem reported": "Delivery problem reported",
   "Delivery report withdrawn": "Delivery report withdrawn",
   "Delivery report decided": "Delivery report decided",
+  "Order price change proposed": "Price change proposed",
+  "Order price change withdrawn": "Price change withdrawn",
+  "Order price change accepted": "Price change approved",
+  "Order price change rejected": "Price change rejected",
+  "Order price change question asked": "Price change question",
+  "Order price change applied": "Price change applied",
 };
 
 export function auditActivityLabel(activity: string) {
@@ -145,6 +151,12 @@ const ORDER_EVENTS = new Set([
   "Delivery problem reported",
   "Delivery report withdrawn",
   "Delivery report decided",
+  "Order price change proposed",
+  "Order price change withdrawn",
+  "Order price change accepted",
+  "Order price change rejected",
+  "Order price change question asked",
+  "Order price change applied",
 ]);
 
 export function auditCategory(activity: string): AuditCategory {

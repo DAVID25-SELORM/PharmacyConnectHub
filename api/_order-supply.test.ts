@@ -74,4 +74,18 @@ describe("receipt figures", () => {
     expect(figures.items).toHaveLength(3);
     expect(figures.items[0].quantity).toBe(10);
   });
+
+  it("a price change shows the price now in force on the receipt", () => {
+    const figures = receiptFigures(order, {
+      effective_total_ghs: "2300.00",
+      delivery_fee_ghs: "50.00",
+      lines: [
+        { order_item_id: "a", product_name: "PF A", supplied_qty: 10, unit_price_ghs: "120.00" },
+        { order_item_id: "b", product_name: "PF B", supplied_qty: 20 },
+        { order_item_id: "c", product_name: "PF C", supplied_qty: 5, unit_price_ghs: 20 },
+      ],
+    });
+    expect(figures.totalGhs).toBe(2300);
+    expect(figures.items.map((item) => item.unitPriceGhs)).toEqual([120, 50, 20]);
+  });
 });
