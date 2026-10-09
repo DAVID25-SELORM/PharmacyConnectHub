@@ -159,3 +159,16 @@ available credit after partial payments and requires explicit financial review.
     order-deliveries, purchase-reports, customer-statement-credit-ledger) were re-run with production's order
     guards switched off (they cannot run with the guards on) and all pass: the reader patches change nothing for
     orders that were never amended.
+
+24. `order-backorders.sql` (130 checks) and `order-backorders-concurrency.sh` (14 checks): Phase 3, back-orders and
+    shipments on credit orders. Accepting with a back-order (cash orders refused, per-line stock choice, one credit note, effective
+    total), preparing shipments (roles, validation, idempotent request ids, outstanding arithmetic), the status machine, dispatch
+    (credit limit re-checked, suspended / blocked / closed lines refused, a one-time override consumed once, stock needed and
+    deducted once, one invoice entry per shipment, the order total raised, a paid order reopened even when a warehouse user
+    dispatches), delivery and the due-date rule (earlier unpaid balance keeps its date; a fully paid order takes the new one),
+    cancelling a shipment or the remaining back-order (either side), cancelling the order closing its back-order with a net stock
+    restore, a legacy order (no stock write), the direct-edit guard on the order total, append-only records, the read functions,
+    the statement and the reports. The `.sh` runs real overlapping sessions: the same shipment dispatched twice, two shipments that
+    together exceed the credit limit (exactly one goes out), a shipment prepared while the rest is cancelled. Needs migrations
+    through 20261102120000 and the production fixtures. Mutation checks: wrong invoice amount, dropped total guard, renamed statement
+    line and skipped stock deduction each fail the suite; removing the credit-line lock fails concurrency scenario 2.

@@ -299,8 +299,6 @@ BEGIN
       zz.val_as((SELECT CASE r WHEN 'px' THEN u_px WHEN 'wo' THEN u_wo WHEN 'pa' THEN u_pa WHEN 'wx' THEN u_wx ELSE u_wm END FROM zz.pf),
         format('SELECT public.respond_to_amendment(%L, ''reject'', ''no'')::text', a)) LIKE 'ERR: You do not have permission to respond%');
   END LOOP;
-  r := zz.val_as((SELECT u_pc FROM zz.pf), format('SELECT public.respond_to_amendment(%L, ''accept_backorder'', NULL)::text', a));
-  PERFORM zz.check('the back-order choice is not available yet', r LIKE 'ERR: Unsupported response.%', r);
   r := zz.val_as((SELECT u_pc FROM zz.pf), format('SELECT public.respond_to_amendment(%L, ''request_clarification'', NULL)::text', a));
   PERFORM zz.check('a question needs text', r LIKE 'ERR: Write your question%', r);
   r := zz.val_as((SELECT u_pc FROM zz.pf), format('SELECT public.respond_to_amendment(%L, ''request_clarification'', ''When will the rest arrive?'')::text', a));

@@ -60,7 +60,9 @@ import {
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
-import { loadOrderSupply, shownTotal, withSupply } from "@/lib/order-supply";
+import { forDocument, loadOrderSupply, shownTotal, withSupply } from "@/lib/order-supply";
+import { backorderBadge } from "@/lib/order-backorder";
+import type { BackorderState } from "@/lib/order-backorder";
 import type { PartyDetails } from "@/lib/order-documents";
 import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
@@ -110,6 +112,8 @@ type OrderRow = {
   total_ghs: number;
   effective_total_ghs?: number | null;
   has_open_amendment?: boolean;
+  main_total_ghs?: number;
+  backorder_state?: BackorderState;
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
@@ -641,6 +645,7 @@ function OrdersInbox({
                 <div className="font-display text-xl font-bold">{formatGHS(shownTotal(o))}</div>
                 {o.effective_total_ghs != null && <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>}
                 {o.has_open_amendment && <div className="text-xs font-medium text-amber-600">Supply change awaiting the pharmacy</div>}
+                {backorderBadge(o.backorder_state) && <div className="text-xs font-medium text-primary">{backorderBadge(o.backorder_state)}</div>}
                 <div className="text-xs text-muted-foreground">{o.order_items.length} line(s) · {totalUnits} unit(s)</div>
               </div>
             </div>
@@ -659,6 +664,7 @@ function OrdersInbox({
               paymentStatus={o.payment_status}
               side="wholesaler"
               canAct={canUpdateStatus}
+              printable={forDocument({ ...o, wholesaler })}
               onChanged={onOrderChanged}
             />
             <OrderActivityTimeline orderId={o.id} />
@@ -671,7 +677,7 @@ function OrdersInbox({
 
             <OrderPrintActions
               wholesaler
-              order={{ ...o, wholesaler }}
+              order={forDocument({ ...o, wholesaler })}
             />
 
             <div className="mt-4 divide-y divide-border rounded-xl border border-border">
@@ -752,7 +758,7 @@ function OrdersInbox({
             <PrintableOrderDocument
               key={order.id}
               mode="pick-pack"
-              order={{ ...order, wholesaler }}
+              order={forDocument({ ...order, wholesaler })}
             />
           ))}
         </div>

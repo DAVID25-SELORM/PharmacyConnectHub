@@ -70,6 +70,10 @@ const DISPLAY_LABELS: Record<string, string> = {
   "Order supply change rejected": "Supply change rejected",
   "Order supply change question asked": "Supply change question",
   "Order supply change applied": "Supply change applied",
+  "Back-order shipment prepared": "Shipment prepared",
+  "Back-order shipment dispatched": "Shipment dispatched",
+  "Back-order shipment cancelled": "Shipment cancelled",
+  "Back-order cancelled": "Back-order cancelled",
 };
 
 export function auditActivityLabel(activity: string) {
@@ -131,6 +135,10 @@ const ORDER_EVENTS = new Set([
   "Order supply change rejected",
   "Order supply change question asked",
   "Order supply change applied",
+  "Back-order shipment prepared",
+  "Back-order shipment dispatched",
+  "Back-order shipment cancelled",
+  "Back-order cancelled",
 ]);
 
 export function auditCategory(activity: string): AuditCategory {

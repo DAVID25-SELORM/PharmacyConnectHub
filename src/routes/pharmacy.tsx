@@ -49,7 +49,14 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
-import { loadOrderSupply, shownTotal, withSupply, type SupplyMap } from "@/lib/order-supply";
+import {
+  forDocument,
+  loadOrderSupply,
+  shownTotal,
+  withSupply,
+  type SupplyMap,
+} from "@/lib/order-supply";
+import { backorderBadge, type BackorderState } from "@/lib/order-backorder";
 import type { PartyDetails } from "@/lib/order-documents";
 import { SupplierComparison } from "@/components/pharmacy/SupplierComparison";
 import { estimateGroup, type OrderTerms } from "@/lib/order-terms";
@@ -185,6 +192,8 @@ type OrderRow = {
   total_ghs: number;
   effective_total_ghs?: number | null;
   has_open_amendment?: boolean;
+  main_total_ghs?: number;
+  backorder_state?: BackorderState;
   created_at: string;
   payment_method: "cod" | "paystack";
   payment_status: "unpaid" | "paid" | "refunded" | "failed";
@@ -2134,6 +2143,11 @@ function OrdersView({
                 {o.has_open_amendment && (
                   <div className="text-xs font-medium text-amber-600">Needs your decision</div>
                 )}
+                {backorderBadge(o.backorder_state) && (
+                  <div className="text-xs font-medium text-primary">
+                    {backorderBadge(o.backorder_state)}
+                  </div>
+                )}
                 <div className="text-xs text-muted-foreground">
                   {o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)
                 </div>
@@ -2190,6 +2204,7 @@ function OrdersView({
                   paymentStatus={o.payment_status}
                   side="pharmacy"
                   canAct={canRespondToSupply}
+                  printable={forDocument({ ...o, pharmacy, wholesaler: o.wholesaler ?? null })}
                   onChanged={() => {
                     setSupplyTick((value) => value + 1);
                     void loadOrderDetail(o.id);
@@ -2228,7 +2243,9 @@ function OrdersView({
                   )}
                 </div>
 
-                <OrderPrintActions order={{ ...o, pharmacy, wholesaler: o.wholesaler ?? null }} />
+                <OrderPrintActions
+                  order={forDocument({ ...o, pharmacy, wholesaler: o.wholesaler ?? null })}
+                />
 
                 <div className="mt-4 divide-y divide-border rounded-xl border border-border">
                   {o.order_items.map((it, i) => (

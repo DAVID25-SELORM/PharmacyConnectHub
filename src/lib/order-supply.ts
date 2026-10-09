@@ -1,6 +1,7 @@
 // What each order on a screen is now committed to supply, for orders that have been amended. The orders themselves keep
 // the quantities and total as placed; this overlays the amended figures where a screen shows or prints them.
 import { supabase } from "@/integrations/supabase/client";
+import type { BackorderState } from "@/lib/order-backorder";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -8,7 +9,10 @@ const db = supabase as any;
 export type SupplySummary = {
   order_id: string;
   current_total_ghs: number;
+  /** The total of the main shipment alone (the order total less back-order shipments already invoiced). */
+  main_total_ghs: number;
   has_open_amendment: boolean;
+  backorder: BackorderState;
   lines: Array<{
     order_item_id: string;
     product_id: string;
@@ -44,6 +48,8 @@ export function withSupply<T extends WithItems>(
   effective_total_ghs?: number | null;
   order_items: Array<T["order_items"][number] & { supplied_quantity?: number | null }>;
   has_open_amendment?: boolean;
+  main_total_ghs?: number;
+  backorder_state?: BackorderState;
 } {
   const summary = supply[order.id];
   if (!summary) return order as never;
@@ -53,6 +59,8 @@ export function withSupply<T extends WithItems>(
     ...order,
     effective_total_ghs: amendedTotal !== Number(order.total_ghs) ? amendedTotal : null,
     has_open_amendment: summary.has_open_amendment,
+    main_total_ghs: Number(summary.main_total_ghs),
+    backorder_state: summary.backorder,
     ...("unit_count" in order
       ? { unit_count: summary.lines.reduce((sum, line) => sum + line.supplied_qty, 0) }
       : {}),
@@ -70,4 +78,13 @@ export function shownTotal(order: {
 }): number {
   const effective = order.effective_total_ghs;
   return Number(effective === null || effective === undefined ? order.total_ghs : effective);
+}
+
+/** The order as its own printed documents show it: the main shipment's lines and the main shipment's total. Back-order shipments
+ * print as documents of their own, so their amounts must not be added to the order's. */
+export function forDocument<
+  T extends { effective_total_ghs?: number | string | null; main_total_ghs?: number },
+>(order: T): T {
+  if (order.main_total_ghs === undefined) return order;
+  return { ...order, effective_total_ghs: order.main_total_ghs };
 }

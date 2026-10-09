@@ -12,6 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { BackorderPanel } from "@/components/orders/BackorderPanel";
+import { TextDialog } from "@/components/orders/TextDialog";
+import type { PrintableOrder } from "@/components/order-print";
+import { backorderConsequence } from "@/lib/order-backorder";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import {
@@ -39,7 +43,7 @@ import { formatReportDate } from "@/lib/reports";
 const db = supabase as any;
 
 type Side = "wholesaler" | "pharmacy";
-type PharmacyAction = "accept" | "reject" | "ask";
+type PharmacyAction = "accept" | "backorder" | "reject" | "ask";
 
 const readError = (error: unknown) =>
   (error as { message?: string } | null)?.message ?? "Something went wrong. Please try again.";
@@ -55,12 +59,15 @@ export function SupplyChangePanel({
   paymentStatus,
   side,
   canAct,
+  printable = null,
   onChanged,
 }: {
   orderId: string;
   orderStatus: string;
   paymentStatus?: string | null;
   side: Side;
+  /** The order as a printable document, so a back-order shipment can print its own sheets. */
+  printable?: PrintableOrder | null;
   /** Whether this user may propose / respond (the database enforces it; this only hides buttons). */
   canAct: boolean;
   onChanged?: () => void;
@@ -73,6 +80,7 @@ export function SupplyChangePanel({
   const [replying, setReplying] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +97,7 @@ export function SupplyChangePanel({
 
   const done = async (message: string) => {
     toast.success(message);
+    setTick((value) => value + 1);
     await load();
     onChanged?.();
   };
@@ -129,7 +138,7 @@ export function SupplyChangePanel({
   const history = view.amendments.filter((amendment) => !isOpenAmendment(amendment));
   const canPropose =
     side === "wholesaler" && canAct && canProposeSupplyChange(view, orderStatus, paymentStatus);
-  if (!open && history.length === 0 && !canPropose) return null;
+  if (!open && history.length === 0 && !canPropose && !view.amended) return null;
 
   return (
     <section
@@ -163,6 +172,21 @@ export function SupplyChangePanel({
       )}
 
       {view.amended && <SupplyTable view={view} />}
+      {view.amended && (
+        <BackorderPanel
+          orderId={orderId}
+          orderStatus={orderStatus}
+          side={side}
+          canAct={canAct}
+          printable={printable}
+          refreshKey={tick}
+          onChanged={() => {
+            setTick((value) => value + 1);
+            void load();
+            onChanged?.();
+          }}
+        />
+      )}
 
       {open && (
         <OpenProposal
@@ -234,17 +258,21 @@ export function SupplyChangePanel({
             const choice =
               responding === "accept"
                 ? "accept_cancel_remaining"
-                : responding === "reject"
-                  ? "reject"
-                  : "request_clarification";
+                : responding === "backorder"
+                  ? "accept_backorder"
+                  : responding === "reject"
+                    ? "reject"
+                    : "request_clarification";
             const ok = await run(
               "respond_to_amendment",
               { p_amendment_id: open.id, p_choice: choice, p_note: note || null },
               responding === "accept"
                 ? "Accepted. The remaining quantity is cancelled."
-                : responding === "reject"
-                  ? "Rejected. The order stands as placed."
-                  : "Question sent to the wholesaler",
+                : responding === "backorder"
+                  ? "Accepted. The rest is on back-order."
+                  : responding === "reject"
+                    ? "Rejected. The order stands as placed."
+                    : "Question sent to the wholesaler",
             );
             if (ok) setResponding(null);
           }}
@@ -311,7 +339,7 @@ function SupplyTable({ view }: { view: OrderAmendmentsView }) {
               Supplying
             </th>
             <th scope="col" className="py-1 text-right font-medium">
-              Cancelled
+              Not now
             </th>
           </tr>
         </thead>
@@ -460,6 +488,11 @@ function OpenProposal({
           <Button type="button" size="sm" variant="hero" onClick={() => onRespond("accept")}>
             Accept and cancel the rest
           </Button>
+          {view.is_credit_order && (
+            <Button type="button" size="sm" variant="hero" onClick={() => onRespond("backorder")}>
+              Accept and back-order the rest
+            </Button>
+          )}
           <Button type="button" size="sm" variant="outline" onClick={() => onRespond("reject")}>
             Reject
           </Button>
@@ -673,6 +706,13 @@ function RespondDialog({
   onSubmit: (note: string) => void | Promise<void>;
 }) {
   const copy = {
+    backorder: {
+      title: "Accept and back-order the rest?",
+      description: `${pharmacySummary(amendment)} ${backorderConsequence(amendment.delta)}`,
+      label: "Note (optional)",
+      button: "Accept and back-order the rest",
+      required: false,
+    },
     accept: {
       title: "Accept the reduced supply?",
       description: `${pharmacySummary(amendment)} ${acceptanceConsequence(isCredit, amendment.delta)}`,
@@ -708,61 +748,5 @@ function RespondDialog({
       onClose={onClose}
       onSubmit={onSubmit}
     />
-  );
-}
-
-function TextDialog({
-  title,
-  description,
-  label,
-  submitLabel,
-  required = false,
-  busy,
-  onClose,
-  onSubmit,
-}: {
-  title: string;
-  description: string;
-  label: string;
-  submitLabel: string;
-  required?: boolean;
-  busy: boolean;
-  onClose: () => void;
-  onSubmit: (text: string) => void | Promise<void>;
-}) {
-  const [text, setText] = useState("");
-  const missing = required && text.trim().length < 3;
-  return (
-    <Dialog open onOpenChange={(next) => !next && !busy && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <label className="block text-sm font-medium">
-          {label}
-          <Textarea
-            className="mt-1"
-            rows={3}
-            maxLength={500}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-        </label>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="hero"
-            disabled={busy || missing}
-            onClick={() => void onSubmit(text.trim())}
-          >
-            {busy ? "Working…" : submitLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

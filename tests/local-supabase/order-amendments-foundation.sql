@@ -71,6 +71,13 @@ DECLARE o UUID := (SELECT order_id FROM zz.af_orders WHERE label = 'o1'); r TEXT
 BEGIN
   PERFORM zz.check('a new order has no effective total (NULL = not amended)', (SELECT effective_total_ghs IS NULL FROM public.orders WHERE id = o));
   PERFORM zz.check('order_effective_total falls back to the placed total (500)', public.order_effective_total(o) = 500);
+  BEGIN
+    UPDATE public.orders SET effective_total_ghs = 400 WHERE id = o;
+    PERFORM zz.check('the order total cannot be edited directly (phase 3 guard)', FALSE, 'update was allowed');
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM zz.check('the order total cannot be edited directly (phase 3 guard)', SQLERRM LIKE 'The order total can only change through an approved supply change%', SQLERRM);
+  END;
+  PERFORM set_config('drugxone.amendment_txid', txid_current()::text, true);
   UPDATE public.orders SET effective_total_ghs = 400 WHERE id = o;
   PERFORM zz.check('the effective total can be set even under production''s legacy guard', (SELECT effective_total_ghs = 400 FROM public.orders WHERE id = o));
   PERFORM zz.check('order_effective_total now returns 400', public.order_effective_total(o) = 400);
@@ -89,6 +96,7 @@ BEGIN
   END;
   UPDATE public.orders SET effective_total_ghs = NULL WHERE id = o;
   PERFORM zz.check('and can be cleared again', public.order_effective_total(o) = 500);
+  PERFORM set_config('drugxone.amendment_txid', '', true);
   r := zz.val_as((SELECT u_wo FROM zz.af), format('SELECT public.order_effective_total(%L)::text', o));
   PERFORM zz.check('the helper is internal: users cannot call it directly', r LIKE 'ERR: permission denied%', r);
 END $$;
@@ -211,6 +219,8 @@ BEGIN
   INSERT INTO public.credit_ledger_entries(wholesaler_id, pharmacy_id, order_id, entry_type, direction, amount_ghs, amendment_id, note)
   VALUES (w, g, o, 'debit_note', 'debit', 20, a, 'price increase');
   PERFORM zz.check('the same amendment may also carry one debit note (a different document type)', TRUE);
+  INSERT INTO public.order_shipments(id, order_id, sequence, status, amount_ghs, request_id, created_by)
+  VALUES (s, o, 2, 'pending', 30, gen_random_uuid(), (SELECT u_wo FROM zz.af));
   INSERT INTO public.credit_ledger_entries(wholesaler_id, pharmacy_id, order_id, entry_type, direction, amount_ghs, shipment_id, note)
   VALUES (w, g, o, 'invoice', 'debit', 30, s, 'back-order shipment invoice');
   BEGIN
