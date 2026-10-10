@@ -42,14 +42,46 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.apply_function_regex_patch(TEXT, TEXT, TEXT, INTEGER, TEXT) FROM PUBLIC, anon, authenticated;
 
+-- The same, for a function that has more than one version: names the exact argument list (as pg_get_function_identity_arguments prints it) and
+-- changes only that version. Any other version is left exactly as it is. Fails closed in the same ways.
+CREATE OR REPLACE FUNCTION public.apply_function_regex_patch_sig(
+  p_function_name TEXT, p_identity_arguments TEXT, p_pattern TEXT, p_replacement TEXT, p_expected INTEGER, p_applied_marker TEXT
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_oids OID[];
+  v_def TEXT;
+  v_count INTEGER;
+BEGIN
+  SELECT array_agg(p.oid) INTO v_oids FROM pg_proc p
+  WHERE p.pronamespace = 'public'::regnamespace AND p.proname = p_function_name AND pg_get_function_identity_arguments(p.oid) = p_identity_arguments;
+  IF v_oids IS NULL THEN
+    RAISE EXCEPTION 'Function %(%) was not found. Nothing was changed.', p_function_name, p_identity_arguments;
+  END IF;
+  v_def := replace(pg_get_functiondef(v_oids[1]), E'\r', '');
+  IF position(p_applied_marker IN v_def) > 0 THEN
+    RETURN 'already patched';
+  END IF;
+  SELECT count(*) INTO v_count FROM regexp_matches(v_def, p_pattern, 'g');
+  IF v_count <> p_expected THEN
+    RAISE EXCEPTION 'Unexpected definition of % (expected % match(es) of %, found %). Nothing was changed.', p_function_name, p_expected, p_pattern, v_count;
+  END IF;
+  EXECUTE regexp_replace(v_def, p_pattern, p_replacement, 'g');
+  RETURN 'patched';
+END;
+$$;
+REVOKE ALL ON FUNCTION public.apply_function_regex_patch_sig(TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT) FROM PUBLIC, anon, authenticated;
+
 -- 1a. "pay_now" is a known method (refused below unless the switch is on).
-SELECT public.apply_function_regex_patch('create_marketplace_orders',
+SELECT public.apply_function_regex_patch_sig('create_marketplace_orders', '_caller_id uuid, _pharmacy_id uuid, _items jsonb, _credit_wholesaler_ids uuid[], _require_classification boolean, _settlement_methods jsonb',
   'WHERE m\.value NOT IN \(''cod'', ''credit'', ''bank_transfer'', ''momo'', ''cheque'', ''other''\) LIMIT 1;',
   'WHERE m.value NOT IN (''pay_now'', ''cod'', ''credit'', ''bank_transfer'', ''momo'', ''cheque'', ''other'') LIMIT 1;',
   1, 'm.value NOT IN (''pay_now''');
 
 -- 1b. ... and refused with the old message while online payments are off.
-SELECT public.apply_function_regex_patch('create_marketplace_orders',
+SELECT public.apply_function_regex_patch_sig('create_marketplace_orders', '_caller_id uuid, _pharmacy_id uuid, _items jsonb, _credit_wholesaler_ids uuid[], _require_classification boolean, _settlement_methods jsonb',
   'IF v_bad_method IS NOT NULL THEN\s+IF v_bad_method = ''pay_now'' THEN RAISE EXCEPTION ''Online payment is not available yet\. Choose another payment method\.''; END IF;\s+RAISE EXCEPTION ''Invalid payment method\.'';\s+END IF;',
   'IF v_bad_method IS NOT NULL THEN' || E'\n'
   || '    RAISE EXCEPTION ''Invalid payment method.'';' || E'\n'
@@ -60,7 +92,7 @@ SELECT public.apply_function_regex_patch('create_marketplace_orders',
   1, 'AND NOT public.online_payments_enabled()');
 
 -- 1c. An online order is stored as an online order.
-SELECT public.apply_function_regex_patch('create_marketplace_orders',
+SELECT public.apply_function_regex_patch_sig('create_marketplace_orders', '_caller_id uuid, _pharmacy_id uuid, _items jsonb, _credit_wholesaler_ids uuid[], _require_classification boolean, _settlement_methods jsonb',
   'v_discount_total, v_fee, v_goods \+ v_fee, ''cod'', v_use_credit,',
   'v_discount_total, v_fee, v_goods + v_fee, (CASE WHEN v_method = ''pay_now'' THEN ''paystack'' ELSE ''cod'' END)::public.payment_method, v_use_credit,',
   1, 'THEN ''paystack'' ELSE ''cod'' END');
@@ -96,7 +128,7 @@ SELECT public.apply_function_regex_patch('change_order_settlement_method',
   || '  IF v_order.payment_method::TEXT = ''paystack'' THEN' || E'\n'
   || '    RAISE EXCEPTION ''An online-payment order''''s payment method can''''t be changed. Cancel it and place a new order instead.'';' || E'\n'
   || '  END IF;',
-  1, 'An online-payment order''s payment method');
+  1, 'Cancel it and place a new order instead');
 
 -- 5. A failed or abandoned attempt that is reported again with the same status (the return page asks every few seconds) changes and
 -- logs nothing the second time. (The payment core, P1, already settles such a repeat correctly; this only keeps the log readable.)

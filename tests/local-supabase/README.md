@@ -233,7 +233,7 @@ available credit after partial payments and requires explicit financial review.
     after a suite first, then `npx tsx`). Needs migrations through 20261106110000. Mutation checks: amount, cancelled-order, duplicate, mode and
     changed-order checks each removed fail the suite; removing the order lock fails concurrency scenarios 1 and 2.
 
-30. `payments-checkout.sql` (97 checks), `payments-checkout-concurrency.sh` (9 checks), `payments-checkout-api.local.mjs` (41 checks), the handler
+30. `payments-checkout.sql` (101 checks), `payments-checkout-concurrency.sh` (9 checks), `payments-checkout-api.local.mjs` (41 checks), the handler
     unit tests (`api/_payments/checkout-handlers.test.ts`, 32 checks) and two local tools, `fake-paystack.mjs` and `dev-api-server.mjs`: online payments,
     P2 (Pay now at checkout, behind the platform switch). The switch is off by default and, off, checkout refuses Pay now with the old message and nothing
     can be started; on, a Pay now checkout stores an unpaid online order (stock reserved, the supplier not yet told); only the server can start a payment,

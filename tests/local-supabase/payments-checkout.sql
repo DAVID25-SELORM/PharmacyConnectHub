@@ -492,4 +492,23 @@ BEGIN
   PERFORM zz.check('switched off again: a payment already in flight is still recorded when it is verified', (r::jsonb ->> 'outcome') = 'applied' AND zz.pstat(zz.ord('A')) = 'paid', r);
 END $$;
 
+
+-- 10. The patches are safe to re-run, and safe where a function has an extra (older) version.
+DO $$
+DECLARE r TEXT;
+BEGIN
+  PERFORM zz.check('re-running the settlement-change patch changes nothing (one copy of the online-order check)',
+    (SELECT (length(d) - length(replace(d, 'Cancel it and place a new order instead', ''))) / length('Cancel it and place a new order instead') = 1
+     FROM (SELECT pg_get_functiondef(oid) d FROM pg_proc WHERE proname = 'change_order_settlement_method') x));
+  CREATE FUNCTION public.zz_dummy(a int) RETURNS text LANGUAGE sql AS $f$ SELECT 'int:old' $f$;
+  CREATE FUNCTION public.zz_dummy(a text) RETURNS text LANGUAGE sql AS $f$ SELECT 'text:old' $f$;
+  r := public.apply_function_regex_patch_sig('zz_dummy', 'a integer', 'old', 'NEW', 1, 'NEW');
+  PERFORM zz.check('a patch by signature changes only that version', r = 'patched' AND public.zz_dummy(1) = 'int:NEW' AND public.zz_dummy('x') = 'text:old', r);
+  BEGIN PERFORM public.apply_function_regex_patch('zz_dummy', 'old', 'X', 1, 'X'); PERFORM zz.check('the plain patch refuses a function with two versions', FALSE, 'patched');
+  EXCEPTION WHEN OTHERS THEN PERFORM zz.check('the plain patch refuses a function with two versions', SQLERRM LIKE '%overloads%', SQLERRM); END;
+  BEGIN PERFORM public.apply_function_regex_patch_sig('zz_dummy', 'a bigint', 'old', 'X', 1, 'X'); PERFORM zz.check('an unknown signature is refused', FALSE, 'patched');
+  EXCEPTION WHEN OTHERS THEN PERFORM zz.check('an unknown signature is refused', SQLERRM LIKE '%was not found%', SQLERRM); END;
+  DROP FUNCTION public.zz_dummy(int);
+  DROP FUNCTION public.zz_dummy(text);
+END $$;
 SELECT count(*) FILTER (WHERE ok) AS pass, count(*) FILTER (WHERE NOT ok) AS fail FROM zz.results;

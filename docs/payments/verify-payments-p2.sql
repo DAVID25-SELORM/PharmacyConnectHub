@@ -21,16 +21,16 @@ WITH
   ('function block_accept_unpaid_online_order', EXISTS (SELECT 1 FROM fns WHERE name = 'block_accept_unpaid_online_order')),
   ('trigger trg_block_accept_unpaid_online_order', EXISTS (SELECT 1 FROM trgs WHERE name = 'trg_block_accept_unpaid_online_order')),
   ('begin_order_payment is not callable by signed-in users or anonymous visitors',
-    NOT has_function_privilege('authenticated', 'public.begin_order_payment(uuid,uuid,text,text,text)', 'EXECUTE')
-    AND NOT has_function_privilege('anon', 'public.begin_order_payment(uuid,uuid,text,text,text)', 'EXECUTE')),
+    (to_regprocedure('public.begin_order_payment(uuid,uuid,text,text,text)') IS NOT NULL AND NOT has_function_privilege('authenticated', 'public.begin_order_payment(uuid,uuid,text,text,text)', 'EXECUTE'))
+    AND (to_regprocedure('public.begin_order_payment(uuid,uuid,text,text,text)') IS NOT NULL AND NOT has_function_privilege('anon', 'public.begin_order_payment(uuid,uuid,text,text,text)', 'EXECUTE'))),
   ('the other payment-start functions are not callable by signed-in users or anonymous visitors',
-    NOT has_function_privilege('authenticated', 'public.record_attempt_authorization(uuid,text,text)', 'EXECUTE')
-    AND NOT has_function_privilege('authenticated', 'public.fail_payment_attempt(uuid,text)', 'EXECUTE')
-    AND NOT has_function_privilege('authenticated', 'public.payment_attempts_to_check(uuid,uuid)', 'EXECUTE')
-    AND NOT has_function_privilege('anon', 'public.order_payment_summary(uuid)', 'EXECUTE')),
+    (to_regprocedure('public.record_attempt_authorization(uuid,text,text)') IS NOT NULL AND NOT has_function_privilege('authenticated', 'public.record_attempt_authorization(uuid,text,text)', 'EXECUTE'))
+    AND (to_regprocedure('public.fail_payment_attempt(uuid,text)') IS NOT NULL AND NOT has_function_privilege('authenticated', 'public.fail_payment_attempt(uuid,text)', 'EXECUTE'))
+    AND (to_regprocedure('public.payment_attempts_to_check(uuid,uuid)') IS NOT NULL AND NOT has_function_privilege('authenticated', 'public.payment_attempts_to_check(uuid,uuid)', 'EXECUTE'))
+    AND (to_regprocedure('public.order_payment_summary(uuid)') IS NOT NULL AND NOT has_function_privilege('anon', 'public.order_payment_summary(uuid)', 'EXECUTE'))),
   ('signed-in users can read the payment summary of their own orders and ask whether online payment is on',
-    has_function_privilege('authenticated', 'public.order_payment_summary(uuid)', 'EXECUTE')
-    AND has_function_privilege('authenticated', 'public.online_payments_status()', 'EXECUTE')),
+    (to_regprocedure('public.order_payment_summary(uuid)') IS NOT NULL AND has_function_privilege('authenticated', 'public.order_payment_summary(uuid)', 'EXECUTE'))
+    AND (to_regprocedure('public.online_payments_status()') IS NOT NULL AND has_function_privilege('authenticated', 'public.online_payments_status()', 'EXECUTE'))),
   ('checkout accepts Pay now only while the switch is on',
     EXISTS (SELECT 1 FROM fns WHERE name = 'create_marketplace_orders' AND def LIKE '%AND NOT public.online_payments_enabled()%'
       AND def LIKE '%THEN ''paystack'' ELSE ''cod'' END%' AND def LIKE '%m.value NOT IN (''pay_now''%')),

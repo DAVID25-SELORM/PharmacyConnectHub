@@ -328,7 +328,7 @@ disabled with the same words, and no payment can be started. Payments already in
   `DEV_API_PROXY` setting in `vite.config.ts` that forwards `/api` to it for browser testing. `PAYSTACK_BASE_URL` redirects the server to the stand-in; it is honoured
   only in test mode and only for a local address, so a typo can never send the secret key to another host.
 
-**Verified locally:** `payments-checkout.sql` 97/97; `payments-checkout-concurrency.sh` 9/9 with a negative control; `payments-checkout-api.local.mjs` 41/41
+**Verified locally:** `payments-checkout.sql` 101/101; `payments-checkout-concurrency.sh` 9/9 with a negative control; `payments-checkout-api.local.mjs` 41/41
 (the real handlers behind a real HTTP server, real sessions and the fake Paystack); 32 new handler unit tests; the P1 suites unchanged (63, 9, 17); mutation
 checks (each safeguard removed makes the suite fail); the whole flow driven in the browser: cart, Pay now, the provider page, close without paying (not paid,
 Pay now offered), pay (webhook applies it, the return page says "Payment received"), and the pharmacy's and wholesaler's order lists.
@@ -344,3 +344,5 @@ Pay now offered), pay (webhook applies it, the return page says "Payment receive
   signature header). Those follow Paystack's published documentation as of the P1 build; the first run against real test keys is the check.
 - The verify endpoint is limited only by authentication and ownership (it asks Paystack about the caller's own order's last three attempts per call, and the return
   page calls it every four seconds for about two minutes). A per-order throttle is added with the reconciler in P3.
+
+**Production finding when the P2 patches were first applied:** production has a second, older version of `create_marketplace_orders` (`_caller_id, _pharmacy_id, _items, _request_id`) that exists in no migration (service role only; the app does not call it). The checkout patches now name the exact argument list of the live six-argument version and change only that one (`apply_function_regex_patch_sig`), and refuse if it is missing or unexpected. A marker bug was also found and fixed (the settlement-change patch could insert its check again on every re-run). The stray older version has not been touched; whether to drop it is a separate decision once its definition has been reviewed.
