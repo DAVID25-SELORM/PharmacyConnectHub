@@ -53,6 +53,25 @@ export type ProviderEvent = {
   dedupeKey: string;
   reference: string | null;
   domain: ProviderMode | null;
+  /** For refund notifications: the reference of the payment being refunded, the provider's own refund id, and the amount it states. */
+  transactionReference?: string | null;
+  refundId?: string | null;
+  amountMinor?: number | null;
+};
+
+export type RefundInput = {
+  /** The reference of the payment being refunded (ours). */
+  transactionReference: string;
+  amountMinor: number;
+  /** A short note for the provider's dashboard. */
+  merchantNote?: string;
+};
+
+/** What the provider answered when asked to refund. A refund is asynchronous: acceptance is not completion. */
+export type RefundResult = {
+  providerRefundId: string | null;
+  /** The provider's own word for where the refund stands right now ("pending", "processing", "processed", "failed"). */
+  status: string;
 };
 
 export type WebhookParseResult = { ok: true; event: ProviderEvent } | { ok: false; reason: string };
@@ -73,6 +92,8 @@ export interface PaymentProvider {
   initialize(input: InitializeInput): Promise<InitializedPayment>;
   /** Asks the provider (server to server) what happened to a payment. This, never a redirect or a notification, is proof. */
   verify(reference: string): Promise<VerifiedPayment>;
+  /** Asks the provider to return money. A thrown ProviderError with a status in 400 to 499 means it was refused; anything else leaves it uncertain. */
+  refund(input: RefundInput): Promise<RefundResult>;
   listTransactions(input: {
     from: string;
     to: string;

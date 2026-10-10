@@ -263,3 +263,14 @@ available credit after partial payments and requires explicit financial review.
     admin-reverify and verify handlers behind a real HTTP server with the fake Paystack and injected failures (run `payments-checkout.sql` first, then `pw.sql`, `source env.sh`, `npx tsx`).
     Needs migrations through 20261108110000. Mutation checks: the unchecked-attempt guard, the window, the 2-hour cap, the throttle, the admin check on resolving, the recheck spacing, the
     mode filter and the amount comparison each removed fail the suite.
+
+32. `payments-refunds.sql` (85 checks), `payments-refunds-concurrency.sh` (12 checks), `payments-refunds-api.local.mjs` (30 checks) and the handler unit tests (`api/_payments/refunds.test.ts`, 26 checks plus the
+    refund step in `reconcile-handler.test.ts`): online payments, P4a (the refund ledger and moving money back). A payment that cannot stay (late, double, order cancelled after payment) requests its full refund
+    automatically, waiting for an administrator unless `auto_refunds` is on; the whole path requested -> approved -> submitting -> processing -> succeeded and every branch (failed, retried, cancelled, unknown, confirmed by hand,
+    marked not sent); only an approved refund can be claimed and only by one worker; an uncertain send is never retried; a definite refusal can be; refunds can never add up to more than the payment received (function and trigger),
+    the same source twice is one refund, a cancelled refund frees its amount, a refund is never edited or deleted; the order becomes "refunded" only when everything has come back; alerts close by themselves; provider notifications
+    that match nothing, the wrong mode or an unknown reference are handled; overdue and half-sent refunds are flagged; only the server can call any of it and only an administrator's id can approve. The `.sh` runs real overlapping
+    sessions (two workers claiming one refund, a notification racing a manual confirmation, requests that would exceed the payment, cancel racing send); negative controls: remove `FOR UPDATE` on the attempt in `_request_refund`
+    (scenario 3 fails) or `SKIP LOCKED` in `claim_refund_for_submission` (scenario 1 fails). The `.mjs` runs the real admin-refund, webhook and reconcile handlers behind a real HTTP server with the fake Paystack (which now
+    takes refunds, refuses them, or takes them and loses the answer, and sends signed refund notifications); run `payments-checkout.sql` first, then `pw.sql`, `source env.sh`, `npx tsx`. Needs migrations through 20261109110000.
+    Mutation checks: the database cap, the claim status check, automatic approval, definite versus uncertain, the administrator check, the refunded order and the half-sent flag each removed fail the suite.

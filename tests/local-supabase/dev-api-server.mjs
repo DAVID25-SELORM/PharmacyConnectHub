@@ -16,6 +16,7 @@ const routes = {
   "/api/payments/webhook": "../../api/payments/webhook.ts",
   "/api/payments/reconcile": "../../api/payments/reconcile.ts",
   "/api/payments/admin-reverify": "../../api/payments/admin-reverify.ts",
+  "/api/payments/admin-refund": "../../api/payments/admin-refund.ts",
 };
 
 export async function startDevApiServer(port = 0) {

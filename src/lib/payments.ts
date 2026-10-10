@@ -73,6 +73,15 @@ export type OrderPaymentSummary =
         channel: string | null;
       } | null;
       refund_required: boolean;
+      paid_ghs?: number;
+      refunded_ghs?: number;
+      refunds?: {
+        amount_ghs: number;
+        status: string;
+        reason: string;
+        created_at: string;
+        completed_at: string | null;
+      }[];
     };
 
 /** What either side of an order may know about its online payment. Null when it cannot be read. */

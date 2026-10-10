@@ -44,6 +44,7 @@ import { canViewAccounting } from "@/lib/accounting";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment, payForOrder, useOnlinePayments } from "@/lib/payments";
+import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -2291,6 +2292,8 @@ function OrdersView({
                 <OrderActivityTimeline orderId={o.id} />
 
                 <ReceiptStatusPanel order={o} />
+
+                <OnlinePaymentPanel orderId={o.id} paymentMethod={o.payment_method} />
 
                 <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
 

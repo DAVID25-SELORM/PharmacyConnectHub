@@ -90,6 +90,30 @@ export function createWebhookHandler(deps: WebhookDeps) {
         p_error: error ?? null,
       });
 
+    // A refund notification: the signature has been checked, so it is believed (it moves money OUT, never in), and applied to the refund that was
+    // sent. One that matches nothing becomes an alert for a person; it is never silently applied.
+    if (event.event.startsWith("refund.")) {
+      try {
+        const applied = await rpc("apply_refund_event", {
+          p_provider: provider.name,
+          p_mode: provider.mode,
+          p_transaction_reference: event.transactionReference ?? event.reference,
+          p_event_type: event.event,
+          p_provider_refund_id: event.refundId ?? null,
+          p_amount_minor: event.amountMinor ?? null,
+        });
+        if (applied.error) throw new Error(applied.error.message);
+        const outcome = String((applied.data as { outcome?: string } | null)?.outcome ?? "unknown");
+        await finish(outcome);
+        return res.status(200).json({ outcome });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        deps.log(`payments webhook refund processing failed: ${message}`);
+        await finish("error", message);
+        return res.status(500).json({ error: "Could not process the notification" });
+      }
+    }
+
     // Only a successful charge matters here; every other kind is stored and acknowledged.
     if (event.event !== "charge.success" || !event.reference) {
       await finish("ignored");

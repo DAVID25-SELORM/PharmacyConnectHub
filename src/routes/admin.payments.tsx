@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { RefundsSection } from "@/components/admin/RefundsSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -290,6 +291,14 @@ function AdminPaymentsPage() {
               </div>
             )}
           </section>
+        )}
+
+        {overview && (
+          <RefundsSection
+            refunds={overview.refunds ?? []}
+            autoRefunds={overview.settings?.auto_refunds === true}
+            onChanged={load}
+          />
         )}
 
         {overview && (

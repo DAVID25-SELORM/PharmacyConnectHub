@@ -12,6 +12,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { PaymentsConfig, PaymentsConfigResult } from "./config.js";
+import { submitRefund } from "./refund-runner.js";
 import { ProviderError, type ListedTransaction, type PaymentProvider } from "./types.js";
 import { verifyAndApply, type AttemptRef } from "./verify-apply.js";
 import type { RpcFn } from "./webhook-handler.js";
@@ -27,6 +28,7 @@ export type ReconcileDeps = {
 };
 
 const MAX_ATTEMPTS_PER_RUN = 25;
+const MAX_REFUNDS_PER_RUN = 10;
 const MAX_LIST_PAGES = 20;
 const PAGE_SIZE = 100;
 const MAX_VERIFY_FROM_COMPARISON = 50;
@@ -107,11 +109,29 @@ export function createReconcileHandler(deps: ReconcileDeps) {
       // Expiry is always asked for: the database itself refuses to cancel an order whose attempts were not checked recently.
       const expired = await rpc("expire_unpaid_online_orders", {});
       if (expired.error) deps.log(`reconciler expiry failed: ${expired.error.message}`);
+
+      // Approved refunds are sent here (each is claimed by exactly one worker; an uncertain answer is never retried), and refunds that have
+      // been sitting too long raise alerts.
+      const refunds = { sent: 0, failed: 0, unknown: 0 };
+      const refundsDue = await rpc("refunds_to_submit", { p_limit: MAX_REFUNDS_PER_RUN });
+      const toSend = (Array.isArray(refundsDue.data) ? refundsDue.data : []) as {
+        refund_id: string;
+      }[];
+      for (const item of toSend) {
+        const result = await submitRefund({ provider, rpc, log: deps.log }, item.refund_id);
+        if (!result.sent) continue;
+        if (result.outcome === "failed") refunds.failed += 1;
+        else if (result.outcome === "unknown") refunds.unknown += 1;
+        else refunds.sent += 1;
+      }
+      const stale = await rpc("flag_stale_refunds", {});
       return res.status(200).json({
         job,
         ...summary,
         closedStale: typeof closed.data === "number" ? closed.data : 0,
         expiry: expired.error ? null : expired.data,
+        refunds,
+        staleRefundsFlagged: typeof stale.data === "number" ? stale.data : 0,
       });
     }
 

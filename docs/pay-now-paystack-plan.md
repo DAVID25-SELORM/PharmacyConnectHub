@@ -390,3 +390,42 @@ mutation checks (each safeguard removed makes the suite fail); the admin screen 
   little value while online payments are in test mode.
 - Verified with the stand-in, not with Paystack: the shape of its transaction list (the daily comparison) as well as initialize, verify and the notification. The first run against real test keys is the check.
 - The daily comparison reads at most 2,000 transactions (20 pages of 100); with more, it says the list is incomplete and does not judge "ours but missing at the provider".
+
+## 15. P4a status (built locally, not deployed): moving money back
+
+P4 is split in two, as the amendment work was. **P4a (this section)** is the refund machinery and the refunds that are not in doubt (a payment after the order was cancelled, a second
+payment for the same order, an order cancelled after it was paid). **P4b** (not started) connects it to amendments: refunding the difference when an accepted amendment lowers a paid online
+order, and a top-up payment when a price rises.
+
+**What P4a contains (online payments and refunds are still off by default; nothing here does anything while there are no refunds):**
+- **Migrations** `20261109100000_payments_refunds_schema.sql` (the refund ledger, the `auto_refunds` setting, three new alert kinds) and `20261109110000_payments_refunds_workflow.sql` (the functions below). They patch no existing
+  production function (only functions and views made in P2 and P3 are replaced), so there is no production-drift risk like the one found in P2.
+- **The ledger** (`order_refunds`): one row per refund: the payment attempt being refunded, amount, reason, status, who approved it. Unique per *source* (for example "the full refund of attempt X"), so the same reason can never refund the
+  same money twice, and **the refunds still alive for a payment can never add up to more than that payment received** (enforced in the function under the payment's lock *and* by a database trigger). Never edited (what it is
+  for) and never deleted.
+- **When a refund is requested:** automatically, the moment a payment is marked as one that cannot stay (late, double, or the order was cancelled after it was paid), whichever path recorded it. A partial refund can also be requested for a payment that stays valid (this is what
+  P4b will use).
+- **Approval:** every refund waits for a platform administrator **unless** `payments_settings.auto_refunds` is on (off by default; switched in the SQL Editor with `docs/payments/switches/`). Even with it on, only refunds that are not in doubt are approved
+  automatically.
+- **Sending:** an approved refund is *claimed* by exactly one worker (`submitting`) and sent to Paystack with the payment's own reference and the amount in pesewas, by the reconciler or immediately when an administrator approves it. The provider's answer
+  is recorded: accepted -> `processing`; the real outcome arrives by a signed notification (`refund.processed` -> refunded, `refund.failed` -> failed, `refund.needs-attention` -> checked by a person).
+- **The rule that matters most: an uncertain request is never retried by the system.** If it is not certain that Paystack received the request (no answer, a timeout, a server error, or the answer could not be written down) the refund becomes `unknown`
+  with a critical alert saying to check Paystack's dashboard first; a refund stuck mid-send for 15 minutes becomes `unknown` too. Only a clear refusal (Paystack answered with a 4xx) makes it `failed`, which an administrator can retry. This is what prevents refunding a customer twice.
+- **Administrator actions** (Admin > Payments > Refunds, `/api/payments/admin-refund`): approve and send, retry a failed one, cancel, *confirm as refunded by hand* (after checking the dashboard; a note is required), or *mark as not sent*. All audited. They move no money except through the same sending code.
+- **When money comes back:** the order becomes "refunded" once an order that was paid and is cancelled has had everything returned; the alerts about it close by themselves; the pharmacy is told ("it can take several business days to reach your account"). A late or double payment's refund leaves the order as it was (cancelled/unpaid, or paid).
+- **Notifications from Paystack that match nothing** (for example a refund made by hand in the dashboard) raise an alert and change nothing; one whose amount is stated in other units still matches when exactly one refund of that payment is in flight.
+- **Overdue refunds raise alerts:** waiting for approval over a day, approved but not sent for hours (is the reconciler running?), processing for ten days.
+- **What the two parties see** (pharmacy and wholesaler order cards, a small "Online payment" panel): what was paid, what was refunded, and any refund in progress, in plain words. The admin overview lists refunds with their actions.
+
+**Paystack facts used, and how sure they are.** From Paystack's published documentation as found on 2026-10-10: `POST /refund` takes the transaction (our reference) and an optional amount in the smallest unit (no more than the original); the answer says the refund was queued, the real outcome comes later as
+`refund.pending`, `refund.processing`, `refund.processed`, `refund.failed` and `refund.needs-attention` notifications (the notification carries the payment's `transaction_reference`); refunds are possible only within 180 days of the payment. **Not confirmed:** the exact fields of the refund notifications (so parsing is tolerant, and a
+notification is matched by the payment's reference and, when stated, the amount), the full list of status words in the answer, whether `currency` and `merchant_note` are accepted on the request (if Paystack rejected them the refund would simply fail and show the reason), and how a refund behaves for a payment that was split between accounts (P5). A refund the system could not match is an alert, and an administrator can always confirm one by hand after looking at the dashboard.
+
+**Verified locally:** `payments-refunds.sql` 85/85 (every state and transition, the cap, the same source twice, partial refunds, unmatched / other-mode / wrong events, stale refunds, who can see and do what, mutation checks: the cap, the claim, automatic approval, definite versus uncertain, the administrator check, the "refunded" order, the half-sent flag);
+`payments-refunds-concurrency.sh` 12/12 with negative controls (two workers claiming, a notification racing a manual confirmation, racing requests that would exceed the payment, cancel racing send); `payments-refunds-api.local.mjs` 30/30 (the real handlers, real sessions and the fake Paystack: a paid order cancelled then refunded, a late payment auto-refunded by the reconciler,
+a refusal retried, a lost answer never sent twice, a refund confirmed by hand, an unmatched and a forged notification); 47 more unit tests (118 in the payments folder, 566 in all); lint, type-check; the admin Refunds section and the order panel driven in the browser.
+
+**Known gaps:**
+- **Amendments on a paid online order (P4b):** an accepted short supply or price change still does not refund the difference, and a price rise cannot be topped up. Online orders must not be used for real money before P4b.
+- A delivery-problem credit on a paid online order is not yet turned into a refund (P4b); it will wait for approval like the others.
+- The first run against real Paystack test keys is still the check for everything above.

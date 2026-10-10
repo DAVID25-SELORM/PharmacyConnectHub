@@ -51,6 +51,7 @@ import {
 } from "@/lib/product-import";
 import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment } from "@/lib/payments";
+import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -693,6 +694,7 @@ function OrdersInbox({
             />
             <DeliveryCheckPanel orderId={o.id} orderStatus={o.status} side="wholesaler" canAct={canDecideDeliveries} onChanged={onOrderChanged} />
             <OrderActivityTimeline orderId={o.id} />
+            <OnlinePaymentPanel orderId={o.id} paymentMethod={o.payment_method} />
 
             <ReceiptStatusPanel order={o} />
 

@@ -8,6 +8,8 @@ import {
   type PaymentProvider,
   type PaymentStatus,
   type ProviderMode,
+  type RefundInput,
+  type RefundResult,
   type VerifiedPayment,
   type WebhookParseResult,
 } from "./types.js";
@@ -190,6 +192,22 @@ export class PaystackProvider implements PaymentProvider {
     };
   }
 
+  async refund(input: RefundInput): Promise<RefundResult> {
+    if (!Number.isInteger(input.amountMinor) || input.amountMinor <= 0)
+      throw new Error("The amount must be a whole number of pesewas.");
+    const json = await this.call("POST", "/refund", {
+      transaction: input.transactionReference,
+      amount: input.amountMinor,
+      currency: "GHS",
+      ...(input.merchantNote ? { merchant_note: input.merchantNote.slice(0, 200) } : {}),
+    });
+    const data = (json.data ?? {}) as Json;
+    return {
+      providerRefundId: data.id === undefined || data.id === null ? null : String(data.id),
+      status: (asString(data.status) ?? "pending").toLowerCase(),
+    };
+  }
+
   async listTransactions(input: { from: string; to: string; page?: number; perPage?: number }) {
     const params = new URLSearchParams({
       from: input.from,
@@ -226,16 +244,34 @@ export class PaystackProvider implements PaymentProvider {
     const event = asString(body.event);
     if (!event) return { ok: false, reason: "no_event" };
     const data = (body.data ?? {}) as Json;
+    const nested = (data.transaction ?? {}) as Json;
     const reference = asString(data.reference);
-    const identity = data.id !== undefined && data.id !== null ? String(data.id) : reference;
+    // Refund notifications name the payment being refunded (our reference) rather than carrying a "reference" of their own.
+    const transactionReference =
+      asString(data.transaction_reference) ?? asString(nested.reference) ?? reference;
+    const refundId = data.refund_reference ?? data.id;
+    const identity =
+      data.id !== undefined && data.id !== null
+        ? String(data.id)
+        : refundId !== undefined && refundId !== null
+          ? String(refundId)
+          : (transactionReference ?? reference);
     const fallback = createHash("sha256").update(rawBody).digest("hex");
+    const isRefund = event.startsWith("refund.");
     return {
       ok: true,
       event: {
         event,
         dedupeKey: `${event}:${identity ?? fallback}`,
-        reference,
+        reference: reference ?? (isRefund ? transactionReference : null),
         domain: asDomain(data.domain),
+        ...(isRefund
+          ? {
+              transactionReference,
+              refundId: refundId === undefined || refundId === null ? null : String(refundId),
+              amountMinor: asNumber(data.amount),
+            }
+          : {}),
       },
     };
   }

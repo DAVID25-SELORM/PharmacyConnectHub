@@ -210,6 +210,8 @@ describe("the frequent job", () => {
       "mark_attempt_checked",
       "close_stale_payment_attempts",
       "expire_unpaid_online_orders",
+      "refunds_to_submit",
+      "flag_stale_refunds",
     ]);
     expect(s.rpcCalls[1].args).toMatchObject({
       p_source: "reconcile",

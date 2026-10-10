@@ -17,8 +17,11 @@ import { fileURLToPath } from "node:url";
 export async function startFakePaystack({ secret, port = 0, webhookUrl = null, webhookDelayMs = 0 } = {}) {
   if (!secret || !secret.startsWith("sk_test_")) throw new Error("the stand-in only accepts a test key");
   const payments = new Map();
+  const refunds = new Map();
+  const refundCalls = [];
   const calls = [];
   let nextId = 5000;
+  let nextRefundId = 800;
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     const send = (status, body, type = "application/json") => {
@@ -71,6 +74,32 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
         }));
         const rows = all.slice((page - 1) * perPage, page * perPage);
         return send(200, { status: true, message: "Transactions retrieved", data: rows, meta: { total: all.length, page, pageCount: Math.max(1, Math.ceil(all.length / perPage)) } });
+      }
+      if (url.pathname === "/refund" && req.method === "POST") {
+        if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
+        const body = JSON.parse(await readBody());
+        refundCalls.push(body);
+        if (fake.refundBehavior === "reject") return send(400, { status: false, message: "Transaction is not eligible for refund" });
+        const p = payments.get(body.transaction);
+        if (!p || p.status !== "success") return send(400, { status: false, message: "Transaction not found or not successful" });
+        const already = [...refunds.values()].filter((r) => r.transaction === body.transaction).reduce((sum, r) => sum + r.amount, 0);
+        if (!Number.isInteger(body.amount) || body.amount <= 0 || already + body.amount > (p.paidAmount ?? p.amount)) {
+          return send(400, { status: false, message: "Amount exceeds the refundable balance" });
+        }
+        const refund = { id: ++nextRefundId, transaction: body.transaction, amount: body.amount, status: "pending" };
+        refunds.set(refund.id, refund);
+        if (fake.refundBehavior === "drop") {
+          // The provider took the request, but the answer never arrives.
+          res.destroy();
+          return;
+        }
+        return send(200, { status: true, message: "Refund has been queued for processing", data: { id: refund.id, status: "pending", amount: refund.amount, currency: "GHS", transaction: { reference: body.transaction } } });
+      }
+      const fetchRefund = /^\/refund\/(\d+)$/.exec(url.pathname);
+      if (fetchRefund && req.method === "GET") {
+        const refund = refunds.get(Number(fetchRefund[1]));
+        if (!refund) return send(404, { status: false, message: "Refund not found" });
+        return send(200, { status: true, data: { id: refund.id, status: refund.status, amount: refund.amount } });
       }
       const verify = /^\/transaction\/verify\/(.+)$/.exec(url.pathname);
       if (verify && req.method === "GET") {
@@ -155,6 +184,26 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
         if (webhookDelayMs > 0) setTimeout(send, webhookDelayMs);
         else await send();
       }
+    },
+    refunds,
+    refundCalls,
+    /** "accept" (default), "reject" (answers 400) or "drop" (takes the refund but the answer is lost). */
+    refundBehavior: "accept",
+    /** The provider finished a refund ("processed", "failed" or "needs-attention"): sends the signed notification, like Paystack. */
+    async finishRefund(transaction, outcome, url = webhookUrl, extra = {}) {
+      const refund = [...refunds.values()].find((r) => r.transaction === transaction);
+      if (!refund) throw new Error(`no refund for ${transaction}`);
+      refund.status = outcome === "processed" ? "processed" : outcome === "failed" ? "failed" : "needs-attention";
+      if (!url) return null;
+      const body = JSON.stringify({
+        event: `refund.${outcome}`,
+        data: { id: refund.id, status: refund.status, transaction_reference: transaction, refund_reference: `rf-${refund.id}`, amount: refund.amount, domain: "test", ...extra },
+      });
+      return fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-paystack-signature": createHmac("sha512", secret).update(body).digest("hex") },
+        body,
+      });
     },
     /** Send a signed charge.success notification for a reference, whatever its state (for tests). */
     async notify(reference, url = webhookUrl, extra = {}) {

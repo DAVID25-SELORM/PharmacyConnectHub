@@ -40,17 +40,47 @@ export type PaymentAttemptRow = {
   failure_reason: string | null;
 };
 
+export type RefundStatus =
+  | "requested"
+  | "approved"
+  | "submitting"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "unknown"
+  | "cancelled";
+
+export type PaymentRefund = {
+  id: string;
+  order_id: string;
+  order_number: string;
+  pharmacy: string | null;
+  amount_ghs: number;
+  reason: string;
+  status: RefundStatus;
+  method: "provider" | "manual";
+  failure_reason: string | null;
+  note: string | null;
+  created_at: string;
+  approved_at: string | null;
+  submitted_at: string | null;
+  completed_at: string | null;
+  reference: string;
+};
+
 export type PaymentOverview = {
-  settings: { enabled: boolean; mode: "test" | "live" } | null;
+  settings: { enabled: boolean; mode: "test" | "live"; auto_refunds: boolean } | null;
   counts: {
     open_alerts: number;
     open_critical: number;
     refunds_required: number;
+    refunds_open: number;
     awaiting_payment: number;
     paid_24h: number;
     paid_24h_ghs: number;
   };
   alerts: PaymentAlert[];
+  refunds: PaymentRefund[];
   attempts: PaymentAttemptRow[];
 };
 
@@ -88,7 +118,105 @@ export const ALERT_KIND_LABELS: Record<string, string> = {
   amount_mismatch: "Amount differs",
   provider_unreachable: "Provider unreachable",
   expiry_blocked: "Order kept open",
+  refund_failed: "Refund failed",
+  refund_stuck: "Refund needs checking",
+  refund_unmatched: "Unmatched refund",
 };
+
+export type RefundAction = "approve" | "retry" | "cancel" | "confirm_refunded" | "mark_failed";
+
+export type RefundActionResult = {
+  status?: string;
+  sent?: boolean;
+  outcome?: "processing" | "succeeded" | "failed" | "unknown";
+  message?: string;
+};
+
+/** Approve, retry, cancel, confirm as refunded, or mark as not sent. Approving and retrying also send the refund at once. */
+export function refundAction(
+  refundId: string,
+  action: RefundAction,
+  note?: string,
+): Promise<RefundActionResult> {
+  return postWithSession<RefundActionResult>("/api/payments/admin-refund", {
+    refundId,
+    action,
+    note: note ?? null,
+  });
+}
+
+export const REFUND_REASON_LABELS: Record<string, string> = {
+  late_payment: "Paid after the order was cancelled",
+  double_payment: "Paid twice",
+  cancelled_after_payment: "Order cancelled after payment",
+  order_changed: "Order changed after payment",
+  amendment_reduction: "Order reduced after payment",
+  delivery_credit: "Delivery problem credit",
+  manual: "Manual",
+};
+
+export const REFUND_STATUS_LABELS: Record<RefundStatus, string> = {
+  requested: "Waiting for approval",
+  approved: "Approved, sending",
+  submitting: "Being sent",
+  processing: "With the provider",
+  succeeded: "Refunded",
+  failed: "Failed",
+  unknown: "Outcome unknown: check the provider",
+  cancelled: "Cancelled",
+};
+
+/** What an administrator may do to a refund in each state (the database enforces the same rules). */
+export function refundActionsFor(
+  status: RefundStatus,
+): { action: RefundAction; label: string; needsNote: boolean }[] {
+  switch (status) {
+    case "requested":
+      return [
+        { action: "approve", label: "Approve and send", needsNote: false },
+        { action: "confirm_refunded", label: "Already refunded", needsNote: true },
+        { action: "cancel", label: "Cancel", needsNote: false },
+      ];
+    case "approved":
+      return [
+        { action: "confirm_refunded", label: "Already refunded", needsNote: true },
+        { action: "cancel", label: "Cancel", needsNote: false },
+      ];
+    case "submitting":
+      return [{ action: "confirm_refunded", label: "Already refunded", needsNote: true }];
+    case "processing":
+      return [
+        { action: "confirm_refunded", label: "Confirm refunded", needsNote: true },
+        { action: "mark_failed", label: "Not sent", needsNote: true },
+      ];
+    case "unknown":
+      return [
+        { action: "confirm_refunded", label: "Confirm refunded", needsNote: true },
+        { action: "mark_failed", label: "Not sent", needsNote: true },
+      ];
+    case "failed":
+      return [
+        { action: "retry", label: "Retry", needsNote: false },
+        { action: "confirm_refunded", label: "Already refunded", needsNote: true },
+        { action: "cancel", label: "Cancel", needsNote: false },
+      ];
+    default:
+      return [];
+  }
+}
+
+/** A plain sentence for what happened when a refund was approved, retried, or otherwise changed. */
+export function describeRefundAction(result: RefundActionResult): string {
+  if (result.sent === false && result.message) return result.message;
+  if (result.outcome === "processing")
+    return "The refund was sent to the provider. It is processing.";
+  if (result.outcome === "succeeded") return "The provider reports the refund as completed.";
+  if (result.outcome === "failed")
+    return "The provider refused the refund. It is marked as failed; you can retry it.";
+  if (result.outcome === "unknown")
+    return "It is not known whether the provider received the refund. Check the provider's dashboard before doing anything else.";
+  return "Done.";
+}
 
 export function alertKindLabel(kind: string): string {
   return ALERT_KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
