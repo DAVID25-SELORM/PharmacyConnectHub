@@ -261,13 +261,13 @@ END $$;
 
 -- 4. Wrong amount, wrong currency, unknown reference, wrong mode: never paid.
 DO $$
-DECLARE o UUID := zz.ord('P2'); r JSONB; n_before INT := (SELECT count(*) FROM public.notifications WHERE type = 'payment_update');
+DECLARE o UUID := zz.ord('P2'); r JSONB; n_before INT := (SELECT count(*) FROM public.notifications WHERE title IN ('Payment confirmed', 'New paid order'));
 BEGIN
   PERFORM zz.att(o, 'DX-TEST-0002');
   r := zz.apply('DX-TEST-0002', 'success', 9999);
   PERFORM zz.check('one pesewa less than asked is flagged, not paid', r->>'outcome' = 'flagged' AND r->>'flag' = 'amount_mismatch' AND zz.pstat(o) = 'unpaid', r::text);
   PERFORM zz.check('the attempt says why and no refund is assumed (a person decides)', zz.astat('DX-TEST-0002') = 'flagged/amount_mismatch/false');
-  PERFORM zz.check('nobody was told the order is paid', (SELECT count(*) FROM public.notifications WHERE type = 'payment_update') = n_before);
+  PERFORM zz.check('nobody was told the order is paid', (SELECT count(*) FROM public.notifications WHERE title IN ('Payment confirmed', 'New paid order')) = n_before);
   r := zz.apply('DX-TEST-0002', 'success', 10000);
   PERFORM zz.check('once flagged, a later correct-looking result does not reopen it (duplicate)', r->>'outcome' = 'duplicate' AND zz.pstat(o) = 'unpaid', r::text);
   PERFORM zz.check('the log records the flag', EXISTS (SELECT 1 FROM public.order_payment_log WHERE order_id = o AND kind = 'payment_flagged'));

@@ -24,6 +24,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as WholesalerRouteImport } from './routes/wholesaler'
 import { Route as AdminActivityRouteImport } from './routes/admin.activity'
+import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
@@ -114,6 +115,11 @@ const AdminActivityRoute = AdminActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminReportsRoute = AdminReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
@@ -264,6 +272,7 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
@@ -297,6 +306,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
@@ -359,6 +370,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
@@ -510,6 +522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminActivityRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/payments': {
+      id: '/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AdminPaymentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/reports': {
       id: '/admin/reports'
       path: '/reports'
@@ -613,6 +632,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminVerificationRoute: typeof AdminVerificationRoute
@@ -620,6 +640,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminPaymentsRoute: AdminPaymentsRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminVerificationRoute: AdminVerificationRoute,

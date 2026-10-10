@@ -14,6 +14,8 @@ const routes = {
   "/api/payments/initialize": "../../api/payments/initialize.ts",
   "/api/payments/verify": "../../api/payments/verify.ts",
   "/api/payments/webhook": "../../api/payments/webhook.ts",
+  "/api/payments/reconcile": "../../api/payments/reconcile.ts",
+  "/api/payments/admin-reverify": "../../api/payments/admin-reverify.ts",
 };
 
 export async function startDevApiServer(port = 0) {
@@ -25,7 +27,9 @@ export async function startDevApiServer(port = 0) {
   const handlers = {};
   for (const [path, file] of Object.entries(routes)) handlers[path] = (await import(file)).default;
   const server = http.createServer(async (req, res) => {
-    const path = new URL(req.url, "http://x").pathname;
+    const parsed = new URL(req.url, "http://x");
+    const path = parsed.pathname;
+    req.query = Object.fromEntries(parsed.searchParams.entries());
     const handler = handlers[path];
     if (!handler) {
       res.statusCode = 404;

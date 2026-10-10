@@ -346,3 +346,47 @@ Pay now offered), pay (webhook applies it, the return page says "Payment receive
   page calls it every four seconds for about two minutes). A per-order throttle is added with the reconciler in P3.
 
 **Production finding when the P2 patches were first applied:** production has a second, older version of `create_marketplace_orders` (`_caller_id, _pharmacy_id, _items, _request_id`) that exists in no migration (service role only; the app does not call it). The checkout patches now name the exact argument list of the live six-argument version and change only that one (`apply_function_regex_patch_sig`), and refuse if it is missing or unexpected. A marker bug was also found and fixed (the settlement-change patch could insert its check again on every re-run). The stray older version has not been touched; whether to drop it is a separate decision once its definition has been reviewed.
+
+## 14. P3 status (built locally, not deployed): operating it
+
+**Decisions as accepted in section 3 (S4):** an unpaid online order is cancelled and its stock released **30 minutes after its last payment attempt started** (or after it
+was placed, when none was started), and in any case 2 hours after it was placed. Every "Pay now" press restarts the 30 minutes, so a customer who is still on the provider's page
+is not cancelled underneath; the 2-hour cap stops that from going on for ever.
+
+**What P3 contains (online payments are still off by default; nothing here does anything while there are no online orders):**
+- **Migrations** `20261108100000_payments_operations_schema.sql` (alerts table, `last_checked_at` / `check_requested_at` on attempts) and
+  `20261108110000_payments_operations_workflow.sql` (the functions below). All of it is service-role or admin only.
+- **Alerts** (`payment_alerts`): one open alert per problem (a repeat only counts it), never rewritten, never deleted, a resolved one is never reopened (a returning problem gets a new
+  one). A flagged payment or money that must be refunded raises one automatically, whichever path recorded it (webhook, return page, reconciler, admin), tells the platform
+  administrators, and tells the pharmacy ("do not pay again", promising nothing the system does not yet do). An alert about a payment closes by itself when that payment is applied.
+- **The reconciler** (`/api/payments/reconcile`, called by a scheduler with `CRON_SECRET`): *frequent* (every ~5 minutes) asks the provider about attempts that could still turn out to have
+  been paid (open ones every few minutes, closed or abandoned ones hourly, for 48 hours: this is how a late payment is found even when its notification never arrives), applies
+  the answers through `apply_payment_result`, closes attempts open for 48 hours, and expires orders; *daily* lists the provider's transactions for the last 25 hours and compares them with ours
+  (unknown at the provider, amount or status differences, paid at the provider but not applied, ours but missing there). Anything paid at the provider but not applied is verified and applied
+  through the same function; **nothing is corrected any other way.**
+- **Expiry safety:** an order is expired under its lock, re-checked as still unpaid and pending, and **never while one of its attempts could still be paid and has not been checked
+  with the provider recently** (15 minutes for an open attempt, 70 for a closed one). The rule lives in the database, so a provider outage or a missed run cannot cancel an order that was in fact
+  paid: it raises "Order kept open" instead. Expiry skips an order that is locked by a payment being recorded (it does not wait), so a payment and an expiry racing each other end with a paid
+  order, never a cancelled paid one.
+- **The return page** can no longer hammer the provider: each attempt is asked about at most once every 3 seconds; a faster request is answered "still waiting" without calling it.
+- **Admin > Payments** (`/admin/payments`): counts (needing attention, refunds needed, awaiting payment, paid in 24 hours), the open alerts with **Re-verify** (asks the provider again about an
+  order's attempts, recorded the same way as everywhere) and **Mark as dealt with** (a note is required, and it is audited), recently resolved alerts, and the recent attempts. It moves no money.
+- **Docs:** `docs/payments/scheduling-the-reconciler.md` (what to schedule, how, and what happens without it), `docs/payments/runbook.md` (each alert and each situation: webhooks not arriving,
+  a payment that is stuck, a late payment, the reconciler not running), `docs/payments/verify-payments-p3.sql` (read-only production check).
+
+**Not scheduled yet, on purpose:** the reconciler is **not** in `vercel.json`. On Vercel's Hobby plan only once-a-day cron jobs are allowed and a disallowed schedule makes the deployment fail; whether
+you are on Pro decides. See the scheduling document. Until it is scheduled, unpaid online orders hold their stock until cancelled by hand, and a lost notification is only found when the customer returns or an
+administrator presses Re-verify.
+
+**Verified locally:** `payments-operations.sql` 86/86; `payments-operations-concurrency.sh` 13/13 with a negative control (removing the lock makes a paid order get cancelled and its stock come back twice);
+`payments-operations-api.local.mjs` 27/27 (the real handlers behind a real HTTP server with the fake Paystack, with failures injected: a notification that never arrives, an abandoned order, the
+provider down, a payment after the order expired, a payment the provider has and we do not, an administrator's re-verify, the return page's throttle); 21 more handler unit tests (92 in all); eight
+mutation checks (each safeguard removed makes the suite fail); the admin screen driven in the browser (counts, alerts, resolving with a note, Re-verify).
+
+**Known gaps (unchanged by P3 unless stated):**
+- **Refunds are still done by a person** in the Paystack dashboard; the alert tells the administrator exactly what to refund. Automatic refunds, refunds when an amendment lowers the price or supply of a
+  paid online order, and top-up payments are P4. Online orders must still not be used for real money before then.
+- The admin payments report and the supplier's customer list still count an order awaiting online payment as unpaid. Left alone deliberately: patching those two production functions carries risk for
+  little value while online payments are in test mode.
+- Verified with the stand-in, not with Paystack: the shape of its transaction list (the daily comparison) as well as initialize, verify and the notification. The first run against real test keys is the check.
+- The daily comparison reads at most 2,000 transactions (20 pages of 100); with more, it says the list is incomplete and does not judge "ours but missing at the provider".

@@ -323,6 +323,59 @@ describe("verifying a payment", () => {
     });
   });
 
+  it("answers still-waiting without calling the provider when the database says the page asked again too soon", async () => {
+    const s = setup("verify", {
+      rpc: (c) =>
+        c.fn === "payment_attempts_to_check"
+          ? { data: { payment_status: "unpaid", throttled: true, attempts: [] }, error: null }
+          : undefined,
+    });
+    const r = await s.run();
+    expect(r.payload).toEqual({ status: "pending" });
+    expect(s.providerCalls).toHaveLength(0);
+  });
+
+  it("marks each attempt as checked once the provider has answered, but not when it could not be reached", async () => {
+    const ok = setup("verify", {
+      rpc: (c) =>
+        c.fn === "payment_attempts_to_check"
+          ? {
+              data: {
+                payment_status: "unpaid",
+                attempts: [
+                  { attempt_id: "a1", provider: "paystack", mode: "test", reference: "dx-test-1" },
+                ],
+              },
+              error: null,
+            }
+          : c.fn === "apply_payment_result"
+            ? { data: { outcome: "pending" }, error: null }
+            : undefined,
+      paystack: { "dx-test-1": { body: verifyBody("dx-test-1", { status: "ongoing" }) } },
+    });
+    await ok.run();
+    expect(ok.rpcCalls.find((c) => c.fn === "mark_attempt_checked")?.args).toEqual({
+      p_attempt_id: "a1",
+    });
+    const down = setup("verify", {
+      rpc: (c) =>
+        c.fn === "payment_attempts_to_check"
+          ? {
+              data: {
+                payment_status: "unpaid",
+                attempts: [
+                  { attempt_id: "a1", provider: "paystack", mode: "test", reference: "dx-test-1" },
+                ],
+              },
+              error: null,
+            }
+          : undefined,
+      paystack: { "dx-test-1": "offline" },
+    });
+    expect((await down.run()).status).toBe(502);
+    expect(down.rpcCalls.some((c) => c.fn === "mark_attempt_checked")).toBe(false);
+  });
+
   it("does not ask the provider again for an order that is already paid", async () => {
     const s = setup("verify", { rpc: listed([{ reference: "dx-test-1" }], "paid") });
     expect((await s.run()).payload).toEqual({ status: "paid" });

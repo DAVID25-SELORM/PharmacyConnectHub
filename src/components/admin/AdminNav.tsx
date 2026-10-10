@@ -1,11 +1,19 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, BarChart3, ClipboardCheck, LayoutDashboard, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  ClipboardCheck,
+  CreditCard,
+  LayoutDashboard,
+  ShieldCheck,
+} from "lucide-react";
 
 const ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/verification", label: "Verification", icon: ClipboardCheck, exact: false },
   { to: "/admin/activity", label: "Activity", icon: Activity, exact: false },
   { to: "/admin/reports", label: "Reports", icon: BarChart3, exact: false },
+  { to: "/admin/payments", label: "Payments", icon: CreditCard, exact: false },
   { to: "/admin/staff", label: "Platform Team", icon: ShieldCheck, exact: false },
 ] as const;
 

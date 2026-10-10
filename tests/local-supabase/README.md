@@ -251,3 +251,15 @@ available credit after partial payments and requires explicit financial review.
     then `DEV_API_PROXY=http://127.0.0.1:3001 npx vite`. Needs migrations through 20261107120000. Mutation checks: the accept block, the permission check, the
     switch, the already-paid check, the cancelled check, the online-order check, the rate limit, the reuse window and the reuse amount check each removed
     fail the suite.
+
+31. `payments-operations.sql` (86 checks), `payments-operations-concurrency.sh` (13 checks), `payments-operations-api.local.mjs` (27 checks) and the handler unit tests
+    (`api/_payments/reconcile-handler.test.ts`, 21 checks): online payments, P3. A flagged payment or money to refund raises exactly one alert and tells the admins and the
+    pharmacy; alerts are admin-readable only, never rewritten, deleted or reopened; the return page's check is throttled and does not count as verified until the provider has answered;
+    what the reconciler asks about (unchecked open attempts, open ones checked long ago, closed ones hourly; not too-young, just-checked, final or over-48-hour ones; attempts of cancelled orders
+    included); stale attempts are closed; unpaid online orders expire 30 minutes after the last attempt (2-hour cap), never while an attempt has not been checked with the provider recently,
+    never if paid, with stock returned, the pharmacy told, logged and audited; the daily comparison (unknown, amount, status, paid-but-not-applied, missing-at-provider, other mode and other
+    people's references ignored, a list that is not a list refused); only the server can call any of it. The `.sh` runs real overlapping sessions (expiry vs a payment, a payment vs expiry, two
+    expiry runs, expiry vs a payment start); negative control: remove `FOR UPDATE SKIP LOCKED` in `expire_unpaid_online_orders` and scenarios 2 and 3 fail. The `.mjs` runs the real reconcile,
+    admin-reverify and verify handlers behind a real HTTP server with the fake Paystack and injected failures (run `payments-checkout.sql` first, then `pw.sql`, `source env.sh`, `npx tsx`).
+    Needs migrations through 20261108110000. Mutation checks: the unchecked-attempt guard, the window, the 2-hour cap, the throttle, the admin check on resolving, the recheck spacing, the
+    mode filter and the amount comparison each removed fail the suite.

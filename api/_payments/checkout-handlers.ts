@@ -13,6 +13,7 @@ import type { PaymentsConfig, PaymentsConfigResult } from "./config.js";
 import type { RpcFn } from "./webhook-handler.js";
 import { ProviderError, type PaymentProvider } from "./types.js";
 import { newPaymentReference } from "./paystack.js";
+import { verifyAndApply, type AttemptRef } from "./verify-apply.js";
 
 export type CheckoutDeps = {
   loadConfig: () => PaymentsConfigResult;
@@ -179,60 +180,44 @@ export function createVerifyHandler(deps: CheckoutDeps) {
         .status(statusForDatabaseMessage(listed.error.message))
         .json({ error: listed.error.message });
     }
-    const { payment_status: paymentStatus, attempts } = listed.data as {
+    const {
+      payment_status: paymentStatus,
+      throttled,
+      attempts,
+    } = listed.data as {
       payment_status: string;
-      attempts: { provider: string; mode: string; reference: string }[];
+      throttled?: boolean;
+      attempts: AttemptRef[];
     };
     if (paymentStatus === "paid") {
       return res.status(200).json({ status: "paid" satisfies VerifyOutcome });
     }
+    // Asked again within a few seconds: answer from what is known (still waiting) without bothering the provider.
+    if (throttled) return res.status(200).json({ status: "pending" satisfies VerifyOutcome });
 
     let status: VerifyOutcome = "not_paid";
     let providerTrouble = false;
     for (const attempt of attempts) {
       // Only attempts made in the mode this server runs in, with the provider this server talks to.
       if (attempt.provider !== provider.name || attempt.mode !== provider.mode) continue;
-      try {
-        const verified = await provider.verify(attempt.reference);
-        if (verified.domain && verified.domain !== provider.mode) {
-          deps.log(
-            `payments verify ignored a ${verified.domain}-mode answer in ${provider.mode} mode`,
-          );
+      const result = await verifyAndApply({ provider, rpc }, attempt, "verify");
+      if (!result.ok) {
+        if (result.error === "other_mode") {
+          deps.log(`payments verify ignored ${result.message}`);
           continue;
         }
-        const applied = await rpc("apply_payment_result", {
-          p_provider: provider.name,
-          p_mode: provider.mode,
-          p_reference: attempt.reference,
-          p_provider_status: verified.status,
-          p_amount_minor: verified.amountMinor,
-          p_currency: verified.currency,
-          p_transaction_id: verified.transactionId,
-          p_channel: verified.channel,
-          p_fee_minor: verified.feeMinor,
-          p_source: "verify",
-          p_event_id: null,
-          p_failure_reason: verified.failureReason,
-        });
-        if (applied.error) throw new Error(applied.error.message);
-        const result = applied.data as { outcome?: string; order_paid?: boolean };
-        if (result.order_paid) {
-          status = "paid";
-          break;
-        }
-        if (result.outcome === "flagged" || result.outcome === "late") status = "flagged";
-        else if (result.outcome === "pending" && status === "not_paid") status = "pending";
-        else if (result.outcome === "failed" && status === "not_paid") status = "failed";
-      } catch (error) {
-        // Paystack not knowing a reference (the customer never reached the checkout page) is not a problem.
-        if (error instanceof ProviderError && error.options.notFound) continue;
         providerTrouble = true;
-        deps.log(
-          `payments verify failed: ${error instanceof ProviderError ? "provider" : "database"}: ${
-            error instanceof Error ? error.message : "unknown error"
-          }`,
-        );
+        deps.log(`payments verify failed: ${result.error}: ${result.message}`);
+        continue;
       }
+      // The provider not knowing a reference (the customer never reached the checkout page) is not a problem.
+      if (result.orderPaid) {
+        status = "paid";
+        break;
+      }
+      if (result.outcome === "flagged" || result.outcome === "late") status = "flagged";
+      else if (result.outcome === "pending" && status === "not_paid") status = "pending";
+      else if (result.outcome === "failed" && status === "not_paid") status = "failed";
     }
     // The answer is "we could not check" rather than a guess, so the page keeps asking.
     if (providerTrouble && status !== "paid") {

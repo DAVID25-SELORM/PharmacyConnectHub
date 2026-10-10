@@ -56,6 +56,22 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
           data: { authorization_url: `${baseUrl}/checkout/${encodeURIComponent(body.reference)}`, access_code: `ac_${nextId}`, reference: body.reference },
         });
       }
+      if (url.pathname === "/transaction" && req.method === "GET") {
+        if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
+        const perPage = Number(url.searchParams.get("perPage") ?? "100");
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const all = [...payments.entries()].map(([reference, p]) => ({
+          id: p.id,
+          reference,
+          status: p.status,
+          amount: p.status === "success" ? (p.paidAmount ?? p.amount) : p.amount,
+          currency: p.currency,
+          channel: "card",
+          paid_at: p.status === "success" ? new Date().toISOString() : null,
+        }));
+        const rows = all.slice((page - 1) * perPage, page * perPage);
+        return send(200, { status: true, message: "Transactions retrieved", data: rows, meta: { total: all.length, page, pageCount: Math.max(1, Math.ceil(all.length / perPage)) } });
+      }
       const verify = /^\/transaction\/verify\/(.+)$/.exec(url.pathname);
       if (verify && req.method === "GET") {
         if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
