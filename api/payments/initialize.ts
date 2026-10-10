@@ -11,6 +11,6 @@ export default createInitializeHandler({
   createProvider: createPaymentProvider,
   createRpc: createAdminRpc,
   authenticate: authenticateBearer,
-  returnUrl: (orderId) => paymentReturnUrl(orderId),
+  returnUrl: (orderId, purpose) => paymentReturnUrl(orderId, process.env, purpose),
   log: (message) => console.warn(message),
 });

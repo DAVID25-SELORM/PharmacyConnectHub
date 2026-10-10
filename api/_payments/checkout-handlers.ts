@@ -22,23 +22,29 @@ export type CheckoutDeps = {
   /** Resolves a bearer token to a user id, or null when it is not a valid session. */
   authenticate: (token: string) => Promise<string | null>;
   /** The page the provider sends the customer back to. */
-  returnUrl: (orderId: string) => string | null;
+  returnUrl: (orderId: string, purpose?: PaymentPurpose) => string | null;
   log: (message: string) => void;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function parseOrderId(req: VercelRequest): string | null {
+/** "order": the payment that pays an order. "top_up": an extra payment for a price increase on an order that is already paid. */
+export type PaymentPurpose = "order" | "top_up";
+
+function parseBody(req: VercelRequest): { orderId: string | null; purpose: PaymentPurpose } {
   let body: unknown = req.body;
   if (typeof body === "string") {
     try {
       body = JSON.parse(body);
     } catch {
-      return null;
+      return { orderId: null, purpose: "order" };
     }
   }
-  const orderId = (body as { orderId?: unknown } | null | undefined)?.orderId;
-  return typeof orderId === "string" && UUID.test(orderId) ? orderId : null;
+  const input = (body ?? {}) as { orderId?: unknown; purpose?: unknown };
+  return {
+    orderId: typeof input.orderId === "string" && UUID.test(input.orderId) ? input.orderId : null,
+    purpose: input.purpose === "top_up" ? "top_up" : "order",
+  };
 }
 
 /** The database speaks to people in plain sentences; this maps them onto status codes without ever passing internals on. */
@@ -49,7 +55,13 @@ function statusForDatabaseMessage(message: string): number {
   return 400;
 }
 
-type Prepared = { provider: PaymentProvider; rpc: RpcFn; userId: string; orderId: string };
+type Prepared = {
+  provider: PaymentProvider;
+  rpc: RpcFn;
+  userId: string;
+  orderId: string;
+  purpose: PaymentPurpose;
+};
 
 async function prepare(
   deps: CheckoutDeps,
@@ -80,27 +92,27 @@ async function prepare(
     res.status(401).json({ error: "Invalid token" });
     return null;
   }
-  const orderId = parseOrderId(req);
+  const { orderId, purpose } = parseBody(req);
   if (!orderId) {
     res.status(400).json({ error: "A valid order is required." });
     return null;
   }
-  return { provider: deps.createProvider(configResult.config), rpc, userId, orderId };
+  return { provider: deps.createProvider(configResult.config), rpc, userId, orderId, purpose };
 }
 
 export function createInitializeHandler(deps: CheckoutDeps) {
   return async function handler(req: VercelRequest, res: VercelResponse) {
     const ready = await prepare(deps, req, res);
     if (!ready) return;
-    const { provider, rpc, userId, orderId } = ready;
+    const { provider, rpc, userId, orderId, purpose } = ready;
 
-    const callbackUrl = deps.returnUrl(orderId);
+    const callbackUrl = deps.returnUrl(orderId, purpose);
     if (!callbackUrl) {
       deps.log("payments initialize: no site address is configured for the return page");
       return res.status(500).json({ error: "Server misconfigured" });
     }
 
-    const begun = await rpc("begin_order_payment", {
+    const begun = await rpc(purpose === "top_up" ? "begin_order_topup" : "begin_order_payment", {
       p_caller_id: userId,
       p_order_id: orderId,
       p_provider: provider.name,
@@ -182,14 +194,17 @@ export function createVerifyHandler(deps: CheckoutDeps) {
     }
     const {
       payment_status: paymentStatus,
+      topup_due: topupDue,
       throttled,
       attempts,
     } = listed.data as {
       payment_status: string;
+      /** The order is paid, but a price increase means an extra payment is still due. */
+      topup_due?: boolean;
       throttled?: boolean;
       attempts: AttemptRef[];
     };
-    if (paymentStatus === "paid") {
+    if (paymentStatus === "paid" && !topupDue) {
       return res.status(200).json({ status: "paid" satisfies VerifyOutcome });
     }
     // Asked again within a few seconds: answer from what is known (still waiting) without bothering the provider.

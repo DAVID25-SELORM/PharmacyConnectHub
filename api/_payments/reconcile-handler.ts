@@ -125,6 +125,8 @@ export function createReconcileHandler(deps: ReconcileDeps) {
         else refunds.sent += 1;
       }
       const stale = await rpc("flag_stale_refunds", {});
+      // An order that costs less than was paid, with no refund on the way (an earlier refund was cancelled), raises an alert.
+      const unrefunded = await rpc("flag_unrefunded_balances", {});
       return res.status(200).json({
         job,
         ...summary,
@@ -132,6 +134,7 @@ export function createReconcileHandler(deps: ReconcileDeps) {
         expiry: expired.error ? null : expired.data,
         refunds,
         staleRefundsFlagged: typeof stale.data === "number" ? stale.data : 0,
+        unrefundedBalances: typeof unrefunded.data === "number" ? unrefunded.data : 0,
       });
     }
 

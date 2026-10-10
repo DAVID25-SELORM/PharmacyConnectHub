@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { formatGHS } from "@/lib/format";
-import { fetchOrderPaymentSummary, type OrderPaymentSummary } from "@/lib/payments";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { fetchOrderPaymentSummary, payForOrder, type OrderPaymentSummary } from "@/lib/payments";
 
 const REFUND_STATUS: Record<string, string> = {
   requested: "being arranged",
@@ -33,6 +35,7 @@ export function OnlinePaymentPanel({
   refreshKey?: number;
 }) {
   const [summary, setSummary] = useState<OrderPaymentSummary | null>(null);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     if (paymentMethod !== "paystack") return;
@@ -49,7 +52,8 @@ export function OnlinePaymentPanel({
   const paid = Number(summary.paid_ghs ?? 0);
   const refunded = Number(summary.refunded_ghs ?? 0);
   const refunds = (summary.refunds ?? []).filter((r) => r.status !== "cancelled");
-  if (paid === 0 && refunds.length === 0) return null;
+  const topupDue = Number(summary.topup_due_ghs ?? 0);
+  if (paid === 0 && refunds.length === 0 && topupDue === 0) return null;
 
   return (
     <div
@@ -61,6 +65,38 @@ export function OnlinePaymentPanel({
         Paid {formatGHS(paid)}
         {refunded > 0 ? ` · ${formatGHS(refunded)} refunded` : ""}
       </div>
+      {topupDue > 0 && (
+        <div className="mt-2 rounded-lg bg-warning/10 p-2 text-xs" data-testid="topup-due">
+          {summary.side === "pharmacy" ? (
+            <>
+              <p>
+                A price change means this order now costs {formatGHS(topupDue)} more. Pay the
+                difference so the supplier can dispatch it.
+              </p>
+              <Button
+                size="sm"
+                className="mt-2"
+                disabled={paying}
+                onClick={async () => {
+                  setPaying(true);
+                  const result = await payForOrder(orderId, "top_up");
+                  if (!result.ok) {
+                    toast.error(result.error);
+                    setPaying(false);
+                  }
+                }}
+              >
+                {paying ? "Opening payment page…" : `Pay ${formatGHS(topupDue)} now`}
+              </Button>
+            </>
+          ) : (
+            <p>
+              Waiting for the pharmacy to pay {formatGHS(topupDue)} for a price change. The order
+              cannot be dispatched until it is paid.
+            </p>
+          )}
+        </div>
+      )}
       {summary.refund_required && refunds.length === 0 && (
         <p className="mt-1 text-xs text-muted-foreground">
           A refund is due on this order and is being arranged.

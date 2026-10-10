@@ -17,6 +17,7 @@ function normalise(candidate: string | undefined): string | null {
 export function paymentReturnUrl(
   orderId: string,
   env: Record<string, string | undefined> = process.env,
+  purpose: "order" | "top_up" = "order",
 ): string | null {
   const base =
     normalise(env.SITE_URL) ??
@@ -24,5 +25,5 @@ export function paymentReturnUrl(
     normalise(env.VERCEL_PROJECT_PRODUCTION_URL) ??
     normalise(env.VERCEL_URL);
   if (!base) return null;
-  return `${base}/pay/return?order=${encodeURIComponent(orderId)}`;
+  return `${base}/pay/return?order=${encodeURIComponent(orderId)}${purpose === "top_up" ? "&purpose=top_up" : ""}`;
 }

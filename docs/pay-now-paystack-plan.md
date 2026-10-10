@@ -429,3 +429,37 @@ a refusal retried, a lost answer never sent twice, a refund confirmed by hand, a
 - **Amendments on a paid online order (P4b):** an accepted short supply or price change still does not refund the difference, and a price rise cannot be topped up. Online orders must not be used for real money before P4b.
 - A delivery-problem credit on a paid online order is not yet turned into a refund (P4b); it will wait for approval like the others.
 - The first run against real Paystack test keys is still the check for everything above.
+
+## 16. P4b status (built locally, not deployed): amendments on an order paid online
+
+**What P4b does:** a supply change, a price change, or a delivery-problem credit can now be made on an order that was **paid online** (until now the "already paid, needs a refund" refusal blocked all of them). The money follows one rule that
+lives in the database, so no screen can skip it:
+
+> what the order costs now (its effective total) **versus** what has been paid for it and not given back (the payments that stay valid, top-ups included, less the refunds still alive)
+
+- It now costs **less**: the difference is **refunded** (a refund request: approved by an administrator unless automatic refunds are on; a **delivery-problem credit always waits for an administrator**, even with automatic refunds on, as decided in S5).
+- It now costs **more**: the pharmacy must pay the difference (a **top-up**, S6) and the order **cannot be dispatched** until it is paid. Preparing it (picking, packing, ready for dispatch) is not blocked.
+- A price that **rises again while a refund for an earlier reduction has not been sent yet** nets it off: that refund is cancelled automatically and replaced by one for what is still due, so the pharmacy is never refunded and charged for the same money.
+
+**What it contains:**
+- **Migrations** `20261110100000_payments_adjustments_schema.sql` (a payment attempt now has a *purpose*: `order` or `top_up`; the one-paying-attempt rule applies to `order` only), `20261110110000_payments_adjustments_workflow.sql` (the balance, the trigger that settles the difference whenever an
+  online paid order's effective total changes, the dispatch block, starting and applying an extra payment, the admin balance tools, the refreshed summary) and `20261110120000_payments_adjustments_patches.sql` (seven fail-closed, exact-signature patches: the "already paid" refusal no longer
+  applies to an online order in `propose_partial_fulfilment`, `propose_price_amendment`, `respond_to_price_amendment` and `resolve_delivery_report`; a delivery credit is marked so its refund waits; `apply_payment_result` hands an extra payment to its own rules).
+  **Run `docs/payments/inspect-amendment-functions.sql` in production first** (a read-only dry run that shows whether production has exactly the text the patches look for, as it did not for `create_marketplace_orders` in P2).
+- **An extra payment** (`begin_order_topup`, `/api/payments/initialize` with `purpose: "top_up"`): same checks as paying an order (the platform switch and mode, who may pay, the amount taken from the database, resumed within 25 minutes, six an hour), but only for a paid, not-cancelled online order with something due, and for exactly what is due.
+  Verified like every payment; judged by its own rules: an extra payment of the wrong amount, for an amount that no longer matches what is due (the price changed again), for an order whose price came back down (nothing due), or for an order cancelled meanwhile is **flagged and refunded**, never kept silently. The return page asks the server to verify, and an order that owes an extra payment is **not** reported paid until it is.
+- **Back-orders are not available on an order paid online (yet):** "accept and back-order the rest" is refused with a clear message (cash orders collect each portion on its own, which does not fit an order paid in advance). The pharmacy can accept the shortage and have the rest cancelled (with a refund), or reject it. A rejected change leaves everything as it was.
+- **A refund that was cancelled** leaves an order costing less than was paid with no refund on the way: the reconciler flags it, and an administrator can ask for the difference to be refunded (`admin_request_balance_refund`).
+- **Screens:** the pharmacy's order card shows "A price change means this order now costs GH₵ X more" with a **Pay GH₵ X now** button (a top-up); the wholesaler's card says it is waiting for that payment and cannot be dispatched until it is paid; the existing "Online payment" panel shows paid, refunded and refunds in progress. The return page remembers it was an extra payment (retry works).
+- **Cash and credit orders are unchanged:** a paid cash order still cannot be amended (no cash refunds), and the money rule ignores any order not paid online.
+
+**Verified locally:** `payments-adjustments.sql` 72/72 (shortage refunded, automatic approval, a delivery credit that always waits, price decrease refunded, price increase and the dispatch block, every way an extra payment can be started or refused, every way one is flagged or late, back-orders refused,
+netting of unsent refunds, an unrefunded balance, cash orders unchanged, permissions; seven mutation checks, all caught); `payments-adjustments-concurrency.sh` 6/6 (an extra payment racing a further price change, in both orders); `payments-adjustments-api.local.mjs` 26/26 (the real handlers, real sessions, the fake Paystack and the
+real amendment functions called as the screens call them: a shortage refunded end to end, back-order refused, a price increase blocked from dispatch until paid, the extra payment found by return and by notification alone, a wrong-amount extra payment flagged); 7 more unit tests (125 in the payments folder);
+the P1 to P4a suites unchanged; lint, type-check.
+
+**Known gaps:**
+- **Back-orders on an order paid online** (above), and **returns of goods** on a paid online order (an order return is separate from a delivery credit and has not been connected to refunds).
+- **A refund is only as good as Paystack's refund** (see section 15): the first run against real test keys, including a refund of a payment that has had a top-up, is still the check.
+- **Several refunds of one payment** (a shortage, then a price drop) are individual Paystack refunds of that payment; Paystack's rules for multiple partial refunds were not confirmed.
+- Real money must still wait for the scheduled reconciler and the real Paystack test-mode run.

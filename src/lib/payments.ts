@@ -39,9 +39,18 @@ export function useOnlinePayments(): OnlinePaymentsStatus {
 
 export type StartedPayment = { authorizationUrl: string; reference: string; resumed: boolean };
 
+/** "order": the payment that pays an order. "top_up": an extra payment for a price increase on an order that is already paid. */
+export type PaymentPurpose = "order" | "top_up";
+
 /** Starts (or resumes) the payment of an order and returns the provider's checkout address. */
-export function startOrderPayment(orderId: string): Promise<StartedPayment> {
-  return postWithSession<StartedPayment>("/api/payments/initialize", { orderId });
+export function startOrderPayment(
+  orderId: string,
+  purpose: PaymentPurpose = "order",
+): Promise<StartedPayment> {
+  return postWithSession<StartedPayment>("/api/payments/initialize", {
+    orderId,
+    ...(purpose === "top_up" ? { purpose } : {}),
+  });
 }
 
 export type VerifyStatus = "paid" | "pending" | "failed" | "flagged" | "not_paid";
@@ -73,6 +82,8 @@ export type OrderPaymentSummary =
         channel: string | null;
       } | null;
       refund_required: boolean;
+      /** What the pharmacy still has to pay on a paid order whose price rose (0 when nothing is due). */
+      topup_due_ghs?: number;
       paid_ghs?: number;
       refunded_ghs?: number;
       refunds?: {
@@ -96,9 +107,10 @@ export async function fetchOrderPaymentSummary(
 /** Sends the customer to the provider's page to pay. Returns false (with the reason) when the payment could not be started. */
 export async function payForOrder(
   orderId: string,
+  purpose: PaymentPurpose = "order",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const started = await startOrderPayment(orderId);
+    const started = await startOrderPayment(orderId, purpose);
     window.location.assign(started.authorizationUrl);
     return { ok: true };
   } catch (error) {

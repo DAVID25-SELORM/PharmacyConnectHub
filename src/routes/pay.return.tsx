@@ -17,7 +17,8 @@ import {
 
 export const Route = createFileRoute("/pay/return")({
   head: () => ({ meta: [{ title: "Payment - Drugxone" }] }),
-  validateSearch: (search: Record<string, unknown>): { order?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { order?: string; purpose?: "top_up" } => ({
+    purpose: search.purpose === "top_up" ? "top_up" : undefined,
     order: typeof search.order === "string" ? search.order : undefined,
   }),
   component: PayReturnPage,
@@ -33,7 +34,7 @@ const MAX_CHECKS = 30;
  */
 function PayReturnPage() {
   const navigate = useNavigate();
-  const { order } = Route.useSearch();
+  const { order, purpose } = Route.useSearch();
   const { loading: sessionLoading, user, roles } = useSession();
   const [status, setStatus] = useState<VerifyStatus | "checking" | "unreachable">("checking");
   const [summary, setSummary] = useState<OrderPaymentSummary | null>(null);
@@ -162,7 +163,7 @@ function PayReturnPage() {
                 onClick={async () => {
                   setRetrying(true);
                   setPayError(null);
-                  const result = await payForOrder(order);
+                  const result = await payForOrder(order, purpose ?? "order");
                   if (!result.ok) {
                     setPayError(result.error);
                     setRetrying(false);

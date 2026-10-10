@@ -23,6 +23,7 @@ import {
   alertKindLabel,
   describeReverify,
   fetchPaymentOverview,
+  requestBalanceRefund,
   resolvePaymentAlert,
   reverifyOrderPayment,
   type PaymentAlert,
@@ -59,6 +60,7 @@ function AdminPaymentsPage() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [reverifying, setReverifying] = useState<string | null>(null);
+  const [requestingRefund, setRequestingRefund] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
 
   const load = useCallback(async () => {
@@ -88,6 +90,23 @@ function AdminPaymentsPage() {
       toast.error(e instanceof Error ? e.message : "Could not re-verify.");
     } finally {
       setReverifying(null);
+    }
+  };
+
+  const askForBalanceRefund = async (orderId: string) => {
+    setRequestingRefund(orderId);
+    try {
+      const result = await requestBalanceRefund(orderId);
+      toast.info(
+        result.requestedMinor > 0
+          ? "A refund of the difference was requested. It now waits for approval under Refunds."
+          : "Nothing could be requested.",
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not request the refund.");
+    } finally {
+      setRequestingRefund(null);
     }
   };
 
@@ -235,6 +254,15 @@ function AdminPaymentsPage() {
                       <p className="text-sm">{alert.summary}</p>
                     </div>
                     <div className="flex gap-2">
+                      {alert.order_id && alert.balance_refund_missing && (
+                        <Button
+                          size="sm"
+                          disabled={requestingRefund === alert.order_id}
+                          onClick={() => void askForBalanceRefund(alert.order_id as string)}
+                        >
+                          Request refund for the difference
+                        </Button>
+                      )}
                       {alert.order_id && (
                         <Button
                           variant="outline"

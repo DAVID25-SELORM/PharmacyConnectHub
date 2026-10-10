@@ -19,6 +19,8 @@ export type PaymentAlert = {
   last_seen_at: string;
   resolved_at: string | null;
   resolution_note: string | null;
+  /** "This order costs less than was paid and no refund is on the way": a refund of the difference can be requested. */
+  balance_refund_missing?: boolean;
 };
 
 export type PaymentAttemptRow = {
@@ -143,6 +145,19 @@ export function refundAction(
     action,
     note: note ?? null,
   });
+}
+
+/** Asks for a refund of the difference on an order that costs less than was paid and has no refund on the way. It still waits for approval. */
+export function requestBalanceRefund(
+  orderId: string,
+): Promise<{ requestedMinor: number; unplacedMinor: number }> {
+  return postWithSession<{ requestedMinor: number; unplacedMinor: number }>(
+    "/api/payments/admin-refund",
+    {
+      orderId,
+      action: "request_balance_refund",
+    },
+  );
 }
 
 export const REFUND_REASON_LABELS: Record<string, string> = {

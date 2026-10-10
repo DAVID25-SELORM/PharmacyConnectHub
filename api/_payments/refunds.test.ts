@@ -541,6 +541,28 @@ describe("the administrator's refund actions", () => {
     expect(s.calls.map((c) => c.fn)).toEqual(["payment_user_is_admin", "admin_refund_transition"]);
     expect(s.calls[1].args).toMatchObject({ p_note: "Refunded in the dashboard" });
   });
+  it("asks for a refund of the difference for an order that costs less than was paid", async () => {
+    const s = setup({
+      body: { orderId: REFUND, action: "request_balance_refund" },
+      transition: { data: { requested_minor: 30000, unplaced_minor: 0 }, error: null },
+    });
+    // the same stand-in answers every rpc with the transition answer; what matters is which function was called and with what
+    const r = await s.run();
+    expect(r.status).toBe(200);
+    const call = s.calls.find((c) => c.fn === "admin_request_balance_refund");
+    expect(call?.args).toEqual({ p_admin_id: ADMIN, p_order_id: REFUND });
+    expect(s.calls.some((c) => c.fn === "claim_refund_for_submission")).toBe(false);
+  });
+
+  it("needs a real order for that, and is for administrators only", async () => {
+    expect(
+      (await setup({ body: { orderId: "x", action: "request_balance_refund" } }).run()).status,
+    ).toBe(400);
+    const s = setup({ admin: false, body: { orderId: REFUND, action: "request_balance_refund" } });
+    expect((await s.run()).status).toBe(403);
+    expect(s.calls.some((c) => c.fn === "admin_request_balance_refund")).toBe(false);
+  });
+
   it("passes the database's reasons on", async () => {
     const s = setup({
       transition: {

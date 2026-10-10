@@ -2,8 +2,8 @@
 
 Where to look: **Admin > Payments** (alerts, refunds needed, recent attempts). Every alert says what happened and which order it concerns. Marking an alert
 "dealt with" records who did it and what they did; it does **not** move money. **Refunds** are made from the **Refunds** section of the same screen: every refund waits for an
-administrator's approval (unless automatic refunds were switched on), is sent to Paystack by the system, and is followed until Paystack says it was returned. Refunds for amendments
-to a paid online order are not built yet: until they are, refund the difference by hand and record it with **Already refunded**.
+administrator's approval (unless automatic refunds were switched on), is sent to Paystack by the system, and is followed until Paystack says it was returned. When an order paid online is
+**amended** (a shortage accepted, a price lowered, a delivery problem credited) the difference is requested as a refund automatically; a price **increase** makes the pharmacy pay the difference (an "extra payment") before the order can be dispatched.
 
 **To stop new online payments at once:** run `docs/payments/switches/disable-online-payments.sql` in the SQL Editor. Payments already in flight are still
 verified and recorded; orders already paid stay paid.
@@ -42,3 +42,15 @@ an old page afterwards is handled as a late payment (it is recorded and raises a
 **The reconciler is not running.** See `docs/payments/scheduling-the-reconciler.md`. Run it by hand with the `curl` command there to catch up.
 
 **Something looks wrong with money.** Switch online payments off (above) first, then look. The switch never touches payments already in flight.
+
+## Amendments on an order paid online
+
+**A shortage, a lower price or a delivery credit on an order that was paid online.** The difference appears under **Refunds** (reason "Order reduced after payment" or "Delivery problem credit"). A delivery-problem credit **always** waits for your approval, even with automatic refunds on, because
+the wholesaler decides it. Approve it once you agree it is due.
+
+**A price went up on a paid order.** The pharmacy sees "A price change means this order now costs GH₵ X more" with a **Pay now** button; the wholesaler sees that it is waiting for payment and cannot dispatch the order until it is paid. If the pharmacy says it paid and the order is still blocked,
+press **Re-verify** on the order (the same check as for any payment). An extra payment that is flagged (wrong amount, or the price changed again meanwhile) is refunded and the pharmacy can pay again for what is now due.
+
+**"Order costs less than was paid and no refund is on the way" alert** (`refund_required`, warning). A refund for a change was cancelled or failed for good. Press **Request refund for the difference** on the alert: it creates a new refund for exactly what is owed back, which then waits for approval under **Refunds** like any other (or refund by hand and confirm it as already refunded).
+
+**A pharmacy wants to back-order the rest on an order it paid online.** That choice is refused for now (the screen shows why). The pharmacy can accept the shortage and have the rest cancelled (the money for it is refunded), or reject the change.

@@ -67,7 +67,7 @@ function setup(
             rpcCalls.push(call);
             const answer = options.rpc?.(call);
             if (answer) return Promise.resolve(answer);
-            if (fn === "begin_order_payment")
+            if (fn === "begin_order_payment" || fn === "begin_order_topup")
               return Promise.resolve({
                 data: {
                   reused: false,
@@ -85,9 +85,9 @@ function setup(
             return Promise.resolve({ data: null, error: null });
           }) as RpcFn),
     authenticate: async () => (options.userId === undefined ? USER : options.userId),
-    returnUrl: (orderId: string) =>
+    returnUrl: (orderId: string, purpose?: string) =>
       options.returnUrl === undefined
-        ? `https://app.test/pay/return?order=${orderId}`
+        ? `https://app.test/pay/return?order=${orderId}${purpose === "top_up" ? "&purpose=top_up" : ""}`
         : options.returnUrl,
     log: (m: string) => logs.push(m),
   };
@@ -281,6 +281,32 @@ describe("starting a payment", () => {
     expect(s.rpcCalls).toHaveLength(0);
   });
 
+  it("starts an EXTRA payment for a price increase when asked for a top-up, and sends the customer back to a page that knows it", async () => {
+    const s = setup("initialize", { body: { orderId: ORDER, purpose: "top_up" } });
+    const r = await s.run();
+    expect(r.status).toBe(200);
+    const begin = s.rpcCalls.find((c) => c.fn === "begin_order_topup")!;
+    expect(begin.args).toMatchObject({
+      p_caller_id: USER,
+      p_order_id: ORDER,
+      p_provider: "paystack",
+      p_mode: "test",
+    });
+    expect(s.rpcCalls.some((c) => c.fn === "begin_order_payment")).toBe(false);
+    expect(JSON.parse(String(s.providerCalls[0].init?.body)).callback_url).toBe(
+      `https://app.test/pay/return?order=${ORDER}&purpose=top_up`,
+    );
+  });
+
+  it("anything other than top_up is the ordinary payment", async () => {
+    for (const purpose of [undefined, "order", "refund", 5]) {
+      const s = setup("initialize", { body: { orderId: ORDER, purpose } });
+      await s.run();
+      expect(s.rpcCalls.some((c) => c.fn === "begin_order_payment")).toBe(true);
+      expect(s.rpcCalls.some((c) => c.fn === "begin_order_topup")).toBe(false);
+    }
+  });
+
   it("accepts a JSON string body", async () => {
     const s = setup("initialize", { body: JSON.stringify({ orderId: ORDER }) });
     expect((await s.run()).status).toBe(200);
@@ -374,6 +400,63 @@ describe("verifying a payment", () => {
     });
     expect((await down.run()).status).toBe(502);
     expect(down.rpcCalls.some((c) => c.fn === "mark_attempt_checked")).toBe(false);
+  });
+
+  it("an order that is paid but owes an extra payment is NOT reported paid until that payment is verified", async () => {
+    const s = setup("verify", {
+      rpc: (c) =>
+        c.fn === "payment_attempts_to_check"
+          ? {
+              data: {
+                payment_status: "paid",
+                topup_due: true,
+                attempts: [
+                  {
+                    attempt_id: "t1",
+                    provider: "paystack",
+                    mode: "test",
+                    reference: "dx-test-top-1",
+                  },
+                ],
+              },
+              error: null,
+            }
+          : c.fn === "apply_payment_result"
+            ? { data: { outcome: "applied", order_paid: true }, error: null }
+            : undefined,
+      paystack: { "dx-test-top-1": { body: verifyBody("dx-test-top-1") } },
+    });
+    const r = await s.run();
+    expect(r.payload).toEqual({ status: "paid" });
+    expect(s.providerCalls).toHaveLength(1);
+    expect(s.rpcCalls.some((c) => c.fn === "apply_payment_result")).toBe(true);
+  });
+
+  it("an extra payment that is still pending leaves the order's extra payment unpaid", async () => {
+    const s = setup("verify", {
+      rpc: (c) =>
+        c.fn === "payment_attempts_to_check"
+          ? {
+              data: {
+                payment_status: "paid",
+                topup_due: true,
+                attempts: [
+                  {
+                    attempt_id: "t1",
+                    provider: "paystack",
+                    mode: "test",
+                    reference: "dx-test-top-1",
+                  },
+                ],
+              },
+              error: null,
+            }
+          : c.fn === "apply_payment_result"
+            ? { data: { outcome: "pending" }, error: null }
+            : undefined,
+      paystack: { "dx-test-top-1": { body: verifyBody("dx-test-top-1", { status: "ongoing" }) } },
+    });
+    expect((await s.run()).payload).toEqual({ status: "pending" });
   });
 
   it("does not ask the provider again for an order that is already paid", async () => {
@@ -502,6 +585,15 @@ describe("verifying a payment", () => {
 });
 
 describe("the return address", () => {
+  it("carries the purpose for an extra payment", () => {
+    expect(paymentReturnUrl(ORDER, { SITE_URL: "https://drugxone.example" }, "top_up")).toBe(
+      `https://drugxone.example/pay/return?order=${ORDER}&purpose=top_up`,
+    );
+    expect(paymentReturnUrl(ORDER, { SITE_URL: "https://drugxone.example" }, "order")).toBe(
+      `https://drugxone.example/pay/return?order=${ORDER}`,
+    );
+  });
+
   it("is built from the site's configured address, not from anything the request says", () => {
     expect(paymentReturnUrl(ORDER, { SITE_URL: "https://drugxone.example/" })).toBe(
       `https://drugxone.example/pay/return?order=${ORDER}`,

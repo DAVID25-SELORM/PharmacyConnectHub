@@ -46,7 +46,34 @@ export function createAdminRefundHandler(deps: AdminRefundDeps) {
         body = null;
       }
     }
-    const input = (body ?? {}) as { refundId?: unknown; action?: unknown; note?: unknown };
+    const input = (body ?? {}) as {
+      refundId?: unknown;
+      orderId?: unknown;
+      action?: unknown;
+      note?: unknown;
+    };
+
+    // "This order costs less than was paid and no refund is on the way": ask for a refund of the difference (a person's decision, after an earlier request was
+    // cancelled or failed for good). It is only a REQUEST; it still waits for approval like every refund.
+    if (input.action === "request_balance_refund") {
+      if (typeof input.orderId !== "string" || !UUID.test(input.orderId)) {
+        return res.status(400).json({ error: "A valid order is required." });
+      }
+      const requested = await rpc("admin_request_balance_refund", {
+        p_admin_id: userId,
+        p_order_id: input.orderId,
+      });
+      if (requested.error) return res.status(400).json({ error: requested.error.message });
+      const result = (requested.data ?? {}) as {
+        requested_minor?: number;
+        unplaced_minor?: number;
+      };
+      return res.status(200).json({
+        requestedMinor: result.requested_minor ?? 0,
+        unplacedMinor: result.unplaced_minor ?? 0,
+      });
+    }
+
     if (typeof input.refundId !== "string" || !UUID.test(input.refundId)) {
       return res.status(400).json({ error: "A valid refund is required." });
     }
