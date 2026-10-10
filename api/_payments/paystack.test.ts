@@ -389,3 +389,110 @@ describe("payment settings", () => {
     });
   });
 });
+
+describe("splitting a payment and settlement accounts", () => {
+  const okInit = {
+    body: {
+      status: true,
+      data: {
+        authorization_url: "https://checkout.paystack.com/abc",
+        access_code: "abc",
+        reference: "dx-test-1",
+      },
+    },
+  };
+  const base = {
+    email: "buyer@example.com",
+    amountMinor: 100000,
+    reference: "dx-test-1",
+    callbackUrl: "https://app.example/pay/return",
+  };
+
+  it("a split payment names the supplier's account, the platform's share in pesewas and who bears the fee", async () => {
+    const { fetchImpl, calls } = stub([okInit]);
+    await new PaystackProvider({ secretKey: SECRET, fetchImpl }).initialize({
+      ...base,
+      split: { subaccount: "ACCT_abc123", platformShareMinor: 2500, feeBearer: "subaccount" },
+    });
+    expect(JSON.parse(calls[0].init.body as string)).toMatchObject({
+      amount: 100000,
+      subaccount: "ACCT_abc123",
+      transaction_charge: 2500,
+      bearer: "subaccount",
+    });
+  });
+
+  it("a payment with no split carries none of those fields", async () => {
+    const { fetchImpl, calls } = stub([okInit]);
+    await new PaystackProvider({ secretKey: SECRET, fetchImpl }).initialize(base);
+    const sent = JSON.parse(calls[0].init.body as string);
+    expect(sent).not.toHaveProperty("subaccount");
+    expect(sent).not.toHaveProperty("transaction_charge");
+    expect(sent).not.toHaveProperty("bearer");
+  });
+
+  it("creates a settlement account with the platform's default share at nothing, and returns its code", async () => {
+    const { fetchImpl, calls } = stub([
+      { body: { status: true, data: { subaccount_code: "ACCT_new1" } } },
+    ]);
+    const r = await new PaystackProvider({ secretKey: SECRET, fetchImpl }).createSubaccount({
+      businessName: "Alpha Wholesale Ltd",
+      bankCode: "GCB",
+      accountNumber: "1234567890",
+    });
+    expect(r).toEqual({ subaccountCode: "ACCT_new1" });
+    expect(calls[0].url).toBe("https://api.paystack.co/subaccount");
+    expect(calls[0].init.method).toBe("POST");
+    expect(JSON.parse(calls[0].init.body as string)).toMatchObject({
+      business_name: "Alpha Wholesale Ltd",
+      settlement_bank: "GCB",
+      account_number: "1234567890",
+      percentage_charge: 0,
+    });
+  });
+
+  it("an answer without a code is an error, not a success", async () => {
+    const { fetchImpl } = stub([{ body: { status: true, data: {} } }]);
+    await expect(
+      new PaystackProvider({ secretKey: SECRET, fetchImpl }).createSubaccount({
+        businessName: "A B",
+        bankCode: "GCB",
+        accountNumber: "1234567890",
+      }),
+    ).rejects.toBeInstanceOf(ProviderError);
+  });
+
+  it("a refusal carries the provider's status and message, and never the account number", async () => {
+    const { fetchImpl } = stub([
+      { status: 400, body: { status: false, message: "Account number is invalid" } },
+    ]);
+    const error = await new PaystackProvider({ secretKey: SECRET, fetchImpl })
+      .createSubaccount({ businessName: "A B", bankCode: "GCB", accountNumber: "1234567890" })
+      .catch((e) => e as ProviderError);
+    expect(error).toBeInstanceOf(ProviderError);
+    expect((error as ProviderError).options.status).toBe(400);
+    expect(String((error as ProviderError).message)).not.toContain("1234567890");
+  });
+
+  it("lists Ghana's banks and mobile money operators, sorted, skipping rows without a name or code", async () => {
+    const { fetchImpl, calls } = stub([
+      {
+        body: {
+          status: true,
+          data: [
+            { name: "Zenith", code: "ZEN" },
+            { name: "Access", code: "ACC" },
+            { name: "No code" },
+            { code: "X" },
+          ],
+        },
+      },
+    ]);
+    const banks = await new PaystackProvider({ secretKey: SECRET, fetchImpl }).listBanks();
+    expect(banks).toEqual([
+      { name: "Access", code: "ACC" },
+      { name: "Zenith", code: "ZEN" },
+    ]);
+    expect(calls[0].url).toContain("/bank?country=ghana");
+  });
+});

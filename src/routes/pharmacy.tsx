@@ -43,7 +43,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { canViewAccounting } from "@/lib/accounting";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
-import { isAwaitingOnlinePayment, payForOrder, useOnlinePayments } from "@/lib/payments";
+import {
+  isAwaitingOnlinePayment,
+  onlinePaymentBlockedReason,
+  payForOrder,
+  useOnlinePayments,
+  useReadySuppliers,
+} from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
@@ -1113,6 +1119,8 @@ function CartSheet({
     return acc;
   }, {});
 
+  const readySuppliers = useReadySuppliers(Object.keys(grouped));
+
   const estimates = Object.fromEntries(
     Object.entries(grouped).map(([wid, group]) => [
       wid,
@@ -1378,7 +1386,14 @@ function CartSheet({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {settlementOptions(creditAvailability(wid), { onlinePayments: onlinePayments.enabled }).map((option) => (
+                          {settlementOptions(creditAvailability(wid), {
+                            onlinePayments: onlinePayments.enabled,
+                            onlineBlockedReason: onlinePaymentBlockedReason({
+                              supplierReady: readySuppliers.has(wid),
+                              total: estimates[wid].total,
+                              maxOrderGhs: onlinePayments.maxOrderGhs,
+                            }),
+                          }).map((option) => (
                             <SelectItem
                               key={option.value}
                               value={option.value}

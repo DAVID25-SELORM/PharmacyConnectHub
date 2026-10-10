@@ -145,6 +145,30 @@ export function createInitializeHandler(deps: CheckoutDeps) {
     const failAttempt = (reason: string) =>
       rpc("fail_payment_attempt", { p_attempt_id: attempt.attempt_id, p_reason: reason });
 
+    // The last check before the provider: the platform's per-payment limit, that the supplier can receive money online, and what the payment is split with.
+    // Nothing is sent to the provider unless this passes.
+    const prepared = await rpc("prepare_attempt_for_provider", {
+      p_attempt_id: attempt.attempt_id,
+    });
+    if (prepared.error) {
+      await failAttempt("Not started: " + prepared.error.message);
+      return res.status(400).json({ error: prepared.error.message });
+    }
+    const plan = (prepared.data ?? {}) as {
+      split?: boolean;
+      subaccount?: string;
+      charge_minor?: number;
+      bearer?: string;
+    };
+    const split =
+      plan.split === true && typeof plan.subaccount === "string"
+        ? {
+            subaccount: plan.subaccount,
+            platformShareMinor: Number(plan.charge_minor ?? 0),
+            feeBearer: plan.bearer === "account" ? ("account" as const) : ("subaccount" as const),
+          }
+        : undefined;
+
     try {
       const initialized = await provider.initialize({
         email: attempt.email ?? "",
@@ -152,6 +176,7 @@ export function createInitializeHandler(deps: CheckoutDeps) {
         reference: attempt.reference,
         callbackUrl,
         metadata: { order_id: orderId, order_number: attempt.order_number },
+        ...(split ? { split } : {}),
       });
       const stored = await rpc("record_attempt_authorization", {
         p_attempt_id: attempt.attempt_id,

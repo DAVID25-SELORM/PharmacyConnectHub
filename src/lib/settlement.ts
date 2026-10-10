@@ -59,7 +59,7 @@ export type CreditAvailability =
  */
 export function settlementOptions(
   credit: CreditAvailability,
-  features: { onlinePayments?: boolean } = {},
+  features: { onlinePayments?: boolean; onlineBlockedReason?: string | null } = {},
 ): SettlementOption[] {
   const options: SettlementOption[] = SELECTABLE_SETTLEMENT_METHODS.map((value) => ({
     value,
@@ -90,14 +90,21 @@ export function settlementOptions(
   }
 
   options.push(
-    features.onlinePayments
-      ? { value: "pay_now", label: SETTLEMENT_LABELS.pay_now, disabled: false }
-      : {
+    features.onlinePayments && features.onlineBlockedReason
+      ? {
           value: "pay_now",
           label: SETTLEMENT_LABELS.pay_now,
           disabled: true,
-          reason: "Online payment isn't available yet.",
-        },
+          reason: features.onlineBlockedReason,
+        }
+      : features.onlinePayments
+        ? { value: "pay_now", label: SETTLEMENT_LABELS.pay_now, disabled: false }
+        : {
+            value: "pay_now",
+            label: SETTLEMENT_LABELS.pay_now,
+            disabled: true,
+            reason: "Online payment isn't available yet.",
+          },
   );
   return options;
 }

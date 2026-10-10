@@ -19,6 +19,7 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
   const payments = new Map();
   const refunds = new Map();
   const refundCalls = [];
+  const subaccounts = new Map();
   const calls = [];
   let nextId = 5000;
   let nextRefundId = 800;
@@ -50,6 +51,8 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
           email: body.email,
           callbackUrl: body.callback_url,
           metadata: body.metadata ?? null,
+          // How the payment was split, exactly as the server asked for it.
+          split: body.subaccount ? { subaccount: body.subaccount, transaction_charge: body.transaction_charge, bearer: body.bearer } : null,
           status: "abandoned",
           gatewayResponse: null,
         });
@@ -58,6 +61,24 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
           message: "Authorization URL created",
           data: { authorization_url: `${baseUrl}/checkout/${encodeURIComponent(body.reference)}`, access_code: `ac_${nextId}`, reference: body.reference },
         });
+      }
+      if (url.pathname === "/subaccount" && req.method === "POST") {
+        if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
+        const body = JSON.parse(await readBody());
+        if (fake.subaccountBehavior === "drop") {
+          res.destroy();
+          return;
+        }
+        if (fake.subaccountBehavior === "reject" || !/^[0-9]{6,20}$/.test(String(body.account_number ?? "")) || !body.settlement_bank || !body.business_name) {
+          return send(400, { status: false, message: "Account number is invalid" });
+        }
+        const code = `ACCT_fake${subaccounts.size + 1}`;
+        subaccounts.set(code, { code, ...body });
+        return send(200, { status: true, message: "Subaccount created", data: { subaccount_code: code, business_name: body.business_name } });
+      }
+      if (url.pathname === "/bank" && req.method === "GET") {
+        if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
+        return send(200, { status: true, data: [{ name: "GCB Bank", code: "GCB" }, { name: "MTN Mobile Money", code: "MTN" }] });
       }
       if (url.pathname === "/transaction" && req.method === "GET") {
         if (req.headers.authorization !== `Bearer ${secret}`) return send(401, { status: false, message: "Invalid key" });
@@ -187,6 +208,9 @@ export async function startFakePaystack({ secret, port = 0, webhookUrl = null, w
     },
     refunds,
     refundCalls,
+    subaccounts,
+    /** "accept" (default), "reject" (answers 400) or "drop" (the answer is lost). */
+    subaccountBehavior: "accept",
     /** "accept" (default), "reject" (answers 400) or "drop" (takes the refund but the answer is lost). */
     refundBehavior: "accept",
     /** The provider finished a refund ("processed", "failed" or "needs-attention"): sends the signed notification, like Paystack. */

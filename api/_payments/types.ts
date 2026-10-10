@@ -33,7 +33,19 @@ export type InitializeInput = {
   callbackUrl: string;
   metadata?: Record<string, unknown>;
   channels?: string[];
+  /** Split the payment: the supplier's share settles to their own account, the platform keeps `platformShareMinor`. */
+  split?: { subaccount: string; platformShareMinor: number; feeBearer: "account" | "subaccount" };
 };
+
+export type CreateSubaccountInput = {
+  businessName: string;
+  /** The provider's code for the bank or mobile money operator. */
+  bankCode: string;
+  /** The full account number. It is passed to the provider and nowhere else: never stored, never logged. */
+  accountNumber: string;
+};
+
+export type ProviderBank = { name: string; code: string };
 
 export type ListedTransaction = {
   reference: string;
@@ -90,6 +102,10 @@ export interface PaymentProvider {
   readonly name: string;
   readonly mode: ProviderMode;
   initialize(input: InitializeInput): Promise<InitializedPayment>;
+  /** Creates the supplier's settlement account at the provider and returns its code. The platform's default share is nothing; each payment states its own. */
+  createSubaccount(input: CreateSubaccountInput): Promise<{ subaccountCode: string }>;
+  /** The banks and mobile money operators a settlement account can be paid into. */
+  listBanks(): Promise<ProviderBank[]>;
   /** Asks the provider (server to server) what happened to a payment. This, never a redirect or a notification, is proof. */
   verify(reference: string): Promise<VerifiedPayment>;
   /** Asks the provider to return money. A thrown ProviderError with a status in 400 to 499 means it was refused; anything else leaves it uncertain. */

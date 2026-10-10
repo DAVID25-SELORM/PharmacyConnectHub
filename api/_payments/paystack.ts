@@ -2,11 +2,13 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   ProviderError,
+  type CreateSubaccountInput,
   type InitializeInput,
   type InitializedPayment,
   type ListedTransaction,
   type PaymentProvider,
   type PaymentStatus,
+  type ProviderBank,
   type ProviderMode,
   type RefundInput,
   type RefundResult,
@@ -164,6 +166,13 @@ export class PaystackProvider implements PaymentProvider {
       callback_url: input.callbackUrl,
       ...(input.metadata ? { metadata: input.metadata } : {}),
       ...(input.channels ? { channels: input.channels } : {}),
+      ...(input.split
+        ? {
+            subaccount: input.split.subaccount,
+            transaction_charge: input.split.platformShareMinor,
+            bearer: input.split.feeBearer,
+          }
+        : {}),
     });
     const data = (json.data ?? {}) as Json;
     const authorizationUrl = asString(data.authorization_url);
@@ -171,6 +180,31 @@ export class PaystackProvider implements PaymentProvider {
     if (!authorizationUrl || !accessCode)
       throw new ProviderError("Paystack did not return a payment page.");
     return { reference: asString(data.reference) ?? input.reference, authorizationUrl, accessCode };
+  }
+
+  async createSubaccount(input: CreateSubaccountInput): Promise<{ subaccountCode: string }> {
+    const json = await this.call("POST", "/subaccount", {
+      business_name: input.businessName,
+      settlement_bank: input.bankCode,
+      account_number: input.accountNumber,
+      percentage_charge: 0,
+      description: "DrugXOne supplier settlement account",
+    });
+    const code = asString(((json.data ?? {}) as Json).subaccount_code);
+    if (!code) throw new ProviderError("Paystack did not return a settlement account code.");
+    return { subaccountCode: code };
+  }
+
+  async listBanks(): Promise<ProviderBank[]> {
+    const json = await this.call("GET", "/bank?country=ghana&perPage=200");
+    const rows = Array.isArray(json.data) ? (json.data as Json[]) : [];
+    const banks: ProviderBank[] = [];
+    for (const row of rows) {
+      const name = asString(row.name);
+      const code = asString(row.code);
+      if (name && code) banks.push({ name, code });
+    }
+    return banks.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async verify(reference: string): Promise<VerifiedPayment> {

@@ -195,10 +195,13 @@ check("a payment that arrives after cancellation is flagged for refund and does 
   && psql(`select status || '/' || refund_required from public.order_payment_attempts where reference = '${ref5}'`) === "succeeded/true", JSON.stringify(r));
 
 // ---- 10. The mode must match.
+// The database refuses to switch live on without its go-live checks (P5); this scenario needs the platform to SAY live anyway, so the guard is lifted for it alone.
+psql(`alter table public.payments_settings disable trigger trg_payments_settings_live_guard`);
 setSwitch(true, "live");
 r = await post("/api/payments/initialize", t.po, { orderId: o6 });
 check("the platform switch says live while the server is in test mode: nothing starts", r.status === 400 && /not set up for this mode/.test(r.json?.error ?? "") && attemptRows(o6) === "", JSON.stringify(r));
 setSwitch(true, "test");
+psql(`alter table public.payments_settings enable trigger trg_payments_settings_live_guard`);
 configOff();
 r = await post("/api/payments/initialize", t.po, { orderId: o6 });
 check("server environment off: nothing starts", r.status === 503 && attemptRows(o6) === "", JSON.stringify(r));

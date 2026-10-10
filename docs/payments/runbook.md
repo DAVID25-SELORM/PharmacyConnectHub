@@ -54,3 +54,19 @@ press **Re-verify** on the order (the same check as for any payment). An extra p
 **"Order costs less than was paid and no refund is on the way" alert** (`refund_required`, warning). A refund for a change was cancelled or failed for good. Press **Request refund for the difference** on the alert: it creates a new refund for exactly what is owed back, which then waits for approval under **Refunds** like any other (or refund by hand and confirm it as already refunded).
 
 **A pharmacy wants to back-order the rest on an order it paid online.** That choice is refused for now (the screen shows why). The pharmacy can accept the shortage and have the rest cancelled (the money for it is refunded), or reject the change.
+
+## Settlement and going live
+
+**Where a supplier's money goes.** In split mode every online payment settles to the supplier's own account (a Paystack *subaccount*). Add the account on **Admin > Payments > Supplier settlement accounts**: choose the bank or mobile money operator, enter the account name and number carefully (the number goes to Paystack once and is not kept here). Without an active account the supplier cannot be paid online: checkout refuses "Pay now" for them and says so.
+
+**A settlement account says "Not created".** Read the reason. If Paystack refused it (for example the account number is invalid), correct it and add it again. If the reason says there was **no answer**, look in the Paystack dashboard first: it may have been created. Do not add it a second time until you have looked.
+
+**A payment above the limit.** The pharmacy is told the limit and that this order must be paid another way (the order stays unpaid and expires, or the supplier can agree another method with the pharmacy). Raise the limit only deliberately, with `docs/payments/switches/set-split-and-limit.sql`.
+
+**"Not split" is not zero in the settlement report (live mode).** Money reached the platform's own account instead of being split. Stop new payments (`disable-online-payments.sql`), then find the payments in the Paystack dashboard and settle that money to the supplier by hand. This should not be possible while the checks in `prepare_attempt_for_provider` hold; treat it as a serious fault.
+
+**The report does not match Paystack's settlement report.** The report here is an estimate before Paystack's fees and counts payments by the day they were received; settlements arrive on Paystack's schedule. Compare payment by payment (reference) before concluding anything is wrong.
+
+**Switching a supplier off.** Press **Switch off** on their account. New payments for them are refused; payments already made are untouched.
+
+**Before live money (all of these, in order):** the **Ready for live money?** card on Admin > Payments must say **Ready**, and the **This server** list must be all green; Paystack's business verification and each supplier's account are in place; the split-refund behaviour is confirmed with Paystack in writing and recorded (`confirm-split-refunds.sql`); the reconciler is scheduled; you have made one split test payment and one refund in test mode against real Paystack test keys. Then run `enable-online-payments-live.sql`. The database will name anything still missing. **To stop at any moment:** `disable-online-payments.sql` (never blocked).

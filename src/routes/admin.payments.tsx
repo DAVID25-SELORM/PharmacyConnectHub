@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { RefundsSection } from "@/components/admin/RefundsSection";
+import { SettlementSection } from "@/components/admin/SettlementSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -328,6 +329,8 @@ function AdminPaymentsPage() {
             onChanged={load}
           />
         )}
+
+        {overview && <SettlementSection />}
 
         {overview && (
           <section aria-labelledby="attempts-heading" className="space-y-3">

@@ -147,7 +147,7 @@ BEGIN
   r := zz.val_as((SELECT u_po FROM zz.bo), 'UPDATE public.payments_settings SET online_enabled = true');
   PERFORM zz.check('nobody can flip the switch through the API', r LIKE 'ERR:%', r);
   r := zz.val_as((SELECT u_po FROM zz.bo), 'SELECT public.online_payments_status()::text');
-  PERFORM zz.check('a signed-in user can ask whether online payment is on (and in which mode)', r::jsonb = '{"enabled": false, "mode": "test"}'::jsonb, r);
+  PERFORM zz.check('a signed-in user can ask whether online payment is on (and in which mode)', (r::jsonb - 'max_order_ghs') = '{"enabled": false, "mode": "test"}'::jsonb, r);
 END $$;
 
 -- The platform switches online payments on (in test mode), as an administrator does in the SQL Editor.

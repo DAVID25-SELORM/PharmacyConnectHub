@@ -248,3 +248,128 @@ export function describeReverify(result: ReverifyResult): string {
     return "The provider could not be reached. Nothing was changed.";
   return "The provider does not show a completed payment for this order.";
 }
+
+// ---------------------------------------------------------------------------
+// Settlement: where each supplier's money goes, and what stands between the platform and live money.
+// ---------------------------------------------------------------------------
+
+export type PayoutAccount = {
+  id: string;
+  mode: "test" | "live";
+  status: "pending" | "active" | "inactive" | "failed";
+  business_name: string;
+  bank_code: string;
+  /** Only the last four digits are ever kept. */
+  last4: string;
+  failure_reason: string | null;
+  created_at: string;
+};
+
+export type PayoutSupplier = { wholesaler_id: string; name: string; accounts: PayoutAccount[] };
+
+export type SettlementSettings = {
+  mode: "test" | "live";
+  split_mode: "none" | "subaccount";
+  platform_fee_bps: number;
+  fee_bearer: "account" | "subaccount";
+  max_order_ghs: number | null;
+  split_refunds_confirmed: boolean;
+};
+
+export type PayoutOverview = { settings: SettlementSettings; suppliers: PayoutSupplier[] };
+
+export async function fetchPayoutAccounts(): Promise<PayoutOverview> {
+  const { data, error } = await db.rpc("admin_payout_accounts");
+  if (error) throw new Error(error.message);
+  return data as PayoutOverview;
+}
+
+export type ProviderBank = { name: string; code: string };
+
+export async function fetchProviderBanks(): Promise<ProviderBank[]> {
+  const result = await postWithSession<{ banks: ProviderBank[] }>("/api/payments/admin-payout", {
+    action: "banks",
+  });
+  return result.banks;
+}
+
+export function registerPayoutAccount(input: {
+  wholesalerId: string;
+  businessName: string;
+  bankCode: string;
+  accountNumber: string;
+}): Promise<{ id: string; status: string }> {
+  return postWithSession<{ id: string; status: string }>("/api/payments/admin-payout", {
+    action: "register",
+    ...input,
+  });
+}
+
+export function setPayoutAccountActive(
+  accountId: string,
+  active: boolean,
+): Promise<{ status: string }> {
+  return postWithSession<{ status: string }>("/api/payments/admin-payout", {
+    action: "set_active",
+    accountId,
+    active,
+  });
+}
+
+export type ReadinessItem = { key: string; blocking: boolean; ok: boolean; detail: string };
+export type Readiness = {
+  mode: "test" | "live";
+  online_enabled: boolean;
+  items: ReadinessItem[];
+  ready_for_live: boolean;
+};
+
+export async function fetchReadiness(): Promise<Readiness> {
+  const { data, error } = await db.rpc("payments_readiness");
+  if (error) throw new Error(error.message);
+  return data as Readiness;
+}
+
+export type ServerChecks = {
+  mode: "test" | "live" | null;
+  checks: { key: string; ok: boolean; detail: string }[];
+};
+
+export function fetchServerChecks(): Promise<ServerChecks> {
+  return postWithSession<ServerChecks>("/api/payments/admin-payout", { action: "checks" });
+}
+
+export type SettlementRow = {
+  wholesaler_id: string;
+  name: string;
+  mode: "test" | "live";
+  payments: number;
+  received_ghs: number;
+  platform_share_ghs: number;
+  not_split_ghs: number;
+  refunded_ghs: number;
+  to_settle_ghs: number;
+};
+
+export async function fetchSettlementReport(
+  from: Date,
+  to: Date,
+): Promise<{ suppliers: SettlementRow[] }> {
+  const { data, error } = await db.rpc("admin_settlement_report", {
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return data as { suppliers: SettlementRow[] };
+}
+
+export const PAYOUT_STATUS_LABELS: Record<PayoutAccount["status"], string> = {
+  pending: "Waiting for the provider",
+  active: "Active",
+  inactive: "Switched off",
+  failed: "Not created",
+};
+
+/** "250" basis points is "2.5%". */
+export const formatBasisPoints = (bps: number): string =>
+  `${(bps / 100).toFixed(2).replace(/\.?0+$/, "")}%`;

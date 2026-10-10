@@ -84,6 +84,7 @@ function setupReconcile(options: {
   method?: string;
   authorization?: string | null;
   job?: string;
+  noteFails?: boolean;
   cron?: string | undefined;
   config?: ReturnType<typeof loadPaymentsConfig>;
   rpc?: (call: RpcCall) => RpcAnswer | undefined;
@@ -91,6 +92,7 @@ function setupReconcile(options: {
   list?: { pages: unknown[][]; fail?: boolean };
 }) {
   const rpcCalls: RpcCall[] = [];
+  const noted: string[] = [];
   const logs: string[] = [];
   const { fetchImpl, calls } = makeFetch(options);
   const handler = createReconcileHandler({
@@ -100,6 +102,12 @@ function setupReconcile(options: {
     createRpc: () =>
       ((fn, args) => {
         const call = { fn, args };
+        // Noting that the scheduler ran is checked on its own (see "the scheduler is noted").
+        if (fn === "record_reconciler_run") {
+          if (options.noteFails) return Promise.reject(new Error("database down"));
+          noted.push(String(args.p_job));
+          return Promise.resolve({ data: null, error: null });
+        }
         rpcCalls.push(call);
         const a = options.rpc?.(call);
         if (a) return Promise.resolve(a);
@@ -131,6 +139,7 @@ function setupReconcile(options: {
       return out.get();
     },
     rpcCalls,
+    noted,
     calls,
     logs,
   };
@@ -159,6 +168,26 @@ describe("the reconciler: who may call it", () => {
     expect(r.status).toBe(200);
     expect(r.payload.skipped).toBeTruthy();
     expect(s.rpcCalls).toHaveLength(0);
+  });
+  it("the scheduler is noted even while online payments are off (so readiness can see it runs), for each job", async () => {
+    const off = setupReconcile({ config: loadPaymentsConfig({}) });
+    await off.run();
+    expect(off.noted).toEqual(["frequent"]);
+    const daily = setupReconcile({ job: "daily" });
+    await daily.run();
+    expect(daily.noted).toEqual(["daily"]);
+  });
+  it("a failure to note the run never stops the run", async () => {
+    const s = setupReconcile({ noteFails: true });
+    const r = await s.run();
+    expect(r.status).toBe(200);
+    expect(s.logs.some((l) => l.includes("could not note"))).toBe(true);
+    expect(s.rpcCalls.some((c) => c.fn === "payment_attempts_due_for_check")).toBe(true);
+  });
+  it("an unauthorised call is not noted", async () => {
+    const s = setupReconcile({ authorization: "Bearer wrong" });
+    expect((await s.run()).status).toBe(401);
+    expect(s.noted).toEqual([]);
   });
   it("reports a misconfiguration as an error", async () => {
     const s = setupReconcile({

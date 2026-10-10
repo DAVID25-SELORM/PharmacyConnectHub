@@ -8,9 +8,13 @@ import { postWithSession } from "@/lib/order-actions";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-export type OnlinePaymentsStatus = { enabled: boolean; mode: "test" | "live" };
+export type OnlinePaymentsStatus = {
+  enabled: boolean;
+  mode: "test" | "live";
+  maxOrderGhs: number | null;
+};
 
-const OFF: OnlinePaymentsStatus = { enabled: false, mode: "test" };
+const OFF: OnlinePaymentsStatus = { enabled: false, mode: "test", maxOrderGhs: null };
 
 /** Whether the platform currently offers online payment, and in which mode. Anything unclear means "no". */
 export async function fetchOnlinePaymentsStatus(): Promise<OnlinePaymentsStatus> {
@@ -19,6 +23,10 @@ export async function fetchOnlinePaymentsStatus(): Promise<OnlinePaymentsStatus>
   return {
     enabled: (data as { enabled?: unknown }).enabled === true,
     mode: (data as { mode?: unknown }).mode === "live" ? "live" : "test",
+    maxOrderGhs:
+      typeof (data as { max_order_ghs?: unknown }).max_order_ghs === "number"
+        ? (data as { max_order_ghs: number }).max_order_ghs
+        : null,
   };
 }
 
@@ -184,4 +192,43 @@ export function returnMessage(status: VerifyStatus | "checking" | "unreachable")
         body: "If you have just paid, wait a moment; this page keeps checking. Otherwise you can pay again from your orders.",
       };
   }
+}
+
+/** Which of these suppliers can take an online payment right now (the platform may need each to have a settlement account first). */
+export async function fetchReadySuppliers(wholesalerIds: string[]): Promise<Set<string>> {
+  if (wholesalerIds.length === 0) return new Set();
+  const { data, error } = await db.rpc("suppliers_ready_for_online_payment", {
+    p_wholesaler_ids: wholesalerIds,
+  });
+  if (error || !Array.isArray(data)) return new Set();
+  return new Set(data as string[]);
+}
+
+/** Loaded for the suppliers in the cart; empty (nobody ready) until the answer arrives, so Pay now is never offered by mistake. */
+export function useReadySuppliers(wholesalerIds: string[]): Set<string> {
+  const key = [...wholesalerIds].sort().join(",");
+  const [ready, setReady] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    void fetchReadySuppliers(key ? key.split(",") : []).then((next) => {
+      if (!cancelled) setReady(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [key]);
+  return ready;
+}
+
+/** Why "Pay now" cannot be chosen for one supplier's part of the cart, or null when it can. The database enforces both rules again at checkout and before the provider. */
+export function onlinePaymentBlockedReason(input: {
+  supplierReady: boolean;
+  total: number;
+  maxOrderGhs: number | null;
+}): string | null {
+  if (!input.supplierReady) return "This supplier can't take online payments yet.";
+  if (input.maxOrderGhs !== null && input.total > input.maxOrderGhs) {
+    return `Online payments are limited to GH₵ ${input.maxOrderGhs.toFixed(2)} per order.`;
+  }
+  return null;
 }

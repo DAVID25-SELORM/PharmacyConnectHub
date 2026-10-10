@@ -60,17 +60,27 @@ export function createReconcileHandler(deps: ReconcileDeps) {
     const given = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
     if (!secretMatches(given, secret)) return res.status(401).json({ error: "Unauthorized" });
 
+    const jobParam = Array.isArray(req.query?.job) ? req.query.job[0] : req.query?.job;
+    const job = jobParam === "daily" ? "daily" : "frequent";
+    // The scheduler calling at all is noted before anything else (even while online payments are off), so "is the scheduler running" can be checked
+    // before going live. A failure to note it never stops the run.
+    const rpc = deps.createRpc();
+    if (rpc) {
+      try {
+        await rpc("record_reconciler_run", { p_job: job });
+      } catch {
+        deps.log("reconciler could not note that it ran");
+      }
+    }
+
     const configResult = deps.loadConfig();
     if (!configResult.ok) {
       // Online payments being off is normal, not a failure of the scheduler.
       if (configResult.status === 503) return res.status(200).json({ skipped: configResult.error });
       return res.status(configResult.status).json({ error: configResult.error });
     }
-    const rpc = deps.createRpc();
     if (!rpc) return res.status(500).json({ error: "Server misconfigured" });
     const provider = deps.createProvider(configResult.config);
-    const jobParam = Array.isArray(req.query?.job) ? req.query.job[0] : req.query?.job;
-    const job = jobParam === "daily" ? "daily" : "frequent";
 
     const reportProblem = (summary: string, details: Record<string, unknown>) =>
       rpc("report_payment_job_problem", {

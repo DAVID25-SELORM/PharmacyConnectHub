@@ -193,8 +193,108 @@ describe("starting a payment", () => {
     });
     expect(s.rpcCalls.map((c) => c.fn)).toEqual([
       "begin_order_payment",
+      "prepare_attempt_for_provider",
       "record_attempt_authorization",
     ]);
+  });
+
+  it("asks the database for the last check before the provider, and sends nothing to the provider without a split when none is set", async () => {
+    const s = setup("initialize");
+    await s.run();
+    const prepare = s.rpcCalls.find((c) => c.fn === "prepare_attempt_for_provider")!;
+    expect(prepare.args).toEqual({ p_attempt_id: "att-1" });
+    const sent = JSON.parse(String(s.providerCalls[0].init?.body));
+    expect(sent).not.toHaveProperty("subaccount");
+    expect(sent).not.toHaveProperty("transaction_charge");
+    expect(sent).not.toHaveProperty("bearer");
+  });
+
+  it("splits the payment as the database says: the supplier's account, the platform's share in pesewas, and who bears the fee", async () => {
+    const s = setup("initialize", {
+      rpc: (c) =>
+        c.fn === "prepare_attempt_for_provider"
+          ? {
+              data: {
+                split: true,
+                subaccount: "ACCT_abc",
+                charge_minor: 250,
+                bearer: "subaccount",
+              },
+              error: null,
+            }
+          : undefined,
+    });
+    expect((await s.run()).status).toBe(200);
+    const sent = JSON.parse(String(s.providerCalls[0].init?.body));
+    expect(sent).toMatchObject({
+      subaccount: "ACCT_abc",
+      transaction_charge: 250,
+      bearer: "subaccount",
+    });
+    expect(sent.amount).toBe(10000);
+  });
+
+  it("a platform share of nothing is still stated", async () => {
+    const s = setup("initialize", {
+      rpc: (c) =>
+        c.fn === "prepare_attempt_for_provider"
+          ? {
+              data: { split: true, subaccount: "ACCT_abc", charge_minor: 0, bearer: "account" },
+              error: null,
+            }
+          : undefined,
+    });
+    await s.run();
+    expect(JSON.parse(String(s.providerCalls[0].init?.body))).toMatchObject({
+      transaction_charge: 0,
+      bearer: "account",
+    });
+  });
+
+  it("when the last check refuses (over the limit, supplier not ready), nothing is sent to the provider, the attempt is closed and the reason is given plainly", async () => {
+    const s = setup("initialize", {
+      rpc: (c) =>
+        c.fn === "prepare_attempt_for_provider"
+          ? {
+              data: null,
+              error: {
+                message:
+                  "This supplier cannot receive online payments yet. Please arrange another way to pay this order.",
+              },
+            }
+          : undefined,
+    });
+    const r = await s.run();
+    expect(r.status).toBe(400);
+    expect(r.payload.error).toMatch(/cannot receive online payments yet/);
+    expect(s.providerCalls).toHaveLength(0);
+    expect(s.rpcCalls.map((c) => c.fn)).toEqual([
+      "begin_order_payment",
+      "prepare_attempt_for_provider",
+      "fail_payment_attempt",
+    ]);
+    expect(s.rpcCalls[2].args).toMatchObject({ p_attempt_id: "att-1" });
+  });
+
+  it("a resumed payment that already has its page is not checked or sent again", async () => {
+    const s = setup("initialize", {
+      rpc: (c) =>
+        c.fn === "begin_order_payment"
+          ? {
+              data: {
+                reused: true,
+                attempt_id: "att-1",
+                reference: "dx-test-r",
+                authorization_url: "https://checkout.paystack.test/old",
+              },
+              error: null,
+            }
+          : undefined,
+    });
+    const r = await s.run();
+    expect(r.payload).toMatchObject({ resumed: true });
+    expect(s.rpcCalls.some((c) => c.fn === "prepare_attempt_for_provider")).toBe(false);
+    expect(s.providerCalls).toHaveLength(0);
   });
 
   it("takes the amount from the database, whatever the browser sent", async () => {
