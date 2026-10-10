@@ -14,6 +14,7 @@ import { TextDialog } from "@/components/orders/TextDialog";
 import { OrderPrintActions, type PrintableOrder } from "@/components/order-print";
 import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
+import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import {
   BACKORDER_LABELS,
   SHIPMENT_LABELS,
@@ -49,6 +50,7 @@ export function BackorderPanel({
   orderStatus,
   side,
   canAct,
+  canCollect = false,
   printable,
   refreshKey,
   onChanged,
@@ -58,6 +60,8 @@ export function BackorderPanel({
   side: Side;
   /** Whether this user may act (the database enforces it; this only hides buttons). */
   canAct: boolean;
+  /** Wholesaler side: may this user confirm that a shipment's cash was received and send its receipt? */
+  canCollect?: boolean;
   /** The order as a printable document, for the shipment pick sheets, delivery notes and invoices. */
   printable: PrintableOrder | null;
   /** Changes when the proposal part of the order changes, so this part reloads too. */
@@ -109,6 +113,39 @@ export function BackorderPanel({
   if (!data || data.state.status === "none") return null;
 
   const { state, lines, shipments } = data;
+  const cash = Boolean(data.cash_portions);
+  const collect = async (shipment: Shipment) => {
+    setBusy(true);
+    try {
+      const result = await confirmOrderPayment({ orderId, shipmentId: shipment.id });
+      toast.success(
+        result.receiptSent
+          ? `Payment for shipment ${shipment.sequence} confirmed and receipt emailed.`
+          : `Payment for shipment ${shipment.sequence} confirmed. Its receipt still needs to be sent.`,
+      );
+      if (result.warning) toast.error(result.warning);
+      await load();
+      onChanged?.();
+    } catch (error) {
+      toast.error(readError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resend = async (shipment: Shipment) => {
+    setBusy(true);
+    try {
+      const result = await sendOrderReceipt({ orderId, shipmentId: shipment.id });
+      if (result.sent) {
+        toast.success(`Receipt for shipment ${shipment.sequence} emailed.`);
+        await load();
+      } else toast.error(result.warning || "Receipt email could not be sent.");
+    } catch (error) {
+      toast.error(readError(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   const canPrepare =
     side === "wholesaler" &&
     canAct &&
@@ -128,9 +165,18 @@ export function BackorderPanel({
         </span>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        The goods that were not supplied with the order. Each shipment is invoiced when it is
-        dispatched; nothing is charged for goods that have not been sent.
+        {cash
+          ? "The goods that were not supplied with the order. Each shipment is added to the order when it is dispatched, paid for on its own delivery and receipted separately; nothing is charged for goods that have not been sent."
+          : "The goods that were not supplied with the order. Each shipment is invoiced when it is dispatched; nothing is charged for goods that have not been sent."}
       </p>
+      {cash && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Main delivery{data.main_total !== undefined ? ` (${formatGHS(data.main_total)})` : ""}:{" "}
+          {data.main_collected_at
+            ? `paid ${formatReportDate(data.main_collected_at)}`
+            : "payment pending, confirmed on the order"}
+        </p>
+      )}
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
@@ -208,13 +254,56 @@ export function BackorderPanel({
                     ` · dispatched ${formatReportDate(shipment.dispatched_at)}`}
                   {shipment.delivered_at &&
                     ` · delivered ${formatReportDate(shipment.delivered_at)}`}
-                  {shipment.credit_due_date &&
+                  {!cash &&
+                    shipment.credit_due_date &&
                     shipment.status !== "cancelled" &&
                     ` · payment due ${formatReportDate(shipment.credit_due_date)}`}
                   {shipment.status === "cancelled" &&
                     shipment.cancel_reason &&
                     ` · cancelled: ${shipment.cancel_reason}`}
                 </div>
+                {cash && (shipment.status === "dispatched" || shipment.status === "delivered") && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span
+                      className={
+                        shipment.collected_at
+                          ? "font-medium text-green-700"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {shipment.collected_at
+                        ? `Paid ${formatReportDate(shipment.collected_at)}`
+                        : shipment.status === "delivered"
+                          ? "Payment due"
+                          : "Payment due on delivery"}
+                    </span>
+                    {side === "wholesaler" &&
+                      canCollect &&
+                      shipment.status === "delivered" &&
+                      !shipment.collected_at && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => void collect(shipment)}
+                        >
+                          Confirm payment received
+                        </Button>
+                      )}
+                    {side === "wholesaler" && canCollect && shipment.collected_at && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void resend(shipment)}
+                      >
+                        {shipment.receipt_sent_at ? "Resend receipt" : "Send receipt"}
+                      </Button>
+                    )}
+                  </div>
+                )}
                 {side === "wholesaler" &&
                   canAct &&
                   (step || canCancelShipment(shipment.status)) && (
@@ -230,7 +319,9 @@ export function BackorderPanel({
                               "advance_backorder_shipment",
                               { p_shipment_id: shipment.id, p_to: step.to },
                               step.to === "dispatched"
-                                ? "Shipment dispatched and invoiced"
+                                ? cash
+                                  ? "Shipment dispatched"
+                                  : "Shipment dispatched and invoiced"
                                 : step.to === "packed"
                                   ? "Shipment packed"
                                   : "Shipment delivered",
@@ -288,6 +379,7 @@ export function BackorderPanel({
       {preparing && (
         <PrepareDialog
           lines={lines}
+          cash={cash}
           busy={busy}
           onClose={() => setPreparing(false)}
           onSubmit={async (payload) => {
@@ -303,7 +395,7 @@ export function BackorderPanel({
       {cancelling && (
         <TextDialog
           title={`Cancel shipment ${cancelling.sequence}?`}
-          description="It has not been dispatched, so nothing was invoiced and no stock moved. Its goods go back to waiting to be shipped."
+          description="It has not been dispatched, so nothing was charged and no stock moved. Its goods go back to waiting to be shipped."
           label="Reason"
           submitLabel="Cancel shipment"
           required
@@ -322,7 +414,7 @@ export function BackorderPanel({
       {cancellingRest && (
         <TextDialog
           title="Cancel the remaining back-order?"
-          description={`The ${state.outstanding} unit${state.outstanding === 1 ? "" : "s"} still waiting to be shipped will never be sent. Nothing was invoiced for them, so nothing changes in the amount owed.`}
+          description={`The ${state.outstanding} unit${state.outstanding === 1 ? "" : "s"} still waiting to be shipped will never be sent. Nothing was charged for them, so nothing changes in the amount owed.`}
           label="Reason"
           submitLabel="Cancel the remaining back-order"
           required
@@ -344,11 +436,13 @@ export function BackorderPanel({
 
 function PrepareDialog({
   lines,
+  cash,
   busy,
   onClose,
   onSubmit,
 }: {
   lines: BackorderLine[];
+  cash: boolean;
   busy: boolean;
   onClose: () => void;
   onSubmit: (payload: ReturnType<typeof shipmentPayload>) => void | Promise<void>;
@@ -363,7 +457,8 @@ function PrepareDialog({
         <DialogHeader>
           <DialogTitle>Prepare a back-order shipment</DialogTitle>
           <DialogDescription>
-            Choose what goes in this shipment. It is invoiced, and stock is deducted, when you
+            Choose what goes in this shipment. It is{" "}
+            {cash ? "added to the order total" : "invoiced"}, and stock is deducted, when you
             dispatch it, not now.
           </DialogDescription>
         </DialogHeader>

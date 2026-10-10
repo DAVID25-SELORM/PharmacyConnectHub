@@ -133,16 +133,9 @@ END $$;
 
 -- 1. Accepting with a back-order.
 DO $$
-DECLARE x UUID := zz.ord('X'); r TEXT; a UUID; y UUID := zz.ord('Y');
+DECLARE x UUID := zz.ord('X'); r TEXT; a UUID;
 BEGIN
-  -- A cash order cannot take the back-order choice.
-  r := zz.val_as((SELECT u_wo FROM zz.bo), format('SELECT public.propose_partial_fulfilment(%L, ''Short'', %L::jsonb, gen_random_uuid())::text', y, jsonb_build_array(zz.line(y, 'BO C', 6, 'release'))::text));
-  a := (r::jsonb->>'amendment_id')::uuid;
-  r := zz.val_as((SELECT u_po FROM zz.bo), format('SELECT public.respond_to_amendment(%L, ''accept_backorder'', NULL)::text', a));
-  PERFORM zz.check('a cash order cannot be accepted with a back-order (credit orders only for now)', r LIKE 'ERR: Back-orders are only available on credit orders for now.%', r);
-  PERFORM zz.check('and the refusal leaves the proposal open and nothing changed',
-    (SELECT status = 'proposed' FROM public.order_amendments WHERE id = a) AND (SELECT effective_total_ghs IS NULL FROM public.orders WHERE id = y) AND zz.stock('BO C') = 379);
-  r := zz.val_as((SELECT u_wo FROM zz.bo), format('SELECT public.withdraw_amendment(%L, NULL)::text', a));
+  -- (A cash order may take the back-order choice too: see cash-backorders.sql.)
 
   -- The credit order X: BO A 10 -> 7 (write off 3: the units are not here yet), BO B 20 -> 12 (release 8: the units exist).
   r := zz.val_as((SELECT u_wo FROM zz.bo), format('SELECT public.propose_partial_fulfilment(%L, ''Supplier short'', %L::jsonb, gen_random_uuid())::text', x,

@@ -685,6 +685,7 @@ function OrdersInbox({
               side="wholesaler"
               canAct={canUpdateStatus}
               canProposePrices={canDecideDeliveries}
+              canCollectCash={canConfirmPayment}
               printable={forDocument({ ...o, wholesaler })}
               onChanged={onOrderChanged}
             />
@@ -731,7 +732,7 @@ function OrdersInbox({
                   {nextLabel[o.status]}
                 </Button>
               )}
-              {canConfirmPayment && o.status === "delivered" && o.payment_status !== "paid" && (
+              {canConfirmPayment && o.status === "delivered" && (o.backorder_state?.cash_portions ? !o.backorder_state.main_collected : o.payment_status !== "paid") && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -743,11 +744,11 @@ function OrdersInbox({
                       <Loader2 className="h-4 w-4 animate-spin" /> Confirming...
                     </>
                   ) : (
-                    "Confirm payment received"
+                    o.backorder_state?.cash_portions ? "Confirm payment for the main delivery" : "Confirm payment received"
                   )}
                 </Button>
               )}
-              {canConfirmPayment && o.status === "delivered" && o.payment_status === "paid" && (
+              {canConfirmPayment && o.status === "delivered" && (o.backorder_state?.cash_portions ? Boolean(o.backorder_state.main_collected) : o.payment_status === "paid") && (
                 <Button
                   variant="outline"
                   size="sm"

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { processCashPortion } from "../_cash-portions.js";
 import { sendOrderReceiptEmail } from "../_order-receipts.js";
 import { receiptFigures, type ReceiptSupply } from "../_order-supply.js";
 
@@ -73,6 +74,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!orderId) {
     return res.status(400).json({ error: "orderId is required" });
   }
+  // Set when the receipt of ONE back-order shipment of a cash order is being sent (omitted for the order itself).
+  const shipmentId =
+    typeof req.body?.shipmentId === "string" && req.body.shipmentId ? req.body.shipmentId : null;
 
   const { data: orderData, error: orderErr } = await admin
     .from("orders")
@@ -120,6 +124,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res
       .status(400)
       .json({ error: "Send the receipt only after the order is marked delivered" });
+  }
+
+  // A cash order accepted with a back-order has one receipt per collected portion.
+  const { data: hasPortions } = await admin.rpc("order_has_cash_portions", { p_order_id: order.id });
+  if (hasPortions === true) {
+    const outcome = await processCashPortion({
+      mode: "resend",
+      callerDb: admin,
+      admin,
+      order,
+      shipmentId,
+      request: req,
+    });
+    return res.status(outcome.status).json(outcome.body);
+  }
+  if (shipmentId) {
+    return res.status(400).json({ error: "This order has no back-order shipments to send a receipt for" });
   }
 
   if (order.payment_status !== "paid") {

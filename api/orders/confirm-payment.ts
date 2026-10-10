@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { processCashPortion } from "../_cash-portions.js";
 import { sendOrderReceiptEmail } from "../_order-receipts.js";
 import { receiptFigures, type ReceiptSupply } from "../_order-supply.js";
 
@@ -106,6 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!orderId) {
     return res.status(400).json({ error: "orderId is required" });
   }
+  // Set when the cash for ONE back-order shipment of a cash order is being confirmed (omitted for the order itself).
+  const shipmentId =
+    typeof req.body?.shipmentId === "string" && req.body.shipmentId ? req.body.shipmentId : null;
 
   const { data: orderData, error: orderErr } = await callerDb
     .from("orders")
@@ -161,6 +165,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (order.payment_status !== "unpaid") {
     return res.status(400).json({ error: "Only unpaid orders can be confirmed as paid" });
+  }
+
+  // A cash order accepted with a back-order is collected and receipted one portion at a time (the main delivery, then each
+  // shipment): the database confirms the portion and this sends that portion's own receipt.
+  const { data: hasPortions } = await callerDb.rpc("order_has_cash_portions", { p_order_id: order.id });
+  if (hasPortions === true) {
+    const outcome = await processCashPortion({
+      mode: "confirm",
+      callerDb,
+      admin,
+      order,
+      shipmentId,
+      request: req,
+    });
+    return res.status(outcome.status).json(outcome.body);
+  }
+  if (shipmentId) {
+    return res.status(400).json({ error: "This order has no back-order shipments to confirm payment for" });
   }
 
   // An order whose supply was reduced is receipted at what was supplied. Fail before anything is changed if that cannot be read.

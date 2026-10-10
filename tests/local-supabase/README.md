@@ -199,3 +199,19 @@ available credit after partial payments and requires explicit financial review.
     fixtures. Mutation checks: a doubled debit note, a removed stale check, a removed credit-limit check, a widened role and a removed
     paid-order check each fail the suite; removing the credit-line lock fails concurrency scenario 4, and removing the order and
     proposal locks fails scenario 1.
+
+27. `cash-backorders.sql` (69 checks), `cash-backorders-concurrency.sh` (11 checks) and `cash-receipts-api.local.mjs` (18 checks):
+    Phase 3b, back-orders on cash (pay on delivery) orders. A cash order can be accepted with a back-order; the main delivery and
+    each shipment are collected and receipted on their own. Covers: who may confirm cash (owner, manager, cashier, finance; not the
+    warehouse, assistants, the pharmacy or other businesses), the main delivery only once delivered, one collection per portion
+    (replays return the first), the order paid only when the main delivery and every dispatched shipment are collected, dispatching a
+    shipment reopening a paid order, the earlier payment of the main delivery recorded first (the backfill case), no ledger entry
+    for a cash shipment, stock deducted once, a direct update unable to mark such an order paid, append-only collections, receipts
+    per portion, one statement payment line per collection (the order nets to zero), a delivery problem credited on an uncollected
+    shipment lowering that shipment (not the main delivery) and refused on a collected one, and the read functions. The `.sh` runs
+    real overlapping sessions: the same shipment confirmed twice, the main delivery confirmed while a shipment is dispatched, and the
+    main delivery and the last shipment confirmed together. The `.mjs` runs the real confirm-payment and send-receipt handlers with
+    real JWTs and a stubbed email provider (`source env.sh` for the keys, then `npx tsx`; run `pw.sql` after the suite first). Needs
+    migrations through 20261105120000 and the production fixtures. Mutation checks: paid-too-early, shipment collected at its gross
+    amount, no backfill, a cash shipment invoiced, and the main total ignoring shipments each fail the suite; removing the order
+    lock fails concurrency scenario 3.

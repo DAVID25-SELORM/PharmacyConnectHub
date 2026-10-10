@@ -164,6 +164,13 @@ describe("wording and printing", () => {
     expect(text).toMatch(/invoiced separately/);
   });
 
+  it("explains accepting with a back-order on a cash order in terms of what is paid on delivery", () => {
+    const text = backorderConsequence(-700, false);
+    expect(text).toMatch(/pay GH₵ 700\.00 less on delivery/);
+    expect(text).toMatch(/paid for on its own delivery, with its own receipt/);
+    expect(text).not.toMatch(/credit note/);
+  });
+
   it("prints a shipment as its own document: own number, own lines, own total, no fee or discount", () => {
     const order = {
       order_number: "ORD-1",

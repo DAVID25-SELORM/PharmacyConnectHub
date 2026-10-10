@@ -62,6 +62,7 @@ export function SupplyChangePanel({
   side,
   canAct,
   canProposePrices = false,
+  canCollectCash = false,
   printable = null,
   onChanged,
 }: {
@@ -75,6 +76,8 @@ export function SupplyChangePanel({
   canAct: boolean;
   /** Wholesaler side: may this user propose price changes (owner or manager)? Pharmacy side ignores it. */
   canProposePrices?: boolean;
+  /** Wholesaler side: may this user confirm that a back-order shipment's cash was received (everyone but assistants and warehouse)? */
+  canCollectCash?: boolean;
   onChanged?: () => void;
 }) {
   const [view, setView] = useState<OrderAmendmentsView | null>(null);
@@ -192,6 +195,7 @@ export function SupplyChangePanel({
           orderStatus={orderStatus}
           side={side}
           canAct={canAct}
+          canCollect={canCollectCash}
           printable={printable}
           refreshKey={tick}
           onChanged={() => {
@@ -517,11 +521,9 @@ function OpenProposal({
           <Button type="button" size="sm" variant="hero" onClick={() => onRespond("accept")}>
             Accept and cancel the rest
           </Button>
-          {view.is_credit_order && (
-            <Button type="button" size="sm" variant="hero" onClick={() => onRespond("backorder")}>
-              Accept and back-order the rest
-            </Button>
-          )}
+          <Button type="button" size="sm" variant="hero" onClick={() => onRespond("backorder")}>
+            Accept and back-order the rest
+          </Button>
           <Button type="button" size="sm" variant="outline" onClick={() => onRespond("reject")}>
             Reject
           </Button>
@@ -737,7 +739,7 @@ function RespondDialog({
   const copy = {
     backorder: {
       title: "Accept and back-order the rest?",
-      description: `${pharmacySummary(amendment)} ${backorderConsequence(amendment.delta)}`,
+      description: `${pharmacySummary(amendment)} ${backorderConsequence(amendment.delta, isCredit)}`,
       label: "Note (optional)",
       button: "Accept and back-order the rest",
       required: false,

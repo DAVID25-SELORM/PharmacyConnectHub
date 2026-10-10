@@ -22,6 +22,8 @@ type CreateMarketplaceOrdersResult = {
 
 type OrderReceiptActionInput = {
   orderId: string;
+  /** One back-order shipment of a cash order (omitted for the order itself, or for the main delivery). */
+  shipmentId?: string | null;
 };
 
 type ConfirmOrderPaymentResult = {

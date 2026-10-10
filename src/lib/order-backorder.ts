@@ -13,6 +13,10 @@ export type BackorderState = {
   planned: number;
   sent: number;
   cancelled: number;
+  /** A cash order accepted with a back-order is collected and receipted one portion at a time. */
+  cash_portions?: boolean;
+  /** (cash portions) Whether the main delivery's cash has been collected. */
+  main_collected?: boolean;
 };
 
 export type BackorderLine = {
@@ -48,11 +52,19 @@ export type Shipment = {
   cancelled_at: string | null;
   cancel_reason: string | null;
   credit_due_date: string | null;
+  /** (cash portions) When this shipment's cash was confirmed received, and when its receipt was last emailed. */
+  collected_at?: string | null;
+  receipt_sent_at?: string | null;
   lines: ShipmentLine[];
 };
 
 export type OrderBackorder = {
   state: BackorderState;
+  cash_portions?: boolean;
+  /** (cash portions) The main delivery's own total, and when its cash was confirmed and its receipt emailed. */
+  main_total?: number;
+  main_collected_at?: string | null;
+  main_receipt_sent_at?: string | null;
   lines: BackorderLine[];
   shipments: Shipment[];
 };
@@ -175,8 +187,11 @@ export function shipmentPayload(lines: ShipmentDraftLine[]) {
 // Wording
 // ---------------------------------------------------------------------------------------------------------------------
 /** What accepting with a back-order means for the money, said plainly (credit orders). */
-export function backorderConsequence(delta: number): string {
+export function backorderConsequence(delta: number, isCredit = true): string {
   const less = formatGHS(Math.abs(money(delta)));
+  if (!isCredit) {
+    return `If you accept, the available quantity is supplied now and you pay ${less} less on delivery. Each later shipment is added when it is dispatched and is paid for on its own delivery, with its own receipt. Nothing is charged for goods that have not been sent.`;
+  }
   return `If you accept, the available quantity is supplied now. A credit note for ${less} removes the rest from this order's invoice, and each later shipment is invoiced separately when it is dispatched. Nothing is charged for goods that have not been sent.`;
 }
 
