@@ -160,7 +160,7 @@ available credit after partial payments and requires explicit financial review.
     guards switched off (they cannot run with the guards on) and all pass: the reader patches change nothing for
     orders that were never amended.
 
-24. `order-backorders.sql` (130 checks) and `order-backorders-concurrency.sh` (14 checks): Phase 3, back-orders and
+24. `order-backorders.sql` (128 checks) and `order-backorders-concurrency.sh` (14 checks): Phase 3, back-orders and
     shipments on credit orders. Accepting with a back-order (cash orders refused, per-line stock choice, one credit note, effective
     total), preparing shipments (roles, validation, idempotent request ids, outstanding arithmetic), the status machine, dispatch
     (credit limit re-checked, suspended / blocked / closed lines refused, a one-time override consumed once, stock needed and
@@ -215,3 +215,9 @@ available credit after partial payments and requires explicit financial review.
     migrations through 20261105120000 and the production fixtures. Mutation checks: paid-too-early, shipment collected at its gross
     amount, no backfill, a cash shipment invoiced, and the main total ignoring shipments each fail the suite; removing the order
     lock fails concurrency scenario 3.
+
+28. `amendment-switches.sh` (14 checks): the "switch off new work" scripts in `docs/order-amendments/switches/`. Off refuses exactly the
+    four ways to start new work (supply-change proposal, price proposal, back-order shipment, delivery report) and leaves the 12 functions
+    that finish work in progress callable; each single switch touches only its own function; on restores everything; the service role keeps
+    its access and anonymous users never had any. Needs only the schema and migrations through 20261105120000 (no fixture data); it leaves the
+    stack switched on.

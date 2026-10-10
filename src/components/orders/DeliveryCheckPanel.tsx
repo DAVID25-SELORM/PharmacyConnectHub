@@ -40,14 +40,12 @@ import {
   type ReportDraftLine,
 } from "@/lib/delivery-report";
 import { formatReportDate } from "@/lib/reports";
+import { amendmentError as readError } from "@/lib/amendment-errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 type Side = "wholesaler" | "pharmacy";
-
-const readError = (error: unknown) =>
-  (error as { message?: string } | null)?.message ?? "Something went wrong. Please try again.";
 
 /** What each delivery of an order actually brought. The pharmacy records it (a claim, nothing moves); the wholesaler's owner or
  * manager checks it and decides. Shows nothing until something has been delivered. */

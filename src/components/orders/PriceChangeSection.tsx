@@ -35,15 +35,13 @@ import {
   type PriceDraftLine,
 } from "@/lib/price-amendment";
 import { formatReportDate } from "@/lib/reports";
+import { amendmentError as readError } from "@/lib/amendment-errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 type Side = "wholesaler" | "pharmacy";
 type PharmacyAction = "accept" | "reject" | "ask";
-
-const readError = (error: unknown) =>
-  (error as { message?: string } | null)?.message ?? "Something went wrong. Please try again.";
 
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });

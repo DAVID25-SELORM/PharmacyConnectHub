@@ -34,14 +34,12 @@ import {
   type ShipmentDraftLine,
 } from "@/lib/order-backorder";
 import { formatReportDate } from "@/lib/reports";
+import { amendmentError as readError } from "@/lib/amendment-errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 type Side = "wholesaler" | "pharmacy";
-
-const readError = (error: unknown) =>
-  (error as { message?: string } | null)?.message ?? "Something went wrong. Please try again.";
 
 /** The back-order of an order: what is still to come, each shipment with its status, and the actions for each side. Shows nothing
  * for an order that has no back-order. */

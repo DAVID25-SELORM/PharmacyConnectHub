@@ -373,3 +373,12 @@ Every "no" is also refused by the database (covered by the SQL suites); the scre
 **Not in this phase:** per-shipment due dates are still not tracked (cash is paid on delivery); no refunds, so a collected portion cannot be credited or cancelled; the order-level payment reports treat a partly collected order as unpaid; the receipt's lines for a portion are what was supplied (a later credit lowers the total but not the lines); reminders for unpaid delivered shipments do not exist.
 
 **Verified:** `cash-backorders.sql` 69/69; concurrency script 11/11 with a negative control; the real receipt handlers 18/18 against the local stack (confirm, receipts, resend, permissions, an ordinary cash order unchanged); mutation checks CM1-CM6; the credit back-order suite still passes (three checks that asserted the old "cash orders refused" behaviour were removed); 441 unit tests; `tsc` and lint clean.
+
+## 22. Phase 8 status (review pack; documentation and operating scripts, no behaviour change)
+
+The review pack is [`order-amendments/review-pack.md`](order-amendments/review-pack.md): what was built and in what order it was applied,
+the decisions it rests on, the verification query for all phases (`order-amendments/verify-all-phases.sql`, read-only, 136 checks), the
+switches that stop new work without deleting anything (`order-amendments/switches/`, tested by `tests/local-supabase/amendment-switches.sh`),
+what was and was not tested, every known limitation in one list, and a reviewer checklist. One small screen change goes with it: an
+action the platform owner has switched off shows "This action is switched off for now" instead of a raw permission error
+(`src/lib/amendment-errors.ts`).
