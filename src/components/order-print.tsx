@@ -338,7 +338,11 @@ export function PrintableOrderDocument({
             <div className="text-xs">
               Order total as first placed: {formatGHS(totals.originalTotal)}
               <br />
-              Reduced by agreement (supply change accepted)
+              {totals.total < totals.originalTotal
+                ? "Reduced by agreement after the order was placed"
+                : totals.total > totals.originalTotal
+                  ? "Increased by agreement after the order was placed"
+                  : "Prices changed by agreement after the order was placed"}
             </div>
           )}
           {mode === "pharmacy" && <div>Payment: {order.payment_status}</div>}

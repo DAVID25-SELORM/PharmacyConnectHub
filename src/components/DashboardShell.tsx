@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
 import {
   NOTIFICATIONS_CHANGED_EVENT,
+  notificationLink,
   openInternalLink,
   timeAgoShort,
   type NotificationRow,
@@ -58,7 +59,7 @@ function NotificationBell() {
     const [{ data }, { count }] = await Promise.all([
       supabase
         .from("notifications")
-        .select("id,type,title,body,read,link,created_at")
+        .select("id,type,title,body,read,link,metadata,created_at")
         .eq("user_id", session.user.id)
         .order("created_at", { ascending: false })
         .limit(15),
@@ -110,7 +111,7 @@ function NotificationBell() {
       setUnreadTotal((count) => Math.max(0, count - 1));
       await supabase.from("notifications").update({ read: true }).eq("id", note.id);
     }
-    openInternalLink(router, note.link);
+    openInternalLink(router, notificationLink(note));
   };
 
   return (

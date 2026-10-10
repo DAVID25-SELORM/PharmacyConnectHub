@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   NOTIFICATION_FILTERS,
   announceNotificationsChanged,
+  notificationLink,
   openInternalLink,
   safeInternalLink,
   timeAgoShort,
@@ -47,7 +48,7 @@ function NotificationsPage() {
 
     let query = supabase
       .from("notifications")
-      .select("id,type,title,body,read,link,created_at", { count: "exact" })
+      .select("id,type,title,body,read,link,metadata,created_at", { count: "exact" })
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -87,7 +88,7 @@ function NotificationsPage() {
 
   const open = async (note: NotificationRow) => {
     await markRead(note);
-    openInternalLink(router, note.link);
+    openInternalLink(router, notificationLink(note));
   };
 
   const markAllRead = async () => {

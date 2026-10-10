@@ -1,6 +1,6 @@
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   Package,
   ShoppingBag,
@@ -67,7 +67,7 @@ import type { BackorderState } from "@/lib/order-backorder";
 import type { PartyDetails } from "@/lib/order-documents";
 import type { PurchaseCategory } from "@/lib/purchase-category";
 import { CustomersView } from "@/components/wholesaler/CustomersView";
-import { announceNotificationsChanged } from "@/lib/notifications";
+import { announceNotificationsChanged, linkedOrderId } from "@/lib/notifications";
 import { OrderTermsCard } from "@/components/wholesaler/OrderTermsCard";
 import { ProductDiscountsCard } from "@/components/wholesaler/ProductDiscountsCard";
 import { CreditTermsCard } from "@/components/wholesaler/CreditTermsCard";
@@ -299,7 +299,9 @@ function WholesalerDashboardContent() {
       });
   }, [expiryBusinessId]);
 
-  if (loading || !business) {
+  // Only the very first load shows the loading screen. A background session refresh (the browser re-announcing the
+  // sign-in when you come back to the tab) must not unmount the page: open dialogs and half-typed forms would be lost.
+  if (!business) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         <Pill className="h-5 w-5 animate-pulse" />
@@ -499,7 +501,21 @@ function OrdersInbox({
   sendingReceiptOrderId: string | null;
   wholesaler: PartyDetails;
 }) {
+  // A notification can link straight to an order (?order=<id>): open it once the list has loaded.
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const linkedOrder = useRef<string | null>(
+    typeof window !== "undefined" ? linkedOrderId(window.location.search) : null,
+  );
+  useEffect(() => {
+    const id = linkedOrder.current;
+    if (!id || !orders.some((order) => order.id === id)) return;
+    linkedOrder.current = null;
+    setOpenOrderId(id);
+    window.setTimeout(
+      () => document.getElementById(`order-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
+      200,
+    );
+  }, [orders]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
   const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("oldest");
@@ -612,7 +628,7 @@ function OrdersInbox({
         const open = openOrderId === o.id;
         const totalUnits = o.order_items.reduce((sum, item) => sum + (item.supplied_quantity ?? item.quantity), 0);
         return (
-          <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
+          <Card key={o.id} id={`order-${o.id}`} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -648,14 +664,14 @@ function OrdersInbox({
               <div className="text-right">
                 <div className="font-display text-xl font-bold">{formatGHS(shownTotal(o))}</div>
                 {o.effective_total_ghs != null && <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>}
-                {o.has_open_amendment && <div className="text-xs font-medium text-amber-600">Supply change awaiting the pharmacy</div>}
+                {o.has_open_amendment && <div className="text-xs font-medium text-amber-600">A change awaiting the pharmacy</div>}
                 {backorderBadge(o.backorder_state) && <div className="text-xs font-medium text-primary">{backorderBadge(o.backorder_state)}</div>}
                 <div className="text-xs text-muted-foreground">{o.order_items.length} line(s) · {totalUnits} unit(s)</div>
               </div>
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-              {canUpdateStatus && next && <Button variant="hero" size="sm" disabled={Boolean(o.has_open_amendment) && (next === "dispatched" || next === "delivered")} title={o.has_open_amendment && (next === "dispatched" || next === "delivered") ? "A supply change is waiting for the pharmacy's decision" : undefined} onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
+              {canUpdateStatus && next && <Button variant="hero" size="sm" disabled={Boolean(o.has_open_amendment) && (next === "dispatched" || next === "delivered")} title={o.has_open_amendment && (next === "dispatched" || next === "delivered") ? "A proposed change is waiting for the pharmacy's decision" : undefined} onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
               {o.status === "pending" || o.status === "accepted" || o.status === "picking" || o.status === "packed" || o.status === "ready_for_dispatch" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
               <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
             </div>

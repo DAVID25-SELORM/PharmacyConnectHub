@@ -5,6 +5,8 @@ export type NotificationRow = {
   body: string;
   read: boolean;
   link: string | null;
+  /** What the notification refers to (for orders: order_id). Not shown to people. */
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -62,6 +64,26 @@ export function timeAgoShort(iso: string, now = Date.now()) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The link a notification opens: its own link, plus the order it is about so the order screens can open that order. */
+export function notificationLink(note: Pick<NotificationRow, "link" | "metadata">): string | null {
+  const safe = safeInternalLink(note.link);
+  if (!safe) return null;
+  const orderId = note.metadata?.order_id;
+  if (typeof orderId !== "string" || !UUID.test(orderId)) return safe;
+  const target = new URL(safe, "https://app.invalid");
+  if (target.pathname !== "/pharmacy" && target.pathname !== "/wholesaler") return safe;
+  target.searchParams.set("order", orderId);
+  return `${target.pathname}${target.search}`;
+}
+
+/** The order a link asks to open (`?order=<id>`), if it is a well-formed id. */
+export function linkedOrderId(search: string): string | null {
+  const value = new URLSearchParams(search).get("order");
+  return value && UUID.test(value) ? value : null;
 }
 
 type Router = { history: { push: (href: string) => void } };

@@ -48,6 +48,7 @@ import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-sta
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrderPrintActions } from "@/components/order-print";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
+import { linkedOrderId } from "@/lib/notifications";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
 import { DeliveryCheckPanel } from "@/components/orders/DeliveryCheckPanel";
 import {
@@ -794,7 +795,9 @@ function PharmacyDashboardContent() {
     );
   };
 
-  if (loading || !business) {
+  // Only the very first load shows the loading screen. A background session refresh (the browser re-announcing the
+  // sign-in when you come back to the tab) must not unmount the page: open dialogs and half-typed forms would be lost.
+  if (!business) {
     return (
       <div className="flex min-h-screen items-center justify-center text-muted-foreground">
         <Pill className="h-5 w-5 animate-pulse" />
@@ -1822,6 +1825,24 @@ function OrdersView({
   wholesalers: WholesalerSummary[];
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  // A notification can link straight to an order (?order=<id>): open it once the list has loaded.
+  const linkedOrder = useRef<string | null>(
+    typeof window !== "undefined" ? linkedOrderId(window.location.search) : null,
+  );
+  useEffect(() => {
+    const id = linkedOrder.current;
+    const found = id ? orders.find((order) => order.id === id) : null;
+    if (!id || !found) return;
+    linkedOrder.current = null;
+    void (async () => {
+      if (found.order_items.length === 0 && !(await loadOrderDetail(id, found.item_count))) return;
+      setOpenOrderId(id);
+      window.setTimeout(
+        () => document.getElementById(`order-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
+        200,
+      );
+    })();
+  }, [orders, loadOrderDetail]);
   const [supply, setSupply] = useState<SupplyMap>({});
   const [supplyTick, setSupplyTick] = useState(0);
   const orderIdsKey = orders.map((order) => order.id).join(",");
@@ -2109,7 +2130,7 @@ function OrdersView({
         const open = openOrderId === o.id;
         const units = o.order_items.reduce((total, item) => total + (item.supplied_quantity ?? item.quantity), 0);
         return (
-          <Card key={o.id} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
+          <Card key={o.id} id={`order-${o.id}`} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -2142,7 +2163,7 @@ function OrdersView({
                   <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>
                 )}
                 {o.has_open_amendment && (
-                  <div className="text-xs font-medium text-amber-600">Needs your decision</div>
+                  <div className="text-xs font-medium text-amber-600">A change needs your decision</div>
                 )}
                 {backorderBadge(o.backorder_state) && (
                   <div className="text-xs font-medium text-primary">

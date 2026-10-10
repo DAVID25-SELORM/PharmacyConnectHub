@@ -327,3 +327,28 @@ Order event log and timeline reader, `orders.effective_total_ghs`, the ledger id
 **Not in this phase:** the delivery fee and quantities cannot be changed here (a supply change handles quantities); prices cannot be changed after dispatch (use delivery reconciliation or a return); the price of units still waiting in a back-order cannot be changed once the first dispatch has happened; `get_order_print` (production-only function) still prints placed prices; no per-line approval (the pharmacy approves or rejects the whole proposal).
 
 **Verified:** `price-amendments.sql` 123/123; concurrency script 13/13 with negative controls; mutation checks M1-M5; 434 unit tests; `tsc`, lint (touched files) and build clean; browser run for both roles (approve, the dialog stating the debit note; propose with validation messages; withdraw; mobile width with no overflow). The patch fragments could not be dry-run against production in this session (the connected Supabase account cannot open the production project); each patch stops without changing anything if a function is not as expected.
+
+## 20. Phase 7 status (UI consistency, notifications, role and mobile checks; built locally, not deployed)
+
+This phase changes the screens only; no database change. It came out of walking every role through every panel.
+
+**Fixed:**
+- **Notifications now open the order.** The notification bell and the notifications page already opened the right tab, but not the order. They now add `&order=<id>` (from the notification's own `order_id`) and the pharmacy and wholesaler order lists open that order and scroll to it (the opening was verified for both sides; the scroll could not be observed because the browser pane was hidden). Older notifications behave as before. Links for anything other than the two order pages are untouched; a malformed id is ignored.
+- **Wording that was only true for supply changes.** The order-list badges and the dispatch tooltip said "supply change" even for a price proposal; they now say "a change". The printed order copy said "Reduced by agreement (supply change accepted)" even after a price increase; it now says reduced, increased or "prices changed" by agreement. The statement footnote now names supply changes, price changes and delivery credits.
+- **A real defect found while testing:** the pharmacy and wholesaler pages replaced themselves with a "Loading..." screen whenever the session store reported a background refresh (the browser re-announces the sign-in when you return to the tab). That unmounted everything, including an open dialog and anything typed in it. Seen twice while testing. The pages now show the loading screen only for the very first load (no business yet). I could not trigger the refresh on demand to prove the fix; I checked that a dialog with typed text stays mounted, and the logic is a one-line condition.
+
+**Role matrix (browser, local database, one order of each kind: open supply proposal, open price proposal, delivered with a report awaiting a decision, delivered and settled, and one with no proposal open):**
+
+| Role | Propose supply change | Propose prices | Reply / withdraw a proposal | Decide a delivery report | Approve / reject / ask |
+|---|---|---|---|---|---|
+| Wholesaler owner, manager | yes | yes | yes (both kinds) | yes | n/a |
+| Wholesaler cashier, warehouse | yes | no | supply: yes; price: no | no | n/a |
+| Wholesaler finance | no | no | no | no | n/a |
+| Pharmacy owner, cashier | n/a | n/a | n/a | n/a (can report, withdraw) | yes (price, supply; back-order only on credit orders) |
+| Pharmacy assistant | n/a | n/a | n/a | no | no |
+
+Every "no" is also refused by the database (covered by the SQL suites); the screens only hide the buttons. Other businesses' staff and admins cannot read or act on an order they are not part of (covered by the SQL suites).
+
+**Mobile (375 px):** no horizontal scroll with every panel open on both sides; the wholesaler's propose-supply, propose-prices, withdraw and decide-a-delivery-report dialogs fit the screen with the primary and cancel buttons stacked and reachable. The pharmacy's dialogs were checked on desktop only (the measuring script could not read a hidden pane reliably).
+
+**Not done / for later:** the screens still use the word "Supply changes" as the section heading (it contains the price section and the back-order panel); a single "Changes to this order" heading is a possible later polish. The block-dispatch message from the database still says "supply change" (SQL, not changed here).

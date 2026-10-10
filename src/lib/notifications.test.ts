@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { groupOf, safeInternalLink, timeAgoShort, typesForGroup } from "./notifications";
+import {
+  groupOf,
+  linkedOrderId,
+  notificationLink,
+  safeInternalLink,
+  timeAgoShort,
+  typesForGroup,
+} from "./notifications";
 
 describe("notification helpers", () => {
   it("groups every notification type the database can create", () => {
@@ -39,5 +46,40 @@ describe("notification helpers", () => {
     expect(timeAgoShort("2026-09-26T11:30:00Z", now)).toBe("30m ago");
     expect(timeAgoShort("2026-09-26T09:00:00Z", now)).toBe("3h ago");
     expect(timeAgoShort("2026-09-23T12:00:00Z", now)).toBe("3d ago");
+  });
+
+  it("a notification about an order opens that order", () => {
+    const id = "0a1b2c3d-1111-4222-8333-444455556666";
+    expect(notificationLink({ link: "/pharmacy?tab=orders", metadata: { order_id: id } })).toBe(
+      `/pharmacy?tab=orders&order=${id}`,
+    );
+    expect(notificationLink({ link: "/wholesaler?tab=orders", metadata: { order_id: id } })).toBe(
+      `/wholesaler?tab=orders&order=${id}`,
+    );
+  });
+
+  it("leaves other links alone: no order, a bad id, another page, an unsafe link", () => {
+    const id = "0a1b2c3d-1111-4222-8333-444455556666";
+    expect(notificationLink({ link: "/pharmacy?tab=orders", metadata: null })).toBe(
+      "/pharmacy?tab=orders",
+    );
+    expect(notificationLink({ link: "/pharmacy?tab=orders", metadata: { order_id: "x" } })).toBe(
+      "/pharmacy?tab=orders",
+    );
+    expect(notificationLink({ link: "/accounting", metadata: { order_id: id } })).toBe(
+      "/accounting",
+    );
+    expect(
+      notificationLink({ link: "https://evil.example", metadata: { order_id: id } }),
+    ).toBeNull();
+    expect(notificationLink({ link: null, metadata: { order_id: id } })).toBeNull();
+  });
+
+  it("reads the order a page was asked to open, only when it is a real id", () => {
+    const id = "0a1b2c3d-1111-4222-8333-444455556666";
+    expect(linkedOrderId(`?tab=orders&order=${id}`)).toBe(id);
+    expect(linkedOrderId("?tab=orders&order=not-an-id")).toBeNull();
+    expect(linkedOrderId("?tab=orders")).toBeNull();
+    expect(linkedOrderId("")).toBeNull();
   });
 });
