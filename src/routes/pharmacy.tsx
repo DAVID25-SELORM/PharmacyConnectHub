@@ -43,6 +43,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { canViewAccounting } from "@/lib/accounting";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { createMarketplaceOrders } from "@/lib/order-actions";
+import { isAwaitingOnlinePayment, payForOrder, useOnlinePayments } from "@/lib/payments";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -702,11 +703,23 @@ function PharmacyDashboardContent() {
       const paymentNote = allSame
         ? methods[0] === "credit"
           ? "on approved credit"
-          : `${SETTLEMENT_LABELS[methods[0] as SettlementMethod] ?? "payment pending"}, payment pending`
+          : methods[0] === "pay_now"
+            ? "awaiting online payment"
+            : `${SETTLEMENT_LABELS[methods[0] as SettlementMethod] ?? "payment pending"}, payment pending`
         : "payment methods as chosen";
       toast.success(`Placed ${orderWord} (${paymentNote})${procurementNote}`);
       setCart([]);
       void loadOrders();
+      // Online orders are placed but not paid: take the customer to pay (nothing is marked paid until the provider confirms it).
+      if (result.awaitingPayment.length === 1) {
+        toast.info("Taking you to the payment page…");
+        const started = await payForOrder(result.awaitingPayment[0].orderId);
+        if (!started.ok) toast.error(`${started.error} You can pay from your orders.`);
+      } else if (result.awaitingPayment.length > 1) {
+        toast.info(
+          `${result.awaitingPayment.length} orders are waiting for online payment. Pay each one from your orders.`,
+        );
+      }
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to place order.";
@@ -1014,6 +1027,28 @@ function PharmacyDashboardContent() {
   );
 }
 
+/** Sends the customer to the provider's page to pay for an online order that is still unpaid. */
+function PayNowButton({ orderId }: { orderId: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      type="button"
+      size="sm"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const result = await payForOrder(orderId);
+        if (!result.ok) {
+          toast.error(result.error);
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Opening payment page…" : "Pay now"}
+    </Button>
+  );
+}
+
 function CartSheet({
   cart,
   cartCount,
@@ -1063,6 +1098,7 @@ function CartSheet({
   savedCarts: SavedCartsApi;
   onResumeSavedCart: (items: Array<{ productId: string; quantity: number }>, label: string) => void;
 }) {
+  const onlinePayments = useOnlinePayments();
   const [open, setOpen] = useState(false);
   const [settlementChoice, setSettlementChoice] = useState<Record<string, SettlementMethod>>({});
   const [itemCategories, setItemCategories] = useState<Record<string, ItemPurchaseCategory>>({});
@@ -1341,7 +1377,7 @@ function CartSheet({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {settlementOptions(creditAvailability(wid)).map((option) => (
+                          {settlementOptions(creditAvailability(wid), { onlinePayments: onlinePayments.enabled }).map((option) => (
                             <SelectItem
                               key={option.value}
                               value={option.value}
@@ -1365,6 +1401,14 @@ function CartSheet({
                       {methodFor(wid) === "cod" && (
                         <p className="text-muted-foreground">
                           Pay the supplier when the order is delivered.
+                        </p>
+                      )}
+                      {methodFor(wid) === "pay_now" && (
+                        <p className="text-muted-foreground">
+                          You will pay online right after checkout
+                          {onlinePayments.mode === "test" ? " (test mode: no real money moves)" : ""}. The
+                          supplier is told once the payment is confirmed, and the order is held for you
+                          until then.
                         </p>
                       )}
                       {["bank_transfer", "momo", "cheque", "other"].includes(methodFor(wid)) && (
@@ -2136,7 +2180,7 @@ function OrdersView({
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-display text-lg font-bold">{o.order_number}</span>
                   <StatusBadge status={o.status} />
-                  <PaymentBadge method={o.payment_method} status={o.payment_status} />
+                  <PaymentBadge method={o.payment_method} status={o.payment_status} cancelled={o.status === "cancelled"} />
                   {o.purchase_category && (
                     <Badge className={purchaseCategoryBadgeClass(o.purchase_category)}>
                       {purchaseCategoryLabel(o.purchase_category)}
@@ -2177,6 +2221,7 @@ function OrdersView({
             </div>
 
             <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
+              {canRespondToSupply && isAwaitingOnlinePayment(o) && <PayNowButton orderId={o.id} />}
               {onRequestReturn && o.status === "delivered" && (
                 <Button
                   type="button"

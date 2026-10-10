@@ -283,5 +283,64 @@ append-only records); `payments-core-concurrency.sh` 9/9 with a negative control
 racing a payment); mutation checks PM1 to PM5; `payments-webhook-api.local.mjs` 17/17 (the real handler behind a real HTTP server with real
 signatures); 483 unit tests including 39 for the adapter, settings and handler; lint clean.
 
-**Next (P2), once you have put a Paystack test key in the environment:** `initialize`, `verify`, the return page, "Pay now" in checkout behind a
+**Next (P2):** `initialize`, `verify`, the return page, "Pay now" in checkout behind a
 test-mode-only flag, the rule that a wholesaler cannot accept an unpaid online order, and resuming payment.
+
+## 13. P2 status (built locally, not deployed): paying for an order
+
+**Built without Paystack credentials.** You had no Paystack keys yet, so P2 was built and tested against a stand-in for Paystack (`tests/local-supabase/fake-paystack.mjs`:
+the same initialize and verify calls, a checkout page with Pay / Decline / Close buttons, the redirect back, signed notifications). It is **off by default
+in production** and nothing changes for any user until two things are both switched on (below). What has *not* been exercised is the real Paystack test
+environment: that waits for your test keys (`PAYMENTS_MODE=test`, `PAYSTACK_SECRET_KEY=sk_test_...`) and is the first thing to do once you have them.
+
+**The two switches (both must agree before anything works):**
+1. **The platform switch in the database**, `payments_settings` (created OFF, test mode). Changed only by running a script in the SQL Editor
+   (`docs/payments/switches/enable-online-payments-test-mode.sql`, `disable-online-payments.sql`); no screen and no API can flip it.
+2. **The server environment** (`PAYMENTS_MODE`, `PAYSTACK_SECRET_KEY`; live also needs `PAYMENTS_LIVE_ENABLED=yes`). The key's prefix must match the mode.
+   The database's mode and the server's mode must also match, or a payment cannot start.
+Either one off: checkout refuses Pay now with the old message ("Online payment is not available yet. Choose another payment method."), the option shows
+disabled with the same words, and no payment can be started. Payments already in flight are still verified and recorded when the provider confirms them.
+
+**What P2 contains:**
+- **Migrations** `20261107100000_payments_checkout_schema.sql` (the switch table and its two read functions), `20261107110000_payments_checkout_patches.sql`
+  (fail-closed, re-runnable in-place patches, each of which refuses to change anything if the live definition is not what was expected) and
+  `20261107120000_payments_checkout_workflow.sql` (starting a payment, the payment summary and the acceptance block). The patches: checkout accepts
+  `pay_now` only while the switch is on and stores such an order as an online order (`payment_method = 'paystack'`, unpaid, pending, stock reserved);
+  the wholesaler is **not** told about an online order when it is placed, only (as "New paid order") when it is paid; an online order's payment method
+  cannot be changed afterwards; a repeated "abandoned" or "failed" report of an unchanged attempt is not logged again.
+- **Starting a payment (`begin_order_payment`, server only):** checks the platform switch and mode; under the order lock requires an online, unpaid,
+  not-cancelled order and a caller who may place orders for that pharmacy (owner, manager or cashier); takes the amount from the order (never from the
+  browser); resumes a recent attempt for the same amount (25 minutes), otherwise closes older open attempts and records a new one; at most six attempts per
+  order per hour. A payment that arrives later on a closed attempt is still verified and applied (and a second payment for the same order is flagged for
+  refund), as in P1.
+- **Acceptance block:** a trigger refuses to move an unpaid online order out of "pending" (accept, pick, pack ...). Cancelling it is still allowed by either
+  side and returns its stock through the existing cancellation path. Once paid, the order is accepted like any other.
+- **Endpoints:** `POST /api/payments/initialize` (start or resume; returns only the provider's checkout address) and `POST /api/payments/verify` (the return
+  page's call: asks Paystack about the order's last three attempts and records the answer through `apply_payment_result`; it never trusts the redirect).
+  `/api/orders/create` accepts `pay_now` only when the server is configured for payments and returns the orders now waiting for payment.
+  The return address is built from the site's configured address (`SITE_URL`), never from request headers.
+- **Screens:** "Pay now (online)" in the cart (enabled only while online payments are on, with a test-mode note); after checkout the customer is sent to
+  the provider's page (one order) or told to pay each order from "My orders" (several); the pharmacy's order card shows "Awaiting online payment" and a
+  **Pay now** button; the wholesaler's card shows "Awaiting online payment" and "Waiting for the pharmacy's online payment" instead of an Accept button; a
+  cancelled unpaid online order reads "Not paid". New page `/pay/return`: asks the server to verify, keeps asking for about two minutes, and shows paid /
+  waiting / failed / "we need to look at this" / "we could not check just now"; it never marks anything paid itself.
+- **Local tools** (not shipped to production): `fake-paystack.mjs`, `dev-api-server.mjs` (serves the real `/api` handlers; Vite does not) and an optional
+  `DEV_API_PROXY` setting in `vite.config.ts` that forwards `/api` to it for browser testing. `PAYSTACK_BASE_URL` redirects the server to the stand-in; it is honoured
+  only in test mode and only for a local address, so a typo can never send the secret key to another host.
+
+**Verified locally:** `payments-checkout.sql` 97/97; `payments-checkout-concurrency.sh` 9/9 with a negative control; `payments-checkout-api.local.mjs` 41/41
+(the real handlers behind a real HTTP server, real sessions and the fake Paystack); 32 new handler unit tests; the P1 suites unchanged (63, 9, 17); mutation
+checks (each safeguard removed makes the suite fail); the whole flow driven in the browser: cart, Pay now, the provider page, close without paying (not paid,
+Pay now offered), pay (webhook applies it, the return page says "Payment received"), and the pharmacy's and wholesaler's order lists.
+
+**Known gaps, all deliberate, all gates before any live money (none matters in test mode):**
+- **Stock is held by an unpaid online order until it is paid or cancelled.** The 30-minute expiry that releases it is P3.
+- **Amendments on a paid online order** (a short supply or a price change after payment) change what the order is worth but nothing yet refunds the
+  difference. Refunds and top-ups are P4. Until then online orders must not be used for real money.
+- **Reports** that count unpaid orders (the admin payments report, the supplier's customer list) will count an order awaiting online payment as unpaid;
+  P3 separates "awaiting online payment" from "unpaid".
+- **Late and double payments** are recorded and flagged (P1), but no person is alerted yet and there is no admin screen: P3.
+- Verified with the stand-in, not with Paystack: the exact shape of Paystack's answers (initialize, verify, the `charge.success` notification and its
+  signature header). Those follow Paystack's published documentation as of the P1 build; the first run against real test keys is the check.
+- The verify endpoint is limited only by authentication and ownership (it asks Paystack about the caller's own order's last three attempts per call, and the return
+  page calls it every four seconds for about two minutes). A per-order throttle is added with the reconciler in P3.

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { loadPaymentsConfig } from "../_payments/config.js";
 
 const VALID_ITEM_CATEGORIES = new Set(["nhis", "cash_private", "other"]);
 const VALID_SETTLEMENT_METHODS = new Set([
@@ -58,8 +59,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
     : [];
 
-  // Payment method per supplier. Online payment doesn't exist yet and is refused here and again in
-  // the database; choosing a method is never treated as payment.
+  // Payment method per supplier. Online payment is refused here unless this server is set up for it, and again in the
+  // database unless the platform switch is on; choosing a method is never treated as payment (the order stays unpaid
+  // until the provider confirms it).
   const rawMethods = req.body?.settlementMethods;
   const settlementMethods: Record<string, string> = {};
   if (rawMethods !== undefined && rawMethods !== null) {
@@ -70,9 +72,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     for (const [wholesalerId, method] of Object.entries(rawMethods as Record<string, unknown>)) {
       if (method === "pay_now") {
-        return res
-          .status(400)
-          .json({ error: "Online payment is not available yet. Choose another payment method." });
+        if (!loadPaymentsConfig().ok) {
+          return res
+            .status(400)
+            .json({ error: "Online payment is not available yet. Choose another payment method." });
+        }
+        settlementMethods[wholesalerId] = method;
+        continue;
       }
       if (typeof method !== "string" || !VALID_SETTLEMENT_METHODS.has(method)) {
         return res.status(400).json({ error: "Invalid payment method" });
@@ -118,7 +124,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: error.message || "Failed to place order" });
   }
 
+  // Orders placed for online payment are not paid yet: tell the page which ones are waiting, so it can send the customer to pay.
+  let awaitingPayment: { orderId: string; orderNumber: string; wholesalerId: string; amountGhs: number }[] = [];
+  if (Object.values(settlementMethods).includes("pay_now")) {
+    const { data: request } = await admin
+      .from("marketplace_checkout_requests")
+      .select("created_at")
+      .eq("pharmacy_id", pharmacyId)
+      .eq("request_id", requestId)
+      .maybeSingle();
+    if (request?.created_at) {
+      const { data: waiting } = await admin
+        .from("orders")
+        .select("id, order_number, wholesaler_id, total_ghs")
+        .eq("pharmacy_id", pharmacyId)
+        .eq("payment_method", "paystack")
+        .eq("payment_status", "unpaid")
+        .eq("status", "pending")
+        .gte("created_at", request.created_at)
+        .order("created_at", { ascending: true });
+      awaitingPayment = (waiting ?? []).map((order) => ({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        wholesalerId: order.wholesaler_id,
+        amountGhs: Number(order.total_ghs),
+      }));
+    }
+  }
+
   return res.status(200).json({
     orderCount: Number(data) || 0,
+    ...(awaitingPayment.length > 0 ? { awaitingPayment } : {}),
   });
 }

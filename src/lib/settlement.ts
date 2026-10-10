@@ -17,8 +17,8 @@ export const SETTLEMENT_LABELS: Record<SettlementMethod, string> = {
   other: "Other",
 };
 
-/** Methods that can be chosen at checkout today. "pay_now" is deliberately absent: there is no
- * online payment integration yet, and an order must never claim a payment that wasn't taken. */
+/** Methods that can always be chosen at checkout. "pay_now" is deliberately absent: it is offered only while the platform
+ * has online payment switched on (see settlementOptions), and an order must never claim a payment that wasn't taken. */
 export const SELECTABLE_SETTLEMENT_METHODS: SettlementMethod[] = [
   "cod",
   "credit",
@@ -57,7 +57,10 @@ export type CreditAvailability =
 /**
  * Keep credit discoverable even when unavailable; approval and limit checks still gate selection.
  */
-export function settlementOptions(credit: CreditAvailability): SettlementOption[] {
+export function settlementOptions(
+  credit: CreditAvailability,
+  features: { onlinePayments?: boolean } = {},
+): SettlementOption[] {
   const options: SettlementOption[] = SELECTABLE_SETTLEMENT_METHODS.map((value) => ({
     value,
     label: SETTLEMENT_LABELS[value],
@@ -86,12 +89,16 @@ export function settlementOptions(credit: CreditAvailability): SettlementOption[
     creditOption.reason = "This supplier has blocked your credit.";
   }
 
-  options.push({
-    value: "pay_now",
-    label: SETTLEMENT_LABELS.pay_now,
-    disabled: true,
-    reason: "Online payment isn't available yet.",
-  });
+  options.push(
+    features.onlinePayments
+      ? { value: "pay_now", label: SETTLEMENT_LABELS.pay_now, disabled: false }
+      : {
+          value: "pay_now",
+          label: SETTLEMENT_LABELS.pay_now,
+          disabled: true,
+          reason: "Online payment isn't available yet.",
+        },
+  );
   return options;
 }
 
@@ -124,15 +131,17 @@ export function settlementSummary(method: SettlementMethod, status: PaymentStatu
 }
 
 /** Whether a placed order's method can still be changed (mirrors the database rule): unpaid, not on
- * credit, and not delivered or cancelled. */
+ * credit, not an online-payment order, and not delivered or cancelled. */
 export function canChangeSettlement(order: {
   status: string;
   payment_status: string;
   is_credit_order?: boolean | null;
+  payment_method?: string | null;
 }): boolean {
   return (
     order.payment_status === "unpaid" &&
     !order.is_credit_order &&
+    order.payment_method !== "paystack" &&
     order.status !== "delivered" &&
     order.status !== "cancelled"
   );

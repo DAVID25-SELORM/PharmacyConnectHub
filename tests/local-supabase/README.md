@@ -232,3 +232,22 @@ available credit after partial payments and requires explicit financial review.
     runs the real webhook handler behind a real HTTP server with real signatures and a stand-in for Paystack's verify call (`source env.sh`, run `pw.sql`
     after a suite first, then `npx tsx`). Needs migrations through 20261106110000. Mutation checks: amount, cancelled-order, duplicate, mode and
     changed-order checks each removed fail the suite; removing the order lock fails concurrency scenarios 1 and 2.
+
+30. `payments-checkout.sql` (97 checks), `payments-checkout-concurrency.sh` (9 checks), `payments-checkout-api.local.mjs` (41 checks), the handler
+    unit tests (`api/_payments/checkout-handlers.test.ts`, 32 checks) and two local tools, `fake-paystack.mjs` and `dev-api-server.mjs`: online payments,
+    P2 (Pay now at checkout, behind the platform switch). The switch is off by default and, off, checkout refuses Pay now with the old message and nothing
+    can be started; on, a Pay now checkout stores an unpaid online order (stock reserved, the supplier not yet told); only the server can start a payment,
+    only people who may place the order can pay for it, the amount always comes from the order, a recent attempt is resumed, an old or changed one is closed
+    and replaced, six attempts an hour at most; a paid, cancelled or non-online order cannot be paid; a wholesaler cannot accept or progress an unpaid
+    online order (cancelling is allowed) and can once it is paid; an online order keeps its payment method; a payment arriving on a closed attempt still
+    pays the order once and the second payment is flagged for refund; repeated "abandoned" reports are logged once. The `.sh` runs real overlapping sessions
+    (two payers at once, a start racing the report of an earlier payment, a cancellation racing a start); negative control: remove the order lock in
+    `begin_order_payment` and scenarios 1 and 3 fail. The `.mjs` runs the real `/api/orders/create`, `/api/payments/initialize`, `verify` and `webhook`
+    handlers behind a real HTTP server, with real sessions and the fake Paystack (checkout page, redirect, signed notifications): checkout, returning without
+    paying, paying with and without the notification, a forged notification, wrong amount, declined then retried, paid after cancellation, mode mismatches,
+    provider unreachable. Run `payments-checkout.sql` first (it leaves the users and products the `.mjs` uses), then `pw.sql`, `source env.sh`, `npx tsx`.
+    The two tools are for browser testing: `fake-paystack.mjs --port 4010 --secret sk_test_x --webhook <dev API>/api/payments/webhook` and
+    `dev-api-server.mjs 3001` (with `PAYMENTS_MODE=test PAYSTACK_SECRET_KEY=sk_test_x PAYSTACK_BASE_URL=http://127.0.0.1:4010 SITE_URL=http://localhost:5173`),
+    then `DEV_API_PROXY=http://127.0.0.1:3001 npx vite`. Needs migrations through 20261107120000. Mutation checks: the accept block, the permission check, the
+    switch, the already-paid check, the cancelled check, the online-order check, the rate limit, the reuse window and the reuse amount check each removed
+    fail the suite.

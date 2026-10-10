@@ -38,10 +38,26 @@ describe("checkout retries", () => {
       .mockRejectedValueOnce(new Error("connection lost"))
       .mockImplementation(async () => success());
     await expect(createMarketplaceOrders(input)).rejects.toThrow("connection lost");
-    await expect(createMarketplaceOrders(input)).resolves.toEqual({ orderCount: 1 });
+    await expect(createMarketplaceOrders(input)).resolves.toEqual({
+      orderCount: 1,
+      awaitingPayment: [],
+    });
     expect(requestId(1)).toBe(requestId(0));
     await createMarketplaceOrders(input);
     expect(requestId(2)).not.toBe(requestId(0));
+  });
+  it("passes on the orders that are waiting for online payment", async () => {
+    const waiting = [{ orderId: "o1", orderNumber: "ORD-1", wholesalerId: "w1", amountGhs: 100 }];
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ orderCount: 1, awaitingPayment: waiting }), {
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    await expect(createMarketplaceOrders(input)).resolves.toEqual({
+      orderCount: 1,
+      awaitingPayment: waiting,
+    });
   });
   it("uses a new request ID if the cart changes", async () => {
     fetchMock

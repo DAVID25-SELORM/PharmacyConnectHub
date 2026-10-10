@@ -632,7 +632,7 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{order.order_number}</span>
                   <StatusBadge status={order.status} />
-                  <PaymentBadge method={order.payment_method} status={order.payment_status} />
+                  <PaymentBadge method={order.payment_method} status={order.payment_status} cancelled={order.status === "cancelled"} />
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   {order.wholesaler?.name ?? "Wholesaler"} · {timeAgo(order.created_at)}
@@ -682,7 +682,7 @@ function RecentWholesalerOrdersCard({ orders }: { orders: WholesalerOrderSummary
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{order.order_number}</span>
                   <StatusBadge status={order.status} />
-                  <PaymentBadge method={order.payment_method} status={order.payment_status} />
+                  <PaymentBadge method={order.payment_method} status={order.payment_status} cancelled={order.status === "cancelled"} />
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   {order.pharmacy?.name ?? "Pharmacy"} · {timeAgo(order.created_at)}

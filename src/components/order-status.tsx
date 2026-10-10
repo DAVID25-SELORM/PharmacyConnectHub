@@ -89,7 +89,16 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-export function PaymentBadge({ method, status }: { method: PaymentMethod; status: PaymentStatus }) {
+export function PaymentBadge({
+  method,
+  status,
+  cancelled = false,
+}: {
+  method: PaymentMethod;
+  status: PaymentStatus;
+  /** The order was cancelled: an online order that was never paid is then simply not paid, not "awaiting" anything. */
+  cancelled?: boolean;
+}) {
   if (method === "cod") {
     const cfg =
       status === "paid"
@@ -124,7 +133,12 @@ export function PaymentBadge({ method, status }: { method: PaymentMethod; status
           ? { cls: "bg-muted text-muted-foreground border-border", label: "Refunded" }
           : {
               cls: "bg-warning/15 text-warning-foreground border-warning/30",
-              label: "Awaiting payment",
+              label:
+                method === "paystack"
+                  ? cancelled
+                    ? "Not paid"
+                    : "Awaiting online payment"
+                  : "Awaiting payment",
             };
   return (
     <Badge variant="secondary" className={`gap-1 border ${cfg.cls}`}>

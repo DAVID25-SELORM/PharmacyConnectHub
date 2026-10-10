@@ -247,8 +247,8 @@ BEGIN
   PERFORM zz.check('the timeline, audit and log record it', EXISTS (SELECT 1 FROM public.order_events WHERE order_id = o AND event_type = 'payment_received' AND actor_side = 'system')
     AND EXISTS (SELECT 1 FROM public.audit_logs WHERE activity = 'Online payment received' AND record_id = o)
     AND EXISTS (SELECT 1 FROM public.order_payment_log WHERE order_id = o AND kind = 'payment_applied'));
-  PERFORM zz.check('both sides were told (pharmacy: payment confirmed; wholesaler: online payment received)', EXISTS (SELECT 1 FROM public.notifications WHERE title = 'Payment confirmed' AND user_id = (SELECT u_po FROM zz.bo))
-    AND EXISTS (SELECT 1 FROM public.notifications WHERE title = 'Payment received' AND user_id = (SELECT u_wm FROM zz.bo))
+  PERFORM zz.check('both sides were told (pharmacy: payment confirmed; wholesaler: a new, paid order)', EXISTS (SELECT 1 FROM public.notifications WHERE title = 'Payment confirmed' AND user_id = (SELECT u_po FROM zz.bo))
+    AND EXISTS (SELECT 1 FROM public.notifications WHERE title = 'New paid order' AND user_id = (SELECT u_wm FROM zz.bo))
     AND (SELECT count(*) FROM public.notifications WHERE type = 'payment_update') > n_before);
   wn_before := (SELECT count(*) FROM public.notifications WHERE type = 'payment_update');
   r := zz.apply('DX-TEST-0001', 'success', 10000, 'GHS', 'test', 'webhook');

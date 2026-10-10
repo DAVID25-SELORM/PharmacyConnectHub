@@ -115,3 +115,36 @@ describe("canChangeSettlement", () => {
     expect(canChangeSettlement({ status: "cancelled", payment_status: "unpaid" })).toBe(false);
   });
 });
+
+describe("online payment (Pay now)", () => {
+  it("is shown disabled, with the reason, while the platform has it switched off", () => {
+    const option = settlementOptions({ state: "none" }).find((o) => o.value === "pay_now");
+    expect(option).toMatchObject({ disabled: true, reason: "Online payment isn't available yet." });
+    expect(
+      settlementOptions({ state: "none" }, { onlinePayments: false }).find(
+        (o) => o.value === "pay_now",
+      )?.disabled,
+    ).toBe(true);
+  });
+
+  it("can be chosen once the platform has it switched on, and changes nothing else", () => {
+    const off = settlementOptions({ state: "available" });
+    const on = settlementOptions({ state: "available" }, { onlinePayments: true });
+    expect(on.find((o) => o.value === "pay_now")).toEqual({
+      value: "pay_now",
+      label: "Pay now (online)",
+      disabled: false,
+    });
+    expect(on.filter((o) => o.value !== "pay_now")).toEqual(
+      off.filter((o) => o.value !== "pay_now"),
+    );
+  });
+
+  it("is never one of the methods an order can be changed to, and an online order cannot be changed", () => {
+    expect(CHANGEABLE_SETTLEMENT_METHODS).not.toContain("pay_now");
+    expect(SELECTABLE_SETTLEMENT_METHODS).not.toContain("pay_now");
+    const order = { status: "pending", payment_status: "unpaid", is_credit_order: false };
+    expect(canChangeSettlement({ ...order, payment_method: "cod" })).toBe(true);
+    expect(canChangeSettlement({ ...order, payment_method: "paystack" })).toBe(false);
+  });
+});

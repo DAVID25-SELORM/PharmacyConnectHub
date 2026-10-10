@@ -5,6 +5,9 @@ import tsConfigPaths from "vite-tsconfig-paths";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 
 export default defineConfig({
+  // Local testing only: serve the /api handlers elsewhere (tests/local-supabase/dev-api-server.mjs) and forward /api to them.
+  // Unset in normal development and ignored by the production build.
+  server: process.env.DEV_API_PROXY ? { proxy: { "/api": process.env.DEV_API_PROXY } } : undefined,
   build: {
     rollupOptions: {
       output: {

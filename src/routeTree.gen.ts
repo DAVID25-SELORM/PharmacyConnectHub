@@ -27,6 +27,7 @@ import { Route as AdminActivityRouteImport } from './routes/admin.activity'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
+import { Route as PayReturnRouteImport } from './routes/pay.return'
 import { Route as PharmacyAccountingRouteImport } from './routes/pharmacy_.accounting'
 import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
 import { Route as PharmacyContactsRouteImport } from './routes/pharmacy_.contacts'
@@ -128,6 +129,11 @@ const AdminVerificationRoute = AdminVerificationRouteImport.update({
   path: '/verification',
   getParentRoute: () => AdminRoute,
 } as any)
+const PayReturnRoute = PayReturnRouteImport.update({
+  id: '/pay/return',
+  path: '/pay/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PharmacyAccountingRoute = PharmacyAccountingRouteImport.update({
   id: '/pharmacy_/accounting',
   path: '/pharmacy/accounting',
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pay/return': typeof PayReturnRoute
   '/pharmacy/accounting': typeof PharmacyAccountingRoute
   '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/contacts': typeof PharmacyContactsRoute
@@ -228,6 +235,7 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pay/return': typeof PayReturnRoute
   '/pharmacy/accounting': typeof PharmacyAccountingRoute
   '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/contacts': typeof PharmacyContactsRoute
@@ -259,6 +267,7 @@ export interface FileRoutesById {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/pay/return': typeof PayReturnRoute
   '/pharmacy_/accounting': typeof PharmacyAccountingRoute
   '/pharmacy_/audit': typeof PharmacyAuditRoute
   '/pharmacy_/contacts': typeof PharmacyContactsRoute
@@ -291,6 +300,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pay/return'
     | '/pharmacy/accounting'
     | '/pharmacy/audit'
     | '/pharmacy/contacts'
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pay/return'
     | '/pharmacy/accounting'
     | '/pharmacy/audit'
     | '/pharmacy/contacts'
@@ -351,6 +362,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/staff'
     | '/admin/verification'
+    | '/pay/return'
     | '/pharmacy_/accounting'
     | '/pharmacy_/audit'
     | '/pharmacy_/contacts'
@@ -378,6 +390,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
   WholesalerRoute: typeof WholesalerRoute
+  PayReturnRoute: typeof PayReturnRoute
   PharmacyAccountingRoute: typeof PharmacyAccountingRoute
   PharmacyAuditRoute: typeof PharmacyAuditRoute
   PharmacyContactsRoute: typeof PharmacyContactsRoute
@@ -518,6 +531,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVerificationRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/pay/return': {
+      id: '/pay/return'
+      path: '/pay/return'
+      fullPath: '/pay/return'
+      preLoaderRoute: typeof PayReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pharmacy_/accounting': {
       id: '/pharmacy_/accounting'
       path: '/pharmacy/accounting'
@@ -622,6 +642,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
   WholesalerRoute: WholesalerRoute,
+  PayReturnRoute: PayReturnRoute,
   PharmacyAccountingRoute: PharmacyAccountingRoute,
   PharmacyAuditRoute: PharmacyAuditRoute,
   PharmacyContactsRoute: PharmacyContactsRoute,

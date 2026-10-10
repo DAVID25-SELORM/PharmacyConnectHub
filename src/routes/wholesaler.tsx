@@ -50,6 +50,7 @@ import {
   type ProductImportResult,
 } from "@/lib/product-import";
 import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
+import { isAwaitingOnlinePayment } from "@/lib/payments";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -647,7 +648,7 @@ function OrdersInbox({
                   />
                   <span className="font-display text-lg font-bold">{o.order_number}</span>
                   <StatusBadge status={o.status} />
-                  <PaymentBadge method={o.payment_method} status={o.payment_status} />
+                  <PaymentBadge method={o.payment_method} status={o.payment_status} cancelled={o.status === "cancelled"} />
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   Payment: {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
@@ -671,7 +672,8 @@ function OrdersInbox({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
-              {canUpdateStatus && next && <Button variant="hero" size="sm" disabled={Boolean(o.has_open_amendment) && (next === "dispatched" || next === "delivered")} title={o.has_open_amendment && (next === "dispatched" || next === "delivered") ? "A proposed change is waiting for the pharmacy's decision" : undefined} onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
+              {canUpdateStatus && next && isAwaitingOnlinePayment(o) && <span className="text-xs text-muted-foreground" data-testid="awaiting-online-payment">Waiting for the pharmacy&apos;s online payment</span>}
+              {canUpdateStatus && next && !isAwaitingOnlinePayment(o) && <Button variant="hero" size="sm" disabled={Boolean(o.has_open_amendment) && (next === "dispatched" || next === "delivered")} title={o.has_open_amendment && (next === "dispatched" || next === "delivered") ? "A proposed change is waiting for the pharmacy's decision" : undefined} onClick={() => updateStatus(o.id, next)}>{nextLabel[o.status]}</Button>}
               {o.status === "pending" || o.status === "accepted" || o.status === "picking" || o.status === "packed" || o.status === "ready_for_dispatch" ? <span className="text-xs text-muted-foreground">Print Pick &amp; Pack below after opening</span> : null}
               <Button type="button" variant="outline" size="sm" onClick={() => setOpenOrderId(open ? null : o.id)} aria-expanded={open}>{open ? "Hide Order" : "View Order"}</Button>
             </div>
@@ -727,7 +729,12 @@ function OrdersInbox({
                   onConfirm={(reason) => cancelOrder(o.id, reason)}
                 />
               )}
-              {canUpdateStatus && next && (
+              {canUpdateStatus && next && isAwaitingOnlinePayment(o) && (
+                <span className="text-xs text-muted-foreground" data-testid="awaiting-online-payment">
+                  Waiting for the pharmacy&apos;s online payment. You can accept this order once it is paid.
+                </span>
+              )}
+              {canUpdateStatus && next && !isAwaitingOnlinePayment(o) && (
                 <Button variant="hero" size="sm" onClick={() => updateStatus(o.id, next)}>
                   {nextLabel[o.status]}
                 </Button>

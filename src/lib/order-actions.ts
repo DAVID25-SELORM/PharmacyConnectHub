@@ -16,8 +16,17 @@ type CreateMarketplaceOrdersInput = {
   settlementMethods?: Record<string, string>;
 };
 
+export type AwaitingPaymentOrder = {
+  orderId: string;
+  orderNumber: string;
+  wholesalerId: string;
+  amountGhs: number;
+};
+
 type CreateMarketplaceOrdersResult = {
   orderCount: number;
+  /** Orders placed for online payment: placed, reserved, and waiting for the customer to pay. */
+  awaitingPayment: AwaitingPaymentOrder[];
 };
 
 type OrderReceiptActionInput = {
@@ -48,7 +57,7 @@ async function getRequiredSession() {
   return session;
 }
 
-async function postWithSession<T>(path: string, input: unknown): Promise<T> {
+export async function postWithSession<T>(path: string, input: unknown): Promise<T> {
   const session = await getRequiredSession();
 
   const res = await fetch(path, {
@@ -90,14 +99,17 @@ export async function createMarketplaceOrders(
     pending = { payload, requestId: crypto.randomUUID() };
     sessionStorage.setItem(key, JSON.stringify(pending));
   }
-  const data = await postWithSession<CreateMarketplaceOrdersResult>("/api/orders/create", {
+  const data = await postWithSession<Partial<CreateMarketplaceOrdersResult>>("/api/orders/create", {
     ...input,
     requestId: pending.requestId,
   });
   // A slower response must not clear a newer cart's pending request.
   if (sessionStorage.getItem(key) === JSON.stringify(pending)) sessionStorage.removeItem(key);
 
-  return { orderCount: Number(data.orderCount) || 0 };
+  return {
+    orderCount: Number(data.orderCount) || 0,
+    awaitingPayment: Array.isArray(data.awaitingPayment) ? data.awaitingPayment : [],
+  };
 }
 
 export async function confirmOrderPayment(
