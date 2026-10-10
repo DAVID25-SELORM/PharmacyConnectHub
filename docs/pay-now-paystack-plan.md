@@ -1,6 +1,6 @@
 # Pay Now (online payment) with Paystack: implementation plan
 
-Status: **plan only. Nothing is built, nothing is deployed, no key has been used.** Written after the order-amendment work (design doc
+Status: **decisions S1 to S8 accepted as recommended (section 3). P1 is built locally and not deployed (section 12). No key has been used.** Written after the order-amendment work (design doc
 sections 1 to 22 and the [review pack](order-amendments/review-pack.md)). Test mode first; live only after the gates in section 9.
 
 ## 1. Goal and the rules this plan is built around
@@ -239,3 +239,49 @@ payments](https://paystack.com/docs/payments/accept-payments/), [Paystack multi-
 [Paystack's help centre on transaction splits](https://support.paystack.com/en/articles/2132802). The official pages could not be fetched
 directly from this environment, so the retry timings, IP list and fee-bearer options come from search summaries of those pages and must be
 re-read on Paystack's site before P1 starts.
+
+## 12. P1 status (built locally, not deployed): the provider-neutral core
+
+**Decisions:** S1 to S8 were accepted exactly as recommended in section 3: one platform Paystack account in test mode (subaccounts with
+splits for live); one payment per supplier order; unpaid pay-now orders cancelled and their stock released after 30 minutes; refunds
+automatic for accepted amendments and manual for delivery-problem credits; a top-up payment for a price increase on a paid order;
+chargebacks out of the pilot (alert only); pilot with one wholesaler and a low cap.
+
+**What P1 contains (no screen, no checkout change; nothing a user can reach):**
+- **Migrations** `20261106100000_payments_core_schema.sql` and `20261106110000_payments_core_workflow.sql`: `payment_provider_events` (every
+  notification stored once, before anything else is done with it), `order_payment_attempts`, `order_payment_log` (append-only), and three
+  service-role-only functions: `record_payment_provider_event`, `finish_payment_provider_event`, and **`apply_payment_result`**, the one function
+  that can mark an attempt and an order paid.
+- **`apply_payment_result` decides** (all under the order lock, idempotently): an unknown reference does nothing; a result from the other mode is
+  refused; a repeat changes nothing; failed / abandoned / pending are recorded and leave the order alone; a success is applied **only** if the
+  currency and the exact amount match, the order is an online order, its total has not changed, it is not cancelled and not already paid.
+  Otherwise it is **flagged** (a person must look), or recorded as a **late payment** (order cancelled: money received, refund required, the order
+  is never revived) or a **double payment** (already paid: refund required). At most one attempt per order can ever be the paying one (a database
+  index, not only the function).
+- **Cancelling an order that was paid online** marks the paying attempt refund-required (a trigger), so money is never held silently.
+- **Adapter and endpoint** (`api/_payments/`, `api/payments/webhook.ts`): the Paystack adapter (exact pesewa conversion that refuses fractions of a
+  pesewa, references, HMAC-SHA512 verification of the raw body in constant time, initialize / verify / list-transactions calls, status mapping), the
+  settings loader (payments are off unless `PAYMENTS_MODE` is `test` or `live`; the key's prefix must match the mode; live needs a second switch,
+  `PAYMENTS_LIVE_ENABLED=yes`), and the webhook handler: it checks the signature, ignores the other mode's events, stores the notification, then **asks
+  Paystack what happened** and applies that, never the notification's own claim. A failure answers 500 so Paystack retries, which is safe.
+- **Nothing is reachable until you set** `PAYMENTS_MODE=test` and `PAYSTACK_SECRET_KEY` (a test key) in the server environment: until then the
+  endpoint answers 503 and the database functions are not callable by any user.
+
+**Findings while building it that affect later phases:**
+- Production's order guard forbids changing `payment_method` after an order is placed, so P2's checkout must create pay-now orders as online
+  orders from the start (the tests switch that guard off for their fixtures only).
+- The site's content-security policy allows a redirect to Paystack's hosted page (navigation is not restricted by it); an in-page Paystack popup
+  would need the policy loosened, so P2 uses the redirect flow.
+- The raw request body is needed for the signature. The handler reads it from the request stream without touching `req.body`; this was verified with
+  a real Node HTTP server, but must be verified once on Vercel itself (a signed test request to a preview deployment) before P2 relies on it.
+- Strict type-checking of the `api/` folder (which the main `tsc` does not cover) shows older errors in `api/platform-staff/*` that predate this work;
+  the payment code and the receipt endpoints are clean.
+
+**Verified:** `payments-core.sql` 63/63 (permissions, duplicate notifications, exact-amount rule, wrong currency, failed / abandoned / pending, a
+failed attempt that later succeeds, late and double payments, a changed order, an ordinary cash order refused, cancellation after payment,
+append-only records); `payments-core-concurrency.sh` 9/9 with a negative control (webhook and verify at once, a customer paying twice, cancellation
+racing a payment); mutation checks PM1 to PM5; `payments-webhook-api.local.mjs` 17/17 (the real handler behind a real HTTP server with real
+signatures); 483 unit tests including 39 for the adapter, settings and handler; lint clean.
+
+**Next (P2), once you have put a Paystack test key in the environment:** `initialize`, `verify`, the return page, "Pay now" in checkout behind a
+test-mode-only flag, the rule that a wholesaler cannot accept an unpaid online order, and resuming payment.

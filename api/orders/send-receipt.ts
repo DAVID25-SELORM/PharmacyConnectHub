@@ -127,20 +127,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // A cash order accepted with a back-order has one receipt per collected portion.
-  const { data: hasPortions } = await admin.rpc("order_has_cash_portions", { p_order_id: order.id });
+  const { data: hasPortions } = await admin.rpc("order_has_cash_portions", {
+    p_order_id: order.id,
+  });
   if (hasPortions === true) {
     const outcome = await processCashPortion({
       mode: "resend",
       callerDb: admin,
       admin,
-      order,
+      order: { ...order, pharmacy: order.pharmacy, wholesaler: order.wholesaler },
       shipmentId,
       request: req,
     });
     return res.status(outcome.status).json(outcome.body);
   }
   if (shipmentId) {
-    return res.status(400).json({ error: "This order has no back-order shipments to send a receipt for" });
+    return res
+      .status(400)
+      .json({ error: "This order has no back-order shipments to send a receipt for" });
   }
 
   if (order.payment_status !== "paid") {

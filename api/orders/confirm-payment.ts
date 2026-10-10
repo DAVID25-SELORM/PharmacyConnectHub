@@ -169,20 +169,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // A cash order accepted with a back-order is collected and receipted one portion at a time (the main delivery, then each
   // shipment): the database confirms the portion and this sends that portion's own receipt.
-  const { data: hasPortions } = await callerDb.rpc("order_has_cash_portions", { p_order_id: order.id });
+  const { data: hasPortions } = await callerDb.rpc("order_has_cash_portions", {
+    p_order_id: order.id,
+  });
   if (hasPortions === true) {
     const outcome = await processCashPortion({
       mode: "confirm",
       callerDb,
       admin,
-      order,
+      order: { ...order, pharmacy: order.pharmacy, wholesaler: order.wholesaler },
       shipmentId,
       request: req,
     });
     return res.status(outcome.status).json(outcome.body);
   }
   if (shipmentId) {
-    return res.status(400).json({ error: "This order has no back-order shipments to confirm payment for" });
+    return res
+      .status(400)
+      .json({ error: "This order has no back-order shipments to confirm payment for" });
   }
 
   // An order whose supply was reduced is receipted at what was supplied. Fail before anything is changed if that cannot be read.

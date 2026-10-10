@@ -221,3 +221,14 @@ available credit after partial payments and requires explicit financial review.
     that finish work in progress callable; each single switch touches only its own function; on restores everything; the service role keeps
     its access and anonymous users never had any. Needs only the schema and migrations through 20261105120000 (no fixture data); it leaves the
     stack switched on.
+
+29. `payments-core.sql` (63 checks), `payments-core-concurrency.sh` (9 checks) and `payments-webhook-api.local.mjs` (17 checks): online payments,
+    P1. Only the service role can use the core; provider notifications are stored once (a duplicate is recognised, a failed one is retried); a verified
+    payment is applied once and only for the exact amount and currency; wrong amount or currency, an order that is not online, a changed order, a
+    double payment and a result from the wrong mode are flagged or refused and never pay an order; failed, abandoned and pending are recorded; a failed
+    attempt can still succeed on the same reference; a payment arriving for a cancelled order is recorded with a refund required and never revives the
+    order; cancelling a paid online order marks its payment refund-required; at most one attempt per order is ever the paying one; append-only records.
+    The `.sh` runs real overlapping sessions (a webhook and a verify at once, a customer paying twice, a cancellation racing a payment). The `.mjs`
+    runs the real webhook handler behind a real HTTP server with real signatures and a stand-in for Paystack's verify call (`source env.sh`, run `pw.sql`
+    after a suite first, then `npx tsx`). Needs migrations through 20261106110000. Mutation checks: amount, cancelled-order, duplicate, mode and
+    changed-order checks each removed fail the suite; removing the order lock fails concurrency scenarios 1 and 2.
