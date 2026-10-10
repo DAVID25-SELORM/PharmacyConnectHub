@@ -105,9 +105,12 @@ changes, and reading is untouched.
   report, decide), the role matrix (section 20 of the design doc), phone width for the wholesaler's dialogs and every panel at rest.
 - **Regression**: the full local sweep after every phase. The same **12 older suites fail on every run** because their fixtures edit orders
   and order lines in ways production's guard refuses (they fail identically without any amendment code); with the guards switched off, 11
-  of them pass. The twelfth, `batches-expiry.sql`, still fails one check ("audit log covers receive, allocate and write-off") with a
-  legacy-order stock-deduction error; it failed the same way when first observed in the Phase 5 run and nothing in these phases touches
-  batches, but **it was not proven to predate Phase 1**, so treat it as an open question (section 6).
+  of them pass. The twelfth, `batches-expiry.sql`, still fails one check ("audit log covers receive, allocate and write-off") with
+  "Legacy order has no verified stock deduction". **Settled: it is independent of the amendment work.** The refusal comes from the
+  production-faithful cancellation guard in `production-stock-fixture.sql` (installed in Phase 1), which refuses to cancel an order that has no
+  checkout deduction evidence; the suite cancels an order it created by direct insert, which has none. With that guard reinstated exactly as
+  the fixture defines it (no amendment code in it) the suite fails identically. It is a fixture to rewrite (create the order through checkout),
+  not a regression.
 
 **Not tested, or tested only partly:**
 - The pharmacy's dialogs at phone width (the measuring script could not read a hidden browser pane reliably); the scroll-to-order after a
@@ -121,8 +124,8 @@ changes, and reading is untouched.
 
 ## 6. Known limitations and open items
 
-1. **`batches-expiry.sql`** (see above): find out whether it fails on a checkout of the commit before Phase 1. If it does, record it as
-   pre-existing; if it does not, it is a regression to fix.
+1. **`batches-expiry.sql`** fails one check for a reason unrelated to the amendment work (settled; see section 5). It, and the other
+   eleven legacy fixtures, still need rewriting so that they create their orders through checkout rather than by direct insert.
 2. **No refunds.** A paid cash order cannot be amended, a collected cash portion cannot be credited, and prepaid (Paystack) orders cannot be
    amended at all. This is refused with a clear message; it is not a silent gap.
 3. **Order-level payment reports** count a partly collected order as unpaid until it is fully collected (as partly paid credit orders
