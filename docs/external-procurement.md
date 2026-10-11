@@ -2,7 +2,9 @@
 
 The pharmacy workspace now has **External purchases**, separate from marketplace checkout.
 Inventory, Reports and Accounting link to the same private workflow. Each existing pharmacy
-business is its own workspace; there is no new shared branch hierarchy.
+business is its own workspace; there is no new shared branch hierarchy. The Workspaces report
+compares authorized pharmacy businesses, with a pharmacy/branch selector and date filters.
+Authorization is checked in the database for every workspace returned.
 
 ## Workflow
 
@@ -54,7 +56,13 @@ Recall references/reasons can be recorded on a hold or write-off. Expired lots c
 Posted receipts cannot be edited. Negative corrections/returns refer to the specific lot; additional
 received units require a new receipt referencing the original. Review history remains intact.
 Legacy manual adjustments/imports can still change unbatched inventory, but cannot reduce total stock
-below the sum of tracked saleable lot balances. Use the batch action for reductions to traced units.
+below the sum of tracked saleable lot balances. Use Record stock consumption for traced units
+dispensed/used, or the reviewer correction/return action for other reductions. Consumption has
+its own counter and cannot use expired/quarantined stock. Select the actual lot; earliest expiry
+is recommended but not automatically allocated. Approval recalculates the inventory moving
+weighted-average unit cost from existing stock and each received lot (rounded to inventory
+currency precision). If previous unit cost is unknown, the incoming cost is the fallback.
+Inventory mapping searches and pages through all items rather than preloading a truncated list.
 There is no automatic migration/backfill of historical stock or automatic marketplace receipt sync.
 
 Expiry is displayed and warned on receipt details; automatic scheduled expiry holds and a global
@@ -64,12 +72,15 @@ not a retail checkout/dispensing system.
 ## Finance and reporting
 
 External payables use their own append-only payment receipts and reversals because marketplace
-credit foreign keys require platform wholesalers/orders. They appear through the external-payables
-link in Accounting. Paying a supplier never changes source verification.
+credit foreign keys require platform wholesalers/orders. Accounting shows combined marketplace/external payable totals and aging, plus external supplier
+balances. Supplier profiles export chronological statements with purchases, payments, reversals,
+return credits and running balances. The existing marketplace invoice/payment registers retain
+their own scope. Paying a supplier never changes source verification.
 
 Balance = purchase cost - net payments - agreed return credits. Negative balances display the
 supplier refund/credit owed. Reversal preserves the original payment. Creation, payments, batch
-returns and holds have request IDs; approvals have unique movement markers and row locks.
+returns, holds and consumption have request IDs. Review actions require the exact displayed
+receipt version; evidence changes increment it. Stale review attempts fail before stock posting.
 
 External report filters include date, contact, source, channel, review, verification and payment.
 Search covers reference, invoice, product, batch, manufacturer, seller and phone. Reports have
@@ -81,7 +92,10 @@ Product procurement history combines marketplace and external items without join
 rows into financial totals. Marketplace quantities use `order_item_fulfilled_qty`, prices use
 `order_item_effective_price`, and resolved returns are separate. External drafts/rejections are
 excluded, pending/quarantined receipts remain explicitly labelled, and gross cost/weighted unit
-prices are separated from returned units. Existing marketplace-only reports retain their semantics;
+prices are separated from returned units. Weighted prices, min/max and last prices are grouped
+by exact catalogue/inventory identity and supplier; unrelated medicines are never averaged into
+a channel price. Product/manufacturer/unit-price filters apply server-side before totals.
+Both receipt exports and combined history exports retrieve every filtered page. Existing marketplace-only reports retain their semantics;
 the Reports link opens the combined history.
 
 ## Migration and rollout
@@ -92,6 +106,7 @@ Apply, in order, after the repository's prior migrations:
 2. `20261113110000_external_procurement_workflow.sql`
 3. `20261113120000_external_procurement_reports.sql`
 4. `20261113130000_external_procurement_batch_holds.sql`
+5. `20261114100000_external_procurement_completion.sql`
 
 The dates follow the repository's existing migration sequence, not deployment dates. Do not run an
 unreviewed blanket production reset. Changes are additive except for the inventory balance guard;
@@ -113,8 +128,10 @@ the guard protecting already-posted lots.
   two-batch posting, idempotency, returns, credit, holds/releases, immutable audit, search, analytics,
   legacy unbatched adjustment and marketplace checkout isolation.
 - `tests/local-supabase/external-procurement-concurrency.mjs`: two real database sessions test
-  duplicate approval, same-request payment retries and competing returns. Defaults to the isolated
-  local `external_procurement_review` database; accepts `EXTERNAL_TEST_DB=external_procurement_final`.
+  duplicate approval, same-request payment/consumption retries and competing returns. Defaults to the isolated
+  local `external_procurement_review` database; accepts `EXTERNAL_TEST_DB=external_procurement_release`.
+  Requires all five external migrations. Fixture rows use unique IDs. The transactional suite can
+  run before or after concurrency tests without assuming an empty procurement database.
 - `tests/external-procurement-ui.mjs`: Playwright desktop/mobile HTTP contract tests. Run Vite on
   port 5186 with `VITE_SUPABASE_URL=http://127.0.0.1:54399` and a dummy public key. No hosted API is used.
   Uses the repository's existing `.tmp/import-db/node_modules/playwright` test installation.
@@ -123,3 +140,19 @@ SQL validation used an isolated copy of the local fixture database with the requ
 accounting, order-amendment, backorder and effective-price schema helpers, then the new migrations.
 This is not a verification of hosted-schema drift or a complete rebuild of every historical seed.
 Browser tests use mocked HTTP; actual database authorization is covered by the SQL suites.
+
+## Completion validation
+
+The five external migrations were applied in order to a fresh isolated copy of the local
+`credit_review_clean` fixture, after its missing accounting/order-amendment/backorder/price
+prerequisites. The expanded SQL suite covers stale evidence revisions, consumption retry and
+quarantine guards, weighted-cost replenishment, statement reconciliation, structured filters,
+workspace authorization and the existing posting/payment/return/RLS regression checks.
+No hosted migration was applied. The user will apply the five files above after all earlier
+pending repository migrations. Do not skip the completion migration: the frontend sends its
+review-version and analytics-filter parameters.
+
+Final validation: 749 unit tests, TypeScript, targeted ESLint, production build, real SQL
+regressions and concurrency checks, and desktop/mobile HTTP browser checks passed. The build
+retains the existing large-chunk warning. Browser HTTP is mocked; hosted deployment and
+production-schema compatibility must be checked when applying migrations.

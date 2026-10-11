@@ -68,6 +68,7 @@ export type Batch = {
   quantity: number;
   remaining?: number;
   returned?: number;
+  consumed?: number;
   disposition?: string;
 };
 export type Line = {
@@ -175,6 +176,10 @@ export type Detail = Purchase & {
   };
 };
 export type Filters = {
+  product: string;
+  manufacturer: string;
+  minimum_price: string;
+  maximum_price: string;
   from: string;
   to: string;
   q: string;
@@ -186,6 +191,10 @@ export type Filters = {
   source: string;
 };
 export const emptyFilters: Filters = {
+  product: "",
+  manufacturer: "",
+  minimum_price: "",
+  maximum_price: "",
   from: "",
   to: "",
   q: "",
@@ -215,6 +224,19 @@ export type AnalyticsRow = {
   batches: string;
 };
 export type Analytics = {
+  products: {
+    product_key: string;
+    supplier_key: string;
+    product: string;
+    seller: string;
+    channel: string;
+    units: number;
+    weighted_average: number;
+    minimum_price: number;
+    maximum_price: number;
+    last_price: number;
+    last_purchase: string;
+  }[];
   rows: AnalyticsRow[];
   count: number;
   channels: {
@@ -222,7 +244,6 @@ export type Analytics = {
     units: number;
     returned: number;
     gross_cost: number;
-    weighted_average: number;
   }[];
 };
 export const db = supabase as unknown as SupabaseClient;
@@ -405,6 +426,8 @@ export function traceabilitySheets(p: Detail, pharmacy: string): ReportExportShe
         "Expiry",
         "Received",
         "Remaining",
+        "Consumed",
+        "Returned / corrected",
         "Disposition",
         "Unit cost GHS",
       ],
@@ -417,6 +440,8 @@ export function traceabilitySheets(p: Detail, pharmacy: string): ReportExportShe
           b.expiry_date ?? "Unknown",
           b.quantity,
           b.remaining ?? 0,
+          b.consumed ?? 0,
+          b.returned ?? 0,
           b.disposition ?? "quarantine",
           i.unit_cost_ghs,
         ]),

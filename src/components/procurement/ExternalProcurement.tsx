@@ -1,3 +1,5 @@
+import { WorkspaceProcurementReport } from "./WorkspaceProcurementReport";
+import { SupplierProfile } from "./SupplierProfile";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -142,6 +144,7 @@ export function ExternalProcurement({
       p_from: filters.from || null,
       p_to: filters.to || null,
       p_query: filters.q,
+      p_filters: filters,
       p_offset: offset,
       p_limit: 30,
     })
@@ -154,7 +157,7 @@ export function ExternalProcurement({
     return () => {
       live = false;
     };
-  }, [business, tab, filters.from, filters.to, filters.q, offset, revision]);
+  }, [business, tab, filters, offset, revision]);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     try {
@@ -194,6 +197,58 @@ export function ExternalProcurement({
     if (format === "csv")
       downloadCsv("external-procurement.csv", rowsToCsv(sheet.headers, sheet.rows));
     else await downloadXlsx("external-procurement.xlsx", [sheet]);
+  }
+  async function exportHistory() {
+    if (!business) return;
+    const rows: Analytics["rows"] = [];
+    let page = 0;
+    while (true) {
+      const data = await externalRpc<Analytics>("external_procurement_analytics", {
+        p_pharmacy_id: business.id,
+        p_from: filters.from || null,
+        p_to: filters.to || null,
+        p_query: filters.q,
+        p_filters: filters,
+        p_offset: page,
+        p_limit: 200,
+      });
+      rows.push(...data.rows);
+      page += data.rows.length;
+      if (!data.rows.length || page >= data.count) break;
+    }
+    await downloadXlsx("procurement-history.xlsx", [
+      {
+        name: "Procurement history",
+        headers: [
+          "Reference",
+          "Date",
+          "Channel",
+          "Product",
+          "Manufacturer",
+          "Supplier",
+          "Source",
+          "Quantity",
+          "Returned",
+          "Unit cost GHS",
+          "Batches",
+          "Review",
+        ],
+        rows: rows.map((r) => [
+          r.reference,
+          r.date,
+          r.channel,
+          r.product,
+          r.manufacturer ?? "",
+          r.seller ?? "",
+          r.source ?? "",
+          r.quantity,
+          r.returned,
+          r.unit_cost,
+          r.batches ?? "",
+          r.review,
+        ]),
+      },
+    ]);
   }
   if (!business) return null;
   return (
@@ -236,20 +291,24 @@ export function ExternalProcurement({
           </div>
         )}
         <nav className="flex flex-wrap gap-2" aria-label="Procurement sections">
-          {["purchases", "suppliers", "history", ...(context?.is_owner ? ["settings"] : [])].map(
-            (t) => (
-              <Button
-                key={t}
-                variant={tab === t ? "default" : "outline"}
-                onClick={() => {
-                  setTab(t);
-                  setOffset(0);
-                }}
-              >
-                {t === "history" ? "Product procurement history" : label(t)}
-              </Button>
-            ),
-          )}
+          {[
+            "purchases",
+            "suppliers",
+            "history",
+            "workspaces",
+            ...(context?.is_owner ? ["settings"] : []),
+          ].map((t) => (
+            <Button
+              key={t}
+              variant={tab === t ? "default" : "outline"}
+              onClick={() => {
+                setTab(t);
+                setOffset(0);
+              }}
+            >
+              {t === "history" ? "Product procurement history" : label(t)}
+            </Button>
+          ))}
         </nav>
         {(tab === "purchases" || tab === "history") && (
           <section className={panel}>
@@ -277,6 +336,22 @@ export function ExternalProcurement({
                   onChange={(e) => filter("to", e.target.value)}
                 />
               </Field>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-4">
+              {" "}
+              {(["product", "manufacturer", "minimum_price", "maximum_price"] as const).map(
+                (key) => (
+                  <Field key={key} title={label(key)}>
+                    <Input
+                      type={key.includes("price") ? "number" : "text"}
+                      min="0"
+                      step="0.01"
+                      value={filters[key]}
+                      onChange={(e) => filter(key, e.target.value)}
+                    />
+                  </Field>
+                ),
+              )}
             </div>
             {tab === "purchases" && (
               <div className="grid gap-3 sm:grid-cols-3">
@@ -318,7 +393,12 @@ export function ExternalProcurement({
                   title="Payment"
                   value={filters.payment}
                   onChange={(v) => filter("payment", v)}
-                  options={{ paid: "Paid", part_paid: "Part payment", credit: "Credit" }}
+                  options={{
+                    outstanding: "All outstanding",
+                    paid: "Paid",
+                    part_paid: "Part payment",
+                    credit: "Credit",
+                  }}
                   empty="All payments"
                 />
                 <Choice
@@ -352,6 +432,18 @@ export function ExternalProcurement({
         )}
         {tab === "purchases" && (
           <>
+            {filters.supplier &&
+              context &&
+              [...context.people, ...context.companies]
+                .filter((c) => c.id === filters.supplier)
+                .map((c) => (
+                  <SupplierProfile
+                    key={c.id}
+                    pharmacy={business!.id}
+                    contact={c}
+                    open={(id) => void run(() => open(id))}
+                  />
+                ))}
             {list && (
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {[
@@ -505,6 +597,9 @@ export function ExternalProcurement({
         {tab === "history" && (
           <section className={panel}>
             <h2 className="text-lg font-semibold">Purchasing across all channels</h2>
+            <Button variant="outline" disabled={busy} onClick={() => void run(exportHistory)}>
+              Export complete filtered history
+            </Button>
             <p className="text-sm text-muted-foreground">
               Marketplace quantities reflect current committed supply. External receipts include
               pending/quarantined purchases, with returns shown separately; drafts and rejected
@@ -518,7 +613,6 @@ export function ExternalProcurement({
                     {c.units} units · {c.returned} returned
                   </p>
                   <p>Gross {formatGHSCell(c.gross_cost)}</p>
-                  <p>Weighted average {formatGHSCell(c.weighted_average)}</p>
                 </div>
               ))}
             </div>
@@ -550,10 +644,36 @@ export function ExternalProcurement({
                 </article>
               ))}
             </div>
+            <h3 className="font-semibold">Product prices by supplier</h3>
+            <p className="text-sm text-muted-foreground">
+              Prices are compared only within the same catalogue product or mapped inventory item.
+              Unmapped local descriptions remain separate.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {analytics?.products?.map((r) => (
+                <article
+                  className="rounded-lg border p-4"
+                  key={`${r.product_key}-${r.supplier_key}-${r.channel}`}
+                >
+                  <strong>{r.product}</strong>
+                  <p>
+                    {r.seller} | {label(r.channel)}
+                  </p>
+                  <p>Weighted unit cost {formatGHSCell(r.weighted_average)}</p>
+                  <p>
+                    Range {formatGHSCell(r.minimum_price)} - {formatGHSCell(r.maximum_price)}
+                  </p>
+                  <p>
+                    Last price {formatGHSCell(r.last_price)} on {r.last_purchase}
+                  </p>
+                </article>
+              ))}
+            </div>
             {analytics?.rows.length === 0 && <p>No purchases found.</p>}
             <Pager offset={offset} count={analytics?.count ?? 0} change={setOffset} />
           </section>
         )}
+        {tab === "workspaces" && <WorkspaceProcurementReport />}
         {tab === "settings" && context?.is_owner && (
           <section className={panel}>
             <h2 className="text-lg font-semibold">Review policy</h2>
@@ -1108,25 +1228,35 @@ function ProductLine({
       clearTimeout(timer);
     };
   }, [query]);
+  const [inventoryQuery, setInventoryQuery] = useState("");
+  const [inventoryPage, setInventoryPage] = useState(0);
   useEffect(() => {
     let live = true;
     db.from("pharmacy_inventory_items")
-      .select("id,name")
+      .select("id,name,strength,pack_size")
       .eq("pharmacy_id", pharmacy)
       .eq("active", true)
       .eq("item_type", "medicine")
+      .ilike("name", `%${inventoryQuery}%`)
       .order("name")
-      .limit(1000)
+      .order("id")
+      .range(inventoryPage * 50, inventoryPage * 50 + 49)
       .then(({ data, error }) => {
         if (live) {
           if (error) toast.error(error.message);
-          else setInventory(data ?? []);
+          else
+            setInventory(
+              (data ?? []).map((item) => ({
+                id: item.id,
+                name: [item.name, item.strength, item.pack_size].filter(Boolean).join(" | "),
+              })),
+            );
         }
       });
     return () => {
       live = false;
     };
-  }, [pharmacy]);
+  }, [pharmacy, inventoryQuery, inventoryPage]);
   return (
     <section className={panel}>
       <div className="flex justify-between">
@@ -1180,6 +1310,16 @@ function ProductLine({
           Use local product description instead
         </Button>
       )}
+      <Field title="Search inventory to map an existing item">
+        <Input
+          value={inventoryQuery}
+          onChange={(e) => {
+            setInventoryQuery(e.target.value);
+            setInventoryPage(0);
+          }}
+          placeholder="Search all inventory by name"
+        />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         {[
           "name",
@@ -1224,9 +1364,31 @@ function ProductLine({
         title="Post to this pharmacy inventory item (confirm the exact medicine / pack)"
         value={i.inventory_item_id}
         onChange={(v) => update({ ...i, inventory_item_id: v })}
-        options={contactOptions(inventory)}
+        options={{
+          ...(i.inventory_item_id
+            ? { [i.inventory_item_id]: "Selected inventory item (search to change)" }
+            : {}),
+          ...contactOptions(inventory),
+        }}
         empty="Create a local inventory item after approval"
       />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="outline"
+          disabled={inventoryPage === 0}
+          onClick={() => setInventoryPage((n) => n - 1)}
+        >
+          Previous inventory matches
+        </Button>
+        <span>Page {inventoryPage + 1}</span>
+        <Button
+          variant="outline"
+          disabled={inventory.length < 50}
+          onClick={() => setInventoryPage((n) => n + 1)}
+        >
+          More inventory matches
+        </Button>
+      </div>
       {i.batches.map((b, n) => (
         <div key={n} className="grid gap-2 rounded-lg bg-muted p-3 sm:grid-cols-4">
           <Field title="Batch number">
@@ -1328,6 +1490,7 @@ function PurchaseDetail({
     [reason, setReason] = useState(""),
     [returnedTo, setReturnedTo] = useState(""),
     [credit, setCredit] = useState("0");
+  const [movementDate, setMovementDate] = useState(today());
   const [paymentRequest, setPaymentRequest] = useState(crypto.randomUUID());
   const [batchRequest, setBatchRequest] = useState(crypto.randomUUID());
   const [holdRequest, setHoldRequest] = useState(crypto.randomUUID());
@@ -1337,6 +1500,7 @@ function PurchaseDetail({
       await externalRpc("review_external_purchase", {
         p_purchase_id: p.id,
         p_decision: decision,
+        p_version: p.version,
         p_notes: notes,
       });
       toast.success("Review saved.");
@@ -1435,8 +1599,8 @@ function PurchaseDetail({
                 {i.batches.map((b) => (
                   <p key={b.id} className="mt-2 rounded bg-muted p-2 text-sm">
                     Batch {b.batch_number ?? "Unknown"} · Expiry {b.expiry_date ?? "Unknown"} ·
-                    Received {b.quantity} · Remaining {b.remaining} ·{" "}
-                    {label(b.disposition ?? "quarantine")}
+                    Consumed {b.consumed ?? 0} | Returned / corrected {b.returned ?? 0} | Received{" "}
+                    {b.quantity} · Remaining {b.remaining} · {label(b.disposition ?? "quarantine")}
                   </p>
                 ))}
               </div>
@@ -1669,6 +1833,54 @@ function PurchaseDetail({
               </>
             )}
           </section>
+          {c.can_record && p.posted_at && (
+            <section className={panel}>
+              <h3 className="font-semibold">Record stock consumption</h3>
+              <p className="text-sm text-muted-foreground">
+                Select the actual lot dispensed or used. Prefer the earliest expiry. Expired and
+                quarantined lots cannot be consumed.
+              </p>
+              <Choice
+                title="Consumption batch"
+                value={batch}
+                onChange={setBatch}
+                empty="Choose batch"
+                options={Object.fromEntries(
+                  p.items.flatMap((i) =>
+                    i.batches
+                      .filter((b) => b.disposition === "saleable" && (b.remaining ?? 0) > 0)
+                      .map((b) => [
+                        b.id!,
+                        `${i.product_snapshot.name} | ${b.batch_number} | expires ${b.expiry_date} | ${b.remaining} remaining`,
+                      ]),
+                  ),
+                )}
+              />
+              <Field title="Units consumed">
+                <Input type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} />
+              </Field>
+              <Field title="Consumption reference / reason">
+                <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+              </Field>
+              <Button
+                disabled={busy || !batch || !reason.trim()}
+                onClick={() =>
+                  act(async () => {
+                    await externalRpc("consume_external_batch", {
+                      p_batch_id: batch,
+                      p_quantity: Number(qty),
+                      p_reason: reason,
+                      p_request_id: batchRequest,
+                    });
+                    setBatchRequest(crypto.randomUUID());
+                    setReason("");
+                  })
+                }
+              >
+                Record consumption
+              </Button>
+            </section>
+          )}
           {c.can_review && (
             <section className={panel}>
               <h3 className="font-semibold">Return / correction / expiry write-off</h3>
@@ -1721,6 +1933,15 @@ function PurchaseDetail({
                 <Field title="Reason / recall reference">
                   <Input value={reason} onChange={(e) => setReason(e.target.value)} />
                 </Field>
+                <Field title="Movement date">
+                  <Input
+                    type="date"
+                    min={p.purchase_date}
+                    max={today()}
+                    value={movementDate}
+                    onChange={(e) => setMovementDate(e.target.value)}
+                  />
+                </Field>
                 <Field title="Returned to / disposition">
                   <Input value={returnedTo} onChange={(e) => setReturnedTo(e.target.value)} />
                 </Field>
@@ -1736,7 +1957,7 @@ function PurchaseDetail({
                       p_kind: kind,
                       p_reason: reason,
                       p_returned_to: returnedTo,
-                      p_date: today(),
+                      p_date: movementDate,
                       p_credit: Number(credit),
                       p_request_id: batchRequest,
                     });

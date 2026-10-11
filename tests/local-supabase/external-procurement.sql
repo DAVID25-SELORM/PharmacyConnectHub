@@ -9,14 +9,18 @@ DECLARE caught BOOLEAN:=false; BEGIN
  IF position(expected IN SQLERRM)=0 THEN RAISE EXCEPTION 'Expected %, got %',expected,SQLERRM; END IF; caught:=true; END;
  PERFORM pg_temp.check_external(caught,'Denied: '||expected);
 END $$;
+CREATE FUNCTION pg_temp.review_current(id UUID,decision TEXT,notes TEXT DEFAULT NULL) RETURNS VOID LANGUAGE plpgsql AS $$ BEGIN
+ PERFORM public.review_external_purchase(id,decision,notes,(SELECT version FROM public.external_purchases WHERE external_purchases.id=review_current.id));
+END $$;
 DO $$
 DECLARE f RECORD; contact UUID; company UUID; purchase UUID; unknown_purchase UUID; batch UUID; item UUID;
- request UUID:=gen_random_uuid(); payload JSONB; result JSONB; paid UUID; r UUID; n INTEGER; other UUID; staff UUID; admin UUID; market_product UUID; market_stock INTEGER; plain_item UUID;
+ test_tag UUID:=gen_random_uuid(); request UUID:=gen_random_uuid(); payload JSONB; result JSONB; paid UUID; r UUID; n INTEGER; other UUID; staff UUID; admin UUID; market_product UUID; market_stock INTEGER; plain_item UUID;
 BEGIN
  SELECT * INTO f FROM zz.cc;
  SELECT id INTO other FROM zz.u WHERE k='ph_other'; SELECT id INTO staff FROM zz.u WHERE k='nobody'; SELECT id INTO admin FROM zz.u WHERE k='admin';
  PERFORM set_config('request.jwt.claim.sub',f.u_po::text,true);
  PERFORM pg_temp.check_external(public.can_access_external_procurement(f.good),'Owner access');
+ PERFORM public.configure_external_procurement(f.good,false,f.u_po,false);
  PERFORM pg_temp.check_external(NOT public.can_review_external_purchase(f.good),'Owner is not implicitly a reviewer');
  SELECT count(*) INTO n FROM public.businesses;
  contact:=public.save_external_contact(f.good,'person','{"name":"External Test Intermediary","phone":"0241234567"}');
@@ -28,7 +32,7 @@ BEGIN
  payload:=jsonb_build_object('purchase_date',current_date,'channel','intermediary','seller_contact_id',contact,
  'source_type','external_wholesaler','source_company_id',company,'source','{}'::jsonb,'invoice_number','TEST-EXT-001','payment_method','cash',
  'items',jsonb_build_array(jsonb_build_object('product',jsonb_build_object('name','External test medicine '||request::text,'strength','500 mg','pack_size','20'),
- 'quantity',20,'unit_cost_ghs',10,'batches',jsonb_build_array(jsonb_build_object('quantity',12,'batch_number','EXT-A','expiry_date',current_date+365),jsonb_build_object('quantity',8,'batch_number','EXT-B','expiry_date',current_date+730)))));
+ 'quantity',20,'unit_cost_ghs',10,'batches',jsonb_build_array(jsonb_build_object('quantity',12,'batch_number','EXT-A-'||test_tag::text,'expiry_date',current_date+365),jsonb_build_object('quantity',8,'batch_number','EXT-B','expiry_date',current_date+730)))));
  purchase:=public.save_external_purchase(f.good,payload,request);
  PERFORM pg_temp.check_external(purchase=public.save_external_purchase(f.good,payload,request),'Create retry is idempotent');
  PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_purchase(%L,%L::jsonb,%L)',f.good,payload||'{"notes":"changed"}',request),'Request ID already used');
@@ -36,24 +40,25 @@ BEGIN
  PERFORM pg_temp.check_external(result->>'total_ghs'='200.00','Server calculates cost');
  PERFORM pg_temp.check_external(jsonb_array_length(result#>'{items,0,batches}')=2,'Multiple batches retained');
  PERFORM pg_temp.check_external(result#>>'{seller_snapshot,name}'='External Test Intermediary' AND result#>>'{source_snapshot,name}'='External Source Ltd','Seller and original source separate');
- PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IS NOT NULL),'Unapproved receipt posts no stock');
- PERFORM public.review_external_purchase(purchase,'submit');
- PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''Reviewed'')',purchase),'assigned active reviewer');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IN (SELECT b.id FROM public.external_purchase_batches b JOIN public.external_purchase_items i ON i.id=b.item_id WHERE i.purchase_id=purchase)),'Unapproved receipt posts no stock');
+ PERFORM pg_temp.review_current(purchase,'submit');
+ PERFORM pg_temp.expect_external_error(format('SELECT pg_temp.review_current(%L,''approved'',''Reviewed'')',purchase),'assigned active reviewer');
  PERFORM public.configure_external_procurement(f.good,false,f.u_po,true);
- PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''Reviewed'')',purchase),'Supporting invoice');
+ PERFORM pg_temp.expect_external_error(format('SELECT pg_temp.review_current(%L,''approved'',''Reviewed'')',purchase),'Supporting invoice');
  INSERT INTO storage.objects(bucket_id,name) VALUES('external-procurement',f.good||'/'||purchase||'/invoice.pdf');
  PERFORM public.external_document_action(purchase,'supplier_invoice',f.good||'/'||purchase||'/invoice.pdf','invoice.pdf');
- PERFORM public.review_external_purchase(purchase,'quarantined','Check source invoice');
- PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IS NOT NULL),'Quarantine posts no saleable stock');
- PERFORM public.review_external_purchase(purchase,'approved','Source and batch evidence reviewed');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''Stale'',1)',purchase),'Purchase or evidence changed');
+ PERFORM pg_temp.review_current(purchase,'quarantined','Check source invoice');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IN (SELECT b.id FROM public.external_purchase_batches b JOIN public.external_purchase_items i ON i.id=b.item_id WHERE i.purchase_id=purchase)),'Quarantine posts no saleable stock');
+ PERFORM pg_temp.review_current(purchase,'approved','Source and batch evidence reviewed');
  SELECT inventory_item_id,id INTO item,r FROM public.external_purchase_items WHERE purchase_id=purchase;
  PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=20,'Approval posts correct stock');
  PERFORM pg_temp.check_external((SELECT count(*) FROM public.pharmacy_inventory_movements WHERE item_id=item)=2,'One receipt movement per batch');
- PERFORM public.review_external_purchase(purchase,'approved','Retry');
+ PERFORM pg_temp.review_current(purchase,'approved','Retry');
  PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=20,'Duplicate approval does not double post');
  PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_purchase(%L,%L::jsonb,%L,%L,1)',f.good,payload,gen_random_uuid(),purchase),'not editable');
  PERFORM pg_temp.expect_external_error(format('SELECT public.adjust_pharmacy_inventory_stock(%L,-1,''adjust'',''other'',''Bypass'')',item),'traced external batches');
- SELECT id INTO batch FROM public.external_purchase_batches WHERE item_id=r AND batch_number='EXT-A';
+ SELECT id INTO batch FROM public.external_purchase_batches WHERE item_id=r AND batch_number='EXT-A-'||test_tag::text;
  request:=gen_random_uuid();
  r:=public.adjust_external_batch(batch,2,'return','Returned damaged packs','External Source Ltd',current_date,20,request);
  PERFORM pg_temp.check_external(r=public.adjust_external_batch(batch,2,'return','Returned damaged packs','External Source Ltd',current_date,20,request),'Return retry is idempotent');
@@ -74,12 +79,12 @@ BEGIN
  PERFORM pg_temp.expect_external_error(format('SELECT public.record_external_payment(%L,181,''cash'',''overpayment'',current_date,%L)',purchase,gen_random_uuid()),'not exceed outstanding');
  request:=gen_random_uuid();
  unknown_purchase:=public.save_external_purchase(f.good,payload||jsonb_build_object('source_type','unknown','invoice_number','UNKNOWN-1'),request);
- PERFORM public.review_external_purchase(unknown_purchase,'submit');
+ PERFORM pg_temp.review_current(unknown_purchase,'submit');
  result:=public.get_external_purchase(unknown_purchase);
  PERFORM pg_temp.check_external(result->>'verification_status'='unverified' AND result->>'review_status'='quarantined','Unknown source is quarantined on submission');
- PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''No evidence'')',unknown_purchase),'Original source must be established');
+ PERFORM pg_temp.expect_external_error(format('SELECT pg_temp.review_current(%L,''approved'',''No evidence'')',unknown_purchase),'Original source must be established');
  PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Unknown purchase never changes saleable stock');
- result:=public.list_external_purchases(f.good,jsonb_build_object('q','EXT-A'));
+ result:=public.list_external_purchases(f.good,jsonb_build_object('q','EXT-A-'||test_tag::text));
  PERFORM pg_temp.check_external((result#>>'{summary,count}')::integer=2,'Batch search reconstructs purchases');
  result:=public.external_procurement_analytics(f.good,current_date,current_date,'External test medicine');
  PERFORM pg_temp.check_external((result->>'count')::integer=2,'Analytics counts items, not batches');
@@ -88,8 +93,30 @@ BEGIN
  PERFORM pg_temp.check_external(public.can_access_external_document(f.good||'/'||purchase||'/invoice.pdf'),'Owner document access');
  PERFORM pg_temp.check_external(NOT public.can_access_external_document(f.good||'/'||purchase||'/other.pdf',true),'Posted evidence cannot be overwritten');
 
+ request:=gen_random_uuid();
+ PERFORM public.consume_external_batch(batch,1,'Dispensing reference TEST',request);
+ PERFORM public.consume_external_batch(batch,1,'Dispensing reference TEST',request);
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=17,'Consumption retry decrements stock only once');
+ PERFORM pg_temp.check_external((SELECT consumed FROM public.external_purchase_batches WHERE id=batch)=1,'Consumption is recorded separately from returns');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.consume_external_batch(%L,1,''changed'',%L)',batch,request),'Request ID already used');
+ PERFORM public.hold_external_batch(batch,true,'Test consumption quarantine',gen_random_uuid());
+ PERFORM pg_temp.expect_external_error(format('SELECT public.consume_external_batch(%L,1,''dispense'',%L)',batch,gen_random_uuid()),'Only released, unexpired');
+ PERFORM public.hold_external_batch(batch,false,'Test release',gen_random_uuid());
+ UPDATE public.external_purchase_batches SET expiry_date=current_date WHERE id=batch;
+ PERFORM pg_temp.expect_external_error(format('SELECT public.consume_external_batch(%L,1,''expired dispense'',%L)',batch,gen_random_uuid()),'Only released, unexpired');
+ UPDATE public.external_purchase_batches SET expiry_date=current_date+365 WHERE id=batch;
+ PERFORM pg_temp.check_external(jsonb_array_length(public.procurement_payables(f.good)->'aging')=5,'Consolidated aging includes all buckets');
+ PERFORM pg_temp.check_external(jsonb_array_length(public.external_procurement_analytics(f.good,current_date,current_date,'External test medicine')->'products')>0,'Product and supplier price groups available');
+ result:=public.external_supplier_statement(f.good,contact);
+ PERFORM pg_temp.check_external((result->-1->>'balance')::numeric=380,'Supplier statement reconciles purchases payments reversal and credit');
+ PERFORM pg_temp.check_external(jsonb_array_length(public.external_supplier_profile(f.good,contact)->'sources')=2,'Supplier profile preserves known and unknown source history');
+ PERFORM pg_temp.check_external(EXISTS(SELECT 1 FROM jsonb_array_elements(public.external_workspace_summary()) x WHERE x->>'id'=f.good::text),'Workspace report includes authorized pharmacy');
+ PERFORM pg_temp.check_external((public.list_external_purchases(f.good,jsonb_build_object('q','EXT-A-'||test_tag::text,'minimum_price','11'))#>>'{summary,count}')::integer=0,'Structured unit price filter applies before totals');
+ PERFORM pg_temp.check_external((public.external_procurement_analytics(f.good,current_date,current_date,'External test medicine',0,100,'{"minimum_price":"11"}'::jsonb)->>'count')::integer=0,'Analytics unit price filter applies before totals');
  PERFORM set_config('request.jwt.claim.sub',other::text,true);
  PERFORM pg_temp.check_external(NOT public.can_access_external_procurement(f.good),'Cross tenant authorization denied');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM jsonb_array_elements(public.external_workspace_summary()) x WHERE x->>'id'=f.good::text),'Workspace report excludes unauthorized pharmacy');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.external_supplier_statement(%L,%L)',f.good,contact),'Accounting permission');
  PERFORM pg_temp.check_external(NOT public.can_access_external_document(f.good||'/'||purchase||'/invoice.pdf'),'Cross tenant document denied');
  PERFORM pg_temp.expect_external_error(format('SELECT public.get_external_purchase(%L)',purchase),'not authorized');
  PERFORM pg_temp.expect_external_error(format('SELECT public.list_external_purchases(%L)',f.good),'Not authorized');
@@ -141,6 +168,15 @@ BEGIN
  PERFORM public.create_marketplace_orders(f.u_po,f.good,jsonb_build_array(jsonb_build_object('productId',market_product,'quantity',2,'category','cash_private')));
  PERFORM pg_temp.check_external((SELECT count(*) FROM public.orders)=market_stock+1,'Marketplace checkout still creates an order');
  PERFORM pg_temp.check_external((SELECT stock FROM public.products WHERE id=market_product)=48,'Marketplace reserves only wholesaler stock');
- PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Marketplace leaves external pharmacy stock unchanged');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=17,'Marketplace leaves external pharmacy stock unchanged');
+ payload:=jsonb_set(payload,'{items,0,inventory_item_id}',to_jsonb(item::text));
+ payload:=jsonb_set(payload,'{items,0,unit_cost_ghs}','20');
+ unknown_purchase:=public.save_external_purchase(f.good,payload,gen_random_uuid());
+ INSERT INTO storage.objects(bucket_id,name) VALUES('external-procurement',f.good||'/'||unknown_purchase||'/invoice.pdf');
+ PERFORM public.external_document_action(unknown_purchase,'supplier_invoice',f.good||'/'||unknown_purchase||'/invoice.pdf','invoice.pdf');
+ PERFORM pg_temp.review_current(unknown_purchase,'submit');
+ PERFORM pg_temp.review_current(unknown_purchase,'approved','Mapped replenishment');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=37,'Mapped replenishment adds to existing stock');
+ PERFORM pg_temp.check_external(abs((SELECT unit_cost_ghs FROM public.pharmacy_inventory_items WHERE id=item)-(570.0/37))<0.02,'Mapped replenishment recalculates weighted inventory cost');
 END $$;
 ROLLBACK;
