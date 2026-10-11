@@ -243,6 +243,7 @@ export function DashboardHeader({
       return;
     }
 
+    if (!window.dispatchEvent(new Event("drugxone:before-workspace-change", { cancelable: true }))) return;
     setActiveBusiness(businessId);
     navigate({ to: "/dashboard" });
   };
@@ -402,6 +403,7 @@ export function DashboardHeader({
                 Accounting
               </Link>
             )}
+            <Link to="/settings" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent">Settings</Link>
             {showAuditLink && (
               <Link
                 to={auditRoute}

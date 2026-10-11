@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { rfqCall } from "@/lib/enterprise-rfq";
+import { toast } from "sonner";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,7 @@ import { BusinessIdentityHeader } from "@/components/documents/BusinessDocument"
 export type OrderPrintMode = "pharmacy" | "pick-pack" | "delivery" | "invoice";
 
 export type PrintableOrder = {
+  id?: string;
   order_number: string;
   created_at: string;
   total_ghs: number;
@@ -91,8 +94,24 @@ export function OrderPrintActions({
   wholesaler?: boolean;
 }) {
   const [mode, setMode] = useState<OrderPrintMode | null>(null);
-  const print = () => {
-    if (!mode) return;
+  const [identity, setIdentity] = useState<{ key: string; issuer: PartyDetails; historical: boolean } | null>(null);
+  const [identityError, setIdentityError] = useState(false);
+  const identityKey = `${order.id}:${mode}`;
+  useEffect(() => {
+    setIdentity(null); setIdentityError(false);
+    if (!mode || !order.id) return;
+    let active = true;
+    void rfqCall<{ issuer: PartyDetails; historical: boolean }>("get_order_document_identity", { p_order_id: order.id, p_kind: mode })
+      .then(result => { if (active) setIdentity({ ...result, key: identityKey }); }, () => { if (active) setIdentityError(true); });
+    return () => { active = false; };
+  }, [identityKey, order.id, mode]);
+  const ready = !order.id || identity?.key === identityKey;
+  const printable = identity?.key === identityKey ? { ...order, [mode === "pharmacy" ? "pharmacy" : "wholesaler"]: identity.issuer } : order;
+  const print = async () => {
+    if (!mode || !ready) return;
+    try {
+      await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>(".print-document img")).map(img => img.decode()));
+    } catch { toast.error("The document logo could not be loaded. Retry before printing."); return; }
     const previousTitle = document.title;
     document.title = `${modeLabels[mode]} - ${order.order_number}`;
     window.print();
@@ -135,12 +154,15 @@ export function OrderPrintActions({
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-end print:hidden">
-              <Button onClick={print}>
+              <Button onClick={print} disabled={!ready}>
                 <Printer className="mr-2 h-4 w-4" />
                 Print
               </Button>
             </div>
-            <PrintableOrderDocument order={order} mode={mode} preview />
+            {identityError ? <p role="alert">Document identity could not be loaded. Close and reopen this preview to retry.</p> : !ready ? <p role="status">Loading document identity…</p> : <>
+              {identity?.historical === false && <p className="text-xs text-muted-foreground">Legacy document: original branding was not recorded; current business identity is displayed.</p>}
+              <PrintableOrderDocument order={printable} mode={mode} preview />
+            </>}
           </DialogContent>
         </Dialog>
       )}
@@ -429,7 +451,8 @@ export function PrintableOrderDocument({
         </div>
       )}
       <footer className="mt-8 break-inside-avoid border-t border-black pt-2 text-center text-xs">
-        Powered by DrugXOne · Developed by Daventra Technologies
+        <p className="break-words">{(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.branding?.footer_note}</p>
+        Issued by {(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.name ?? "the issuing business"} via Drugxone.
       </footer>
     </article>
   );

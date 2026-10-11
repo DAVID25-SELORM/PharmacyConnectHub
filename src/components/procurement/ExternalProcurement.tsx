@@ -5,7 +5,6 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
-import { DocumentBrandingSettings } from "@/components/documents/DocumentBrandingSettings";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/hooks/use-session";
@@ -677,7 +676,7 @@ export function ExternalProcurement({
         {tab === "workspaces" && <WorkspaceProcurementReport />}
         {tab === "settings" && context?.is_owner && (
           <section className={panel}>
-            <DocumentBrandingSettings businessId={business.id} businessName={business.name} />
+            <a href="/settings" className="text-primary underline">Manage document branding in Business Settings</a>
             <div className="border-t pt-6">
             <h2 className="text-lg font-semibold">Review policy</h2>
             <p>
@@ -784,6 +783,7 @@ export function ExternalProcurement({
           purchase={detail}
           context={context}
           pharmacyName={business.name}
+          pharmacyId={business.id}
           busy={busy}
           close={() => setDetail(null)}
           act={(action) =>
@@ -1468,6 +1468,7 @@ function PurchaseDetail({
   purchase: p,
   context: c,
   pharmacyName,
+  pharmacyId,
   busy,
   close,
   act,
@@ -1476,6 +1477,7 @@ function PurchaseDetail({
   purchase: Detail;
   context: Context;
   pharmacyName: string;
+  pharmacyId: string;
   busy: boolean;
   close: () => void;
   act: (f: () => Promise<void>) => void;
@@ -1533,6 +1535,7 @@ function PurchaseDetail({
                     `${p.reference}.pdf`,
                     `${pharmacyName} — GOODS RECEIVED NOTE`,
                     traceabilitySheets(p, pharmacyName),
+                    pharmacyId,
                   );
                 })
               }

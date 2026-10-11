@@ -147,7 +147,7 @@ function PharmacyInventoryPage() {
     try {
       if (format === "pdf") {
         const sheet = inventoryItemsToPdfSheet(visibleItems);
-        await downloadPdf(reportFilename("inventory", "pdf"), `${business.name} — Inventory`, [sheet]);
+        await downloadPdf(reportFilename("inventory", "pdf"), `${business.name} — Inventory`, [sheet], business.id);
       } else {
         const sheet = inventoryItemsToExportSheet(visibleItems);
         if (format === "xlsx") await downloadXlsx(reportFilename("inventory", "xlsx"), [sheet]);

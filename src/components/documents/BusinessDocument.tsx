@@ -20,16 +20,18 @@ function useStoredBranding(business: DocumentBusiness | null | undefined) {
       }, () => { if (live) setLoaded(null); });
     return () => { live = false; };
   }, [business?.id, business?.branding]);
-  return business?.branding ?? (loaded?.id === business?.id ? loaded?.branding : null);
+  const branding = business?.branding ?? (loaded?.id === business?.id ? loaded?.branding : null);
+  return branding?.logo_path && !branding.logo_url ? { ...branding, logo_url: supabase.storage.from("business-document-logos").getPublicUrl(branding.logo_path).data.publicUrl } : branding;
 }
 
 export function BusinessIdentityHeader({ business }: { business: DocumentBusiness | null | undefined }) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
   const stored = useStoredBranding(business);
   const identity = resolveDocumentBranding(business ? { ...business, branding: stored } : business);
   return (
     <div className="flex min-w-0 items-start gap-3">
-      {identity.logo_url ? (
-        <img src={identity.logo_url} alt="" className="h-14 w-14 shrink-0 object-contain" />
+      {identity.logo_url && failedLogo !== identity.logo_url ? (
+        <img src={identity.logo_url} onError={() => setFailedLogo(identity.logo_url ?? null)} alt="" className="h-14 w-14 shrink-0 object-contain" />
       ) : (
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded border text-lg font-bold" style={{ borderColor: identity.accentColor, color: identity.accentColor }}>
           {identity.name.slice(0, 1).toUpperCase()}

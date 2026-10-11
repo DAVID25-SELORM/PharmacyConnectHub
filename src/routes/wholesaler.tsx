@@ -61,6 +61,8 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
+import { loadDocumentIdentity } from "@/lib/document-identity";
+import type { DocumentBusiness } from "@/lib/document-branding";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
 import { DeliveryCheckPanel } from "@/components/orders/DeliveryCheckPanel";
@@ -531,6 +533,7 @@ function OrdersInbox({
   const [page, setPage] = useState(1);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkPrint, setBulkPrint] = useState(false);
+  const [bulkIssuer, setBulkIssuer] = useState<DocumentBusiness | null>(null);
   const pageSize = 20;
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
@@ -589,8 +592,10 @@ function OrdersInbox({
     if (!bulkPrint) return;
     const cleanup = () => setBulkPrint(false);
     window.addEventListener("afterprint", cleanup, { once: true });
-    window.setTimeout(() => window.print(), 0);
-    return () => window.removeEventListener("afterprint", cleanup);
+    let active = true;
+    void Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>(".print-documents img")).map(img => img.decode()))
+      .then(() => { if (active) window.print(); }, () => { if (active) { toast.error("Document logo could not be loaded. Retry printing."); setBulkPrint(false); } });
+    return () => { active = false; window.removeEventListener("afterprint", cleanup); };
   }, [bulkPrint]);
 
   if (orders.length === 0) {
@@ -626,7 +631,13 @@ function OrdersInbox({
           size="sm"
           variant="outline"
           disabled={selectedOrders.length === 0}
-          onClick={() => setBulkPrint(true)}
+          onClick={async () => {
+            try {
+              if (!wholesaler?.id) throw new Error("Supplier identity unavailable.");
+              setBulkIssuer(await loadDocumentIdentity(wholesaler.id));
+              setBulkPrint(true);
+            } catch { toast.error("Supplier identity could not be loaded. Retry printing."); }
+          }}
         >
           Print selected pick sheets ({selectedOrders.length})
         </Button>
@@ -797,7 +808,7 @@ function OrdersInbox({
             <PrintableOrderDocument
               key={order.id}
               mode="pick-pack"
-              order={forDocument({ ...order, wholesaler })}
+              order={forDocument({ ...order, wholesaler: bulkIssuer })}
             />
           ))}
         </div>

@@ -1,4 +1,5 @@
 import type { VercelRequest } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
 
 type ReceiptLineItem = {
   productName: string;
@@ -20,7 +21,10 @@ type ReceiptParties = {
 };
 
 export type OrderReceiptPayload = {
+  issuer?: { name: string; legacy_branding?: boolean; branding?: { logo_path?: string; footer_note?: string } };
+  logoUrl?: string;
   orderId: string;
+  collectionId?: string;
   orderNumber: string;
   totalGhs: number;
   /** Delivery fee included in totalGhs, when the wholesaler charged one. */
@@ -174,10 +178,12 @@ function buildReceiptHtml(input: SendOrderReceiptEmailInput, loginUrl: string) {
     <div style="background:#f5faf8;padding:32px 16px;font-family:Segoe UI,Arial,sans-serif;color:#102a43;">
       <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #d9e7df;border-radius:20px;overflow:hidden;">
         <div style="padding:28px 32px;background:linear-gradient(135deg,#0f766e,#0b4f4b);color:#ffffff;">
-          <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">Drugxone</div>
+          ${input.order.logoUrl ? `<img src="${escapeHtml(input.order.logoUrl)}" alt="Business logo" style="max-width:160px;max-height:70px;object-fit:contain;background:white;">` : ""}
+          <div style="font-size:22px;font-weight:bold;">${escapeHtml(input.order.issuer?.name || input.order.parties.wholesaler.name)}</div>
           <h1 style="margin:12px 0 0;font-size:28px;line-height:1.15;">Order receipt</h1>
           <p style="margin:10px 0 0;font-size:15px;line-height:1.6;opacity:.92;">
             This receipt was issued after the wholesaler confirmed payment for your delivered order.
+            ${input.order.issuer?.legacy_branding ? "Original branding was not recorded; current business identity is shown." : ""}
           </p>
         </div>
         <div style="padding:28px 32px;">
@@ -294,6 +300,12 @@ export async function sendOrderReceiptEmail(
   }
 
   const siteUrl = getSiteUrl(input.request);
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const { data: issuer, error } = await db.rpc("prepare_receipt_document_identity", { p_order_id: input.order.orderId, p_collection_id: input.order.collectionId ?? null });
+    if (error || !issuer) return { ok: false, error: "Receipt identity could not be prepared. Retry sending the receipt." };
+    input = { ...input, order: { ...input.order, issuer, logoUrl: issuer.branding?.logo_path ? db.storage.from("business-document-logos").getPublicUrl(issuer.branding.logo_path).data.publicUrl : undefined } };
+  }
   const loginUrl = siteUrl ? new URL("/login", `${siteUrl}/`).toString() : "";
 
   let response: Response;

@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { documentFileName, resolveDocumentBranding } from "./document-branding";
 
 describe("document branding", () => {
+  it("keeps light brand colours from hiding document text", () => {
+    expect(resolveDocumentBranding({ name:"Supplier", branding:{accent_color:"#ffffff"} }).accentColor).toBe("#0f766e");
+    expect(resolveDocumentBranding({ name:"Supplier", branding:{accent_color:"#112233"} }).accentColor).toBe("#112233");
+  });
   it("does not replace the registered issuer with a presentation name", () => {
     expect(resolveDocumentBranding({ name: "Registered Supplier Ltd", branding: { display_name: "Trading Brand" } }).name).toBe("Registered Supplier Ltd");
   });

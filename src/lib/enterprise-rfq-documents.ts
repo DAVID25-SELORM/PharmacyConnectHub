@@ -9,6 +9,7 @@ import {
 import { resolveDocumentBranding, type DocumentBusiness } from "./document-branding";
 import { supabase } from "@/integrations/supabase/client";
 type Document = {
+  historical?: boolean;
   issuer?: DocumentBusiness & { branding?: DocumentBusiness["branding"] & { logo_path?: string | null } };
   rfq: EnterpriseRfq;
   pharmacy: string;
@@ -62,6 +63,7 @@ export async function exportRfqDocument(
           i.minimum_shelf_life_days,
         ]);
   const metadata = [
+    ...(!data.historical ? [["Branding history", "Original branding was not recorded; current identity is shown."]] : []),
     ["Issued by", identity.name],
     ...identity.contactLines.map(line => ["Contact", line]),
     ...(identity.display_name ? [["Trading name", identity.display_name]] : []),

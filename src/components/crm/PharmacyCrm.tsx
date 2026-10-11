@@ -211,6 +211,7 @@ export function PharmacyCrm() {
         (nextFollowup(data, r.id) !== "" && new Date(nextFollowup(data, r.id)) <= new Date())),
   );
   const exportReps = async (pdf: boolean) => {
+    if (!business) return;
     setBusy(true);
     try {
       const headers = [
@@ -268,7 +269,7 @@ export function PharmacyCrm() {
             headers: [headers[0], ...headers.slice(9)],
             rows: rows.map((r) => [r[0], ...r.slice(9)]),
           },
-        ]);
+        ], business.id);
       else await downloadXlsx("representatives.xlsx", sheets);
     } catch (e) {
       setError(String(e));

@@ -20,6 +20,7 @@ import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PharmacyRouteImport } from './routes/pharmacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as WholesalerRouteImport } from './routes/wholesaler'
@@ -94,6 +95,11 @@ const PharmacyRoute = PharmacyRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -209,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
@@ -242,6 +249,7 @@ export interface FileRoutesByTo {
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
@@ -276,6 +284,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/pharmacy': typeof PharmacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
@@ -311,6 +320,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pharmacy'
     | '/reset-password'
+    | '/settings'
     | '/signup'
     | '/staff'
     | '/wholesaler'
@@ -344,6 +354,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pharmacy'
     | '/reset-password'
+    | '/settings'
     | '/signup'
     | '/staff'
     | '/wholesaler'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/pharmacy'
     | '/reset-password'
+    | '/settings'
     | '/signup'
     | '/staff'
     | '/wholesaler'
@@ -411,6 +423,7 @@ export interface RootRouteChildren {
   OnboardingRoute: typeof OnboardingRoute
   PharmacyRoute: typeof PharmacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   StaffRoute: typeof StaffRoute
   WholesalerRoute: typeof WholesalerRoute
@@ -505,6 +518,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -680,6 +700,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardingRoute: OnboardingRoute,
   PharmacyRoute: PharmacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   StaffRoute: StaffRoute,
   WholesalerRoute: WholesalerRoute,

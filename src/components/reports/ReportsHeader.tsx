@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { REPORT_RANGES, type ReportRangeState } from "@/lib/reports";
+import { BusinessIdentityHeader } from "@/components/documents/BusinessDocument";
+import { useSession } from "@/hooks/use-session";
 
 const selectClass =
   "h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring";
@@ -35,8 +37,9 @@ export function ReportsHeader({
   exporting?: boolean;
   exportDisabled?: boolean;
 }) {
+  const { business } = useSession();
   return (
-    <div className="print:hidden">
+    <><div className="hidden print:block mb-6">{business && <BusinessIdentityHeader business={business} />}<h1>{title}</h1><p>{subtitle}</p></div><div className="print:hidden">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold">{title}</h1>
@@ -134,6 +137,6 @@ export function ReportsHeader({
           </Button>
         </div>
       </form>
-    </div>
+    </div></>
   );
 }

@@ -23,7 +23,9 @@
   .business-document__metadata dt { color: #555; text-transform: uppercase; font-size: 7pt; letter-spacing: .05em; }
   .business-document__metadata dd { margin: 2px 0 0; font-weight: 600; }
   .business-document__footer { break-inside: avoid; margin-top: 20px; padding-top: 8px; border-top: 1px solid #777; color: #555; font-size: 8pt; text-align: center; }
-  @page { size: A4; margin: 10mm; }
+  @page { size: A4; margin: 12mm;
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial, sans-serif; color: #555; }
+  }
 }
 
 @custom-variant dark (&:is(.dark *));

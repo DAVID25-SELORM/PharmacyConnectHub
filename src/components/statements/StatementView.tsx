@@ -71,13 +71,18 @@ export function StatementView({
     void load();
   }, [load]);
 
-  const print = () => {
+  const print = async () => {
     if (!statement) return;
     const win = window.open("", "_blank");
     if (!win) return toast.error("Allow pop-ups to print the statement.");
     win.document.open();
     win.addEventListener("load", () => win.print(), { once: true });
-    win.document.write(statementPrintHtml(statement));
+    try {
+      const identity = await (await import("@/lib/document-identity")).loadDocumentIdentity(statement.wholesaler.id);
+      win.document.write(statementPrintHtml(statement, identity));
+    } catch {
+      win.close(); toast.error("Statement identity could not be loaded. Retry printing."); return;
+    }
     win.document.close();
   };
 

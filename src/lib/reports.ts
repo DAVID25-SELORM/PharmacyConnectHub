@@ -142,23 +142,40 @@ function loadPdf() {
   return pdfModulePromise;
 }
 
-export async function downloadPdf(filename: string, title: string, sheets: ReportExportSheet[]) {
+export async function downloadPdf(filename: string, title: string, sheets: ReportExportSheet[], businessId?: string) {
   const { jsPDF, autoTable } = await loadPdf();
+  const identity = businessId ? await (await import("./document-identity")).loadDocumentIdentity(businessId) : null;
+  const branding = (await import("./document-branding")).resolveDocumentBranding(identity);
   const doc = new jsPDF({ orientation: "landscape" });
+  let logo: string | null = null;
+  if (branding.logo_url) {
+    const response = await fetch(branding.logo_url);
+    if (!response.ok) throw new Error("Logo could not be loaded. Retry export.");
+    const bitmap = await createImageBitmap(await response.blob());
+    const canvas = document.createElement("canvas"); canvas.width=240; canvas.height=100;
+    const scale=Math.min(240/bitmap.width,100/bitmap.height);
+    canvas.getContext("2d")!.drawImage(bitmap,0,0,bitmap.width*scale,bitmap.height*scale); bitmap.close();
+    logo=canvas.toDataURL("image/png");
+  }
   sheets.forEach((sheet, index) => {
     if (index > 0) doc.addPage();
     doc.setFontSize(14);
-    doc.text(sheets.length > 1 ? `${title} — ${sheet.name}` : title, 14, 15);
+    if (logo) doc.addImage(logo,"PNG",14,8,36,15);
+    if (identity) doc.text(identity.name,logo ? 55 : 14,15);
+    doc.text(sheets.length > 1 ? `${title} — ${sheet.name}` : title, 14, identity ? 31 : 15);
     doc.setFontSize(9);
-    doc.text(new Date().toLocaleString("en-GB"), 14, 21);
+    doc.text(new Date().toLocaleString("en-GB"), 14, identity ? 38 : 21);
     autoTable(doc, {
       head: [sheet.headers],
       body: sheet.rows.map((row) => row.map(String)),
-      startY: 26,
+      startY: identity ? 44 : 26,
+      margin: { bottom: 20 },
       styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [15, 118, 110] },
+      headStyles: { fillColor: [240, 244, 244], textColor: [20,20,20] },
     });
   });
+  const pages=doc.getNumberOfPages();
+  for(let p=1;p<=pages;p++) { doc.setPage(p); doc.setFontSize(8); doc.text(`${identity ? `Issued by ${identity.name} via Drugxone` : "Drugxone"} · ${p} / ${pages}`,14,200); }
   doc.save(filename);
 }
 

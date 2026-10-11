@@ -278,7 +278,7 @@ export function AccountingPage({ side }: { side: AccountingSide }) {
         );
       else if (format === "xlsx")
         await downloadXlsx(reportFilename(filenamePrefix, "xlsx"), sheets);
-      else await downloadPdf(reportFilename(filenamePrefix, "pdf"), title, sheets);
+      else await downloadPdf(reportFilename(filenamePrefix, "pdf"), title, sheets, business.id);
     } catch {
       toast.error("We couldn't export this right now. Please try again.");
     } finally {

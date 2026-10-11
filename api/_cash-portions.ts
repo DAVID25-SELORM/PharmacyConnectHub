@@ -39,6 +39,7 @@ export function portionReceiptPayload(
 ): OrderReceiptPayload {
   return {
     orderId: order.id,
+    collectionId: receipt.collection_id,
     orderNumber: receipt.order_number,
     totalGhs: Number(receipt.total_ghs),
     deliveryFeeGhs: Number(receipt.delivery_fee_ghs ?? 0),

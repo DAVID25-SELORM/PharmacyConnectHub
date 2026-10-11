@@ -165,6 +165,7 @@ export function StatementPanel({
             reportFilename(stem, "pdf"),
             `Statement of account — ${businessName} and ${statement.counterparty.name}`,
             sheets,
+            businessId,
           );
       } catch {
         toast.error("We couldn't export this right now. Please try again.");

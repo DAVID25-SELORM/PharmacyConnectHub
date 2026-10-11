@@ -9,7 +9,7 @@ import { EnterpriseRfqEditor } from "./EnterpriseRfqEditor";
 import { EnterpriseRfqDetail } from "./EnterpriseRfqDetail";
 import { PharmacyRfqDetail } from "./PharmacyRfqDetail";
 import { WholesalerRfqDetail } from "./WholesalerRfqDetail";
-import { DocumentBrandingSettings } from "@/components/documents/DocumentBrandingSettings";
+import { Link } from "@tanstack/react-router";
 export function EnterpriseRfqWorkspace() {
   const { business } = useSession();
   return business ? <RfqWorkspace key={business.id} business={business} /> : null;
@@ -119,10 +119,7 @@ function RfqWorkspace({ business }: { business: Business }) {
           </div>
         </div>
         {manage && (
-          <details className="rounded border p-4">
-            <summary className="cursor-pointer font-medium">Document branding settings</summary>
-            <DocumentBrandingSettings businessId={business.id} businessName={business.name} />
-          </details>
+          <Link to="/settings" className="text-sm text-primary underline">Manage document branding in Business Settings</Link>
         )}
         {report && (
           <section className="rounded border p-4">
