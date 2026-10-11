@@ -54,7 +54,7 @@ async function render(orders: unknown[] = [order], overrides = {}) {
           loadOrderDetail: detail,
           wholesalers: [],
           ...overrides,
-        } as any)}
+        } as ComponentProps<typeof OrdersView>)}
       />,
     ),
   );
