@@ -232,3 +232,100 @@ export function onlinePaymentBlockedReason(input: {
   }
   return null;
 }
+
+export type SupplierSettlementOverview = {
+  online_enabled: boolean;
+  mode: "test" | "live";
+  split_mode: "none" | "subaccount";
+  /** Customers can pay this supplier online right now. */
+  ready: boolean;
+  account: {
+    status: "pending" | "active" | "inactive" | "failed";
+    bank_code: string;
+    last4: string;
+    business_name: string;
+  } | null;
+  summary: {
+    payments: number;
+    received_ghs: number;
+    platform_share_ghs: number;
+    refunded_ghs: number;
+    to_settle_ghs: number;
+  };
+  recent: {
+    order_number: string;
+    paid_at: string;
+    amount_ghs: number;
+    platform_share_ghs: number;
+    refunded_ghs: number;
+    purpose: "order" | "top_up";
+  }[];
+};
+
+/** A supplier's own settlement status and the online payments that reached it, for the last `days` days. */
+export async function fetchSupplierSettlement(
+  wholesalerId: string,
+  days: number,
+): Promise<SupplierSettlementOverview> {
+  const to = new Date(Date.now() + 60_000);
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+  const { data, error } = await db.rpc("supplier_settlement_overview", {
+    p_wholesaler_id: wholesalerId,
+    p_from: from.toISOString(),
+    p_to: to.toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  return data as SupplierSettlementOverview;
+}
+
+/** The one-line state a supplier sees: can customers pay it online, and if not, why and what to do. */
+export function supplierOnlineStatusLine(overview: SupplierSettlementOverview): {
+  label: string;
+  tone: "good" | "bad" | "neutral";
+  detail: string;
+} {
+  if (!overview.online_enabled) {
+    return {
+      label: "Online payments are off",
+      tone: "neutral",
+      detail: "The platform is not offering online payment yet. Nothing is needed from you.",
+    };
+  }
+  if (overview.ready && overview.split_mode === "none") {
+    return {
+      label: "Customers can pay you online (test)",
+      tone: "good",
+      detail:
+        "In this test phase payments go to the platform's own test account; no real money moves.",
+    };
+  }
+  if (overview.ready) {
+    return {
+      label: "Customers can pay you online",
+      tone: "good",
+      detail: "Your share of each payment settles to your own account.",
+    };
+  }
+  const status = overview.account?.status;
+  if (status === "pending") {
+    return {
+      label: "Your settlement account is being set up",
+      tone: "neutral",
+      detail:
+        "Customers can't pay you online until it is ready. The platform will tell you when it is.",
+    };
+  }
+  if (status === "inactive") {
+    return {
+      label: "Your settlement account is switched off",
+      tone: "bad",
+      detail: "Customers can't pay you online. Contact the platform to switch it back on.",
+    };
+  }
+  return {
+    label: "No settlement account yet",
+    tone: "bad",
+    detail:
+      "Customers can't pay you online until the platform sets up where your share should settle. Contact the platform with your bank or mobile money details.",
+  };
+}

@@ -52,6 +52,7 @@ import {
 import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment } from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
+import { OnlinePaymentsPanel } from "@/components/wholesaler/OnlinePaymentsPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -428,6 +429,7 @@ function WholesalerDashboardContent() {
             {canProcessOrders && <TabsTrigger value="returns">Returns</TabsTrigger>}
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="credit">Credit</TabsTrigger>}
+            {canRecordCreditPayment && <TabsTrigger value="online-payments">Online payments</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -467,6 +469,11 @@ function WholesalerDashboardContent() {
                 canManage={canManageProducts}
                 canDispute={canDisputeCreditInvoice}
               />
+            </TabsContent>
+          )}
+          {canRecordCreditPayment && (
+            <TabsContent value="online-payments">
+              <OnlinePaymentsPanel wholesalerId={business.id} />
             </TabsContent>
           )}
           {canManageProducts && <TabsContent value="discounts"><div className="space-y-6"><OrderTermsCard wholesalerId={business.id} /><ProductDiscountsCard wholesalerId={business.id} products={products.map((p) => ({ id: p.id, name: p.name }))} /><CustomerDiscounts wholesalerId={business.id} /></div></TabsContent>}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { onlinePaymentBlockedReason } from "./payments";
+import { onlinePaymentBlockedReason, supplierOnlineStatusLine } from "./payments";
 import { settlementOptions } from "./settlement";
 
 describe("when Pay now cannot be chosen for a supplier", () => {
@@ -53,5 +53,65 @@ describe("the Pay now option at checkout", () => {
       label: "Pay now (online)",
       disabled: false,
     });
+  });
+});
+
+describe("what a supplier sees about online payments", () => {
+  const base = {
+    online_enabled: true,
+    mode: "test" as const,
+    split_mode: "subaccount" as const,
+    ready: true,
+    account: null,
+    summary: {
+      payments: 0,
+      received_ghs: 0,
+      platform_share_ghs: 0,
+      refunded_ghs: 0,
+      to_settle_ghs: 0,
+    },
+    recent: [],
+  };
+  it("says online payments are off, and asks nothing of the supplier", () => {
+    expect(
+      supplierOnlineStatusLine({ ...base, online_enabled: false, ready: false }),
+    ).toMatchObject({
+      label: "Online payments are off",
+      tone: "neutral",
+    });
+  });
+  it("says customers can pay, and where the money goes", () => {
+    expect(supplierOnlineStatusLine(base)).toMatchObject({
+      tone: "good",
+      label: "Customers can pay you online",
+    });
+    expect(supplierOnlineStatusLine({ ...base, split_mode: "none" }).detail).toMatch(
+      /no real money moves/,
+    );
+  });
+  it("explains each way it cannot work and what to do", () => {
+    const not = { ...base, ready: false };
+    expect(supplierOnlineStatusLine(not)).toMatchObject({
+      tone: "bad",
+      label: "No settlement account yet",
+    });
+    expect(
+      supplierOnlineStatusLine({
+        ...not,
+        account: { status: "pending", bank_code: "GCB", last4: "1234", business_name: "A" },
+      }).label,
+    ).toBe("Your settlement account is being set up");
+    expect(
+      supplierOnlineStatusLine({
+        ...not,
+        account: { status: "inactive", bank_code: "GCB", last4: "1234", business_name: "A" },
+      }),
+    ).toMatchObject({ tone: "bad", label: "Your settlement account is switched off" });
+    expect(
+      supplierOnlineStatusLine({
+        ...not,
+        account: { status: "failed", bank_code: "GCB", last4: "1234", business_name: "A" },
+      }).label,
+    ).toBe("No settlement account yet");
   });
 });

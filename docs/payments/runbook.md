@@ -70,3 +70,9 @@ press **Re-verify** on the order (the same check as for any payment). An extra p
 **Switching a supplier off.** Press **Switch off** on their account. New payments for them are refused; payments already made are untouched.
 
 **Before live money (all of these, in order):** the **Ready for live money?** card on Admin > Payments must say **Ready**, and the **This server** list must be all green; Paystack's business verification and each supplier's account are in place; the split-refund behaviour is confirmed with Paystack in writing and recorded (`confirm-split-refunds.sql`); the reconciler is scheduled; you have made one split test payment and one refund in test mode against real Paystack test keys. Then run `enable-online-payments-live.sql`. The database will name anything still missing. **To stop at any moment:** `disable-online-payments.sql` (never blocked).
+
+## Returned goods on an order paid online
+
+**A wholesaler resolved a return as a refund.** It appears under **Refunds** (reason "Goods returned") and waits for you, even with automatic refunds on, because the wholesaler decided it. Check the return on the wholesaler's side if in doubt, then approve it. It is then sent to Paystack and followed like any refund. If the refund cannot be placed in full (the payment has too little left to refund), the wholesaler is told and should resolve the return as a credit instead.
+
+**A supplier asks why customers cannot pay it online.** The supplier's **Online payments** tab says why: online payments are off, or its settlement account does not exist yet, is being set up, or is switched off. Set the account up or switch it on under **Admin > Payments > Supplier settlement accounts**.

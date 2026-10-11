@@ -21,6 +21,7 @@ const REFUND_REASON: Record<string, string> = {
   order_changed: "order changed",
   amendment_reduction: "order reduced",
   delivery_credit: "delivery problem",
+  order_return: "goods returned",
   manual: "",
 };
 

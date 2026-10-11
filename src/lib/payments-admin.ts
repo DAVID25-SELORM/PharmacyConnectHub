@@ -167,6 +167,7 @@ export const REFUND_REASON_LABELS: Record<string, string> = {
   order_changed: "Order changed after payment",
   amendment_reduction: "Order reduced after payment",
   delivery_credit: "Delivery problem credit",
+  order_return: "Goods returned",
   manual: "Manual",
 };
 
