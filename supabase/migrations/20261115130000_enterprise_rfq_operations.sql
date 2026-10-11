@@ -1,5 +1,5 @@
 BEGIN;
-CREATE FUNCTION public.rfq_transition(p_rfq_id UUID,p_action TEXT,p_revision INTEGER,p_reason TEXT DEFAULT NULL,p_deadline TIMESTAMPTZ DEFAULT NULL) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.rfq_transition(p_rfq_id UUID,p_action TEXT,p_revision INTEGER,p_reason TEXT DEFAULT NULL,p_deadline TIMESTAMPTZ DEFAULT NULL) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE r public.rfqs%ROWTYPE; v_invitee RECORD; BEGIN
  SELECT * INTO r FROM public.rfqs WHERE id=p_rfq_id FOR UPDATE;
  IF NOT FOUND OR NOT r.enterprise OR NOT public.rfq_member(r.pharmacy_id) OR NOT public.can_act_for_business(r.pharmacy_id,'manage') THEN RAISE EXCEPTION 'Pharmacy manager permission required.'; END IF;
@@ -33,7 +33,7 @@ DECLARE r public.rfqs%ROWTYPE; v_invitee RECORD; BEGIN
  END LOOP;
 END $$;
 
-CREATE FUNCTION public.rfq_negotiate(p_rfq_id UUID,p_wholesaler_id UUID,p_version_id UUID,p_proposal JSONB) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.rfq_negotiate(p_rfq_id UUID,p_wholesaler_id UUID,p_version_id UUID,p_proposal JSONB) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE r public.rfqs%ROWTYPE; v_id UUID; v_term TEXT; v_value TEXT; BEGIN
  SELECT * INTO r FROM public.rfqs WHERE id=p_rfq_id FOR UPDATE;
  IF NOT FOUND OR NOT public.rfq_member(r.pharmacy_id) OR NOT public.can_act_for_business(r.pharmacy_id,'manage') THEN RAISE EXCEPTION 'Pharmacy manager permission required.'; END IF;
@@ -49,7 +49,7 @@ DECLARE r public.rfqs%ROWTYPE; v_id UUID; v_term TEXT; v_value TEXT; BEGIN
  PERFORM public.notify_business(p_wholesaler_id,ARRAY['owner','manager','cashier'],'rfq_negotiation','Quotation negotiation requested',r.title,'/wholesaler/rfqs?rfq='||r.id);
  RETURN v_id;
 END $$;
-CREATE FUNCTION public.rfq_respond_negotiation(p_id UUID,p_action TEXT,p_response TEXT,p_version_id UUID DEFAULT NULL) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.rfq_respond_negotiation(p_id UUID,p_action TEXT,p_response TEXT,p_version_id UUID DEFAULT NULL) RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE n public.rfq_negotiations%ROWTYPE; r public.rfqs%ROWTYPE; BEGIN
  SELECT * INTO n FROM public.rfq_negotiations WHERE id=p_id;
  IF NOT FOUND OR NOT public.rfq_member(n.wholesaler_id) OR NOT public.can_act_for_business(n.wholesaler_id,'process') THEN RAISE EXCEPTION 'Supplier permission required.'; END IF;
@@ -62,7 +62,7 @@ DECLARE n public.rfq_negotiations%ROWTYPE; r public.rfqs%ROWTYPE; BEGIN
  PERFORM public.notify_business(r.pharmacy_id,ARRAY['owner','manager'],'rfq_negotiation_response','Supplier responded to negotiation',r.title,'/pharmacy/rfqs?rfq='||r.id);
 END $$;
 
-CREATE FUNCTION public.list_enterprise_rfqs(p_business_id UUID,p_filters JSONB DEFAULT '{}',p_offset INTEGER DEFAULT 0,p_limit INTEGER DEFAULT 25) RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.list_enterprise_rfqs(p_business_id UUID,p_filters JSONB DEFAULT '{}',p_offset INTEGER DEFAULT 0,p_limit INTEGER DEFAULT 25) RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
 DECLARE result JSONB; BEGIN
  IF NOT public.rfq_member(p_business_id) THEN RAISE EXCEPTION 'Approved workspace membership required.'; END IF;
  WITH visible AS(SELECT r.*,CASE WHEN r.status='open' AND r.response_deadline<=now() THEN 'evaluation' ELSE r.status END display_status,
@@ -79,7 +79,7 @@ DECLARE result JSONB; BEGIN
  RETURN result;
 END $$;
 
-CREATE FUNCTION public.rfq_procurement_report(p_business_id UUID,p_from DATE DEFAULT NULL,p_to DATE DEFAULT NULL) RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.rfq_procurement_report(p_business_id UUID,p_from DATE DEFAULT NULL,p_to DATE DEFAULT NULL) RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
 DECLARE result JSONB; BEGIN
  IF NOT public.rfq_member(p_business_id) THEN RAISE EXCEPTION 'Approved workspace membership required.'; END IF;
  WITH rs AS(SELECT * FROM public.rfqs r WHERE (r.pharmacy_id=p_business_id OR (r.status<>'draft' AND EXISTS(SELECT 1 FROM public.rfq_invitees i WHERE i.rfq_id=r.id AND i.wholesaler_id=p_business_id))) AND (p_from IS NULL OR r.created_at::date>=p_from) AND (p_to IS NULL OR r.created_at::date<=p_to)),
@@ -106,7 +106,7 @@ DECLARE result JSONB; BEGIN
  RETURN result;
 END $$;
 
-CREATE FUNCTION public.investigate_rfq(p_rfq_id UUID,p_reason TEXT) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.investigate_rfq(p_rfq_id UUID,p_reason TEXT) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 BEGIN
  IF auth.uid() IS NULL OR NOT public.has_role(auth.uid(),'admin') OR length(btrim(COALESCE(p_reason,'')))<10 THEN RAISE EXCEPTION 'Administrator permission and a specific investigation reason required.'; END IF;
  PERFORM public.write_audit_log('RFQ commercial investigation','Platform','rfq',p_rfq_id,'Restricted commercial records',jsonb_build_object('reason',p_reason));
