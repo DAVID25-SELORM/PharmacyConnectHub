@@ -1,4 +1,4 @@
-// Runs the real api/staff/invite.ts handler against the LOCAL Supabase stack with real GoTrue JWTs.
+// Runs the real api/_staff/invite.ts handler against the LOCAL Supabase stack with real GoTrue JWTs.
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
