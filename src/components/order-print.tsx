@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatGHS } from "@/lib/format";
 import {
   canPrintInvoice,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/order-documents";
 import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-category";
 import { formatReportDate } from "@/lib/reports";
+import { BusinessIdentityHeader } from "@/components/documents/BusinessDocument";
 
 export type OrderPrintMode = "pharmacy" | "pick-pack" | "delivery" | "invoice";
 
@@ -82,40 +84,46 @@ export function OrderPrintActions({
   wholesaler?: boolean;
 }) {
   const [mode, setMode] = useState<OrderPrintMode | null>(null);
-  const print = (next: OrderPrintMode) => {
-    setMode(next);
-    window.setTimeout(() => {
-      const previousTitle = document.title;
-      document.title = "Drugxone";
-      window.print();
-      window.setTimeout(() => {
-        document.title = previousTitle;
-      }, 0);
-    }, 0);
+  const print = () => {
+    if (!mode) return;
+    const previousTitle = document.title;
+    document.title = `${modeLabels[mode]} - ${order.order_number}`;
+    window.print();
+    window.setTimeout(() => { document.title = previousTitle; }, 0);
   };
   return (
     <div className="mt-4">
       <div className="flex flex-wrap justify-end gap-2 print:hidden">
-        <Button type="button" variant="outline" size="sm" onClick={() => print("pharmacy")}>
+        <Button type="button" variant="outline" size="sm" onClick={() => setMode("pharmacy")}>
           <Printer className="mr-2 h-4 w-4" /> Pharmacy Order Copy
         </Button>
         {canPrintInvoice(order) && (
-          <Button type="button" variant="outline" size="sm" onClick={() => print("invoice")}>
+          <Button type="button" variant="outline" size="sm" onClick={() => setMode("invoice")}>
             <Printer className="mr-2 h-4 w-4" /> {wholesaler ? "Invoice" : "Invoice copy"}
           </Button>
         )}
         {wholesaler && (
           <>
-            <Button type="button" variant="outline" size="sm" onClick={() => print("pick-pack")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setMode("pick-pack")}>
               Pick &amp; Pack Sheet
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => print("delivery")}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setMode("delivery")}>
               Delivery Note
             </Button>
           </>
         )}
       </div>
-      {mode && <PrintableOrderDocument order={order} mode={mode} />}
+      {mode && (
+        <Dialog open onOpenChange={(open) => !open && setMode(null)}>
+          <DialogContent className="max-h-[94dvh] max-w-5xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{modeLabels[mode]} · {order.order_number}</DialogTitle>
+            </DialogHeader>
+            <div className="flex justify-end print:hidden"><Button onClick={print}><Printer className="mr-2 h-4 w-4" />Print</Button></div>
+            <PrintableOrderDocument order={order} mode={mode} preview />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -137,9 +145,11 @@ function PartyBlock({ title, party }: { title: string; party: PartyDetails | nul
 export function PrintableOrderDocument({
   order,
   mode,
+  preview = false,
 }: {
   order: PrintableOrder;
   mode: OrderPrintMode;
+  preview?: boolean;
 }) {
   const operational = mode === "pick-pack" || mode === "delivery";
   const priced = mode === "pharmacy" || mode === "invoice";
@@ -149,9 +159,15 @@ export function PrintableOrderDocument({
   const amended = isAmended(order, items);
   const terms = paymentTermsLine(order, formatReportDate);
   return (
-    <article className="print-document hidden print:block">
+    <article className={`print-document ${preview ? "block" : "hidden print:block"}`}>
       <header className="mb-6 border-b-2 border-black pb-3">
-        <h1 className="text-2xl font-bold">Drugxone</h1>
+        <div className="flex items-start justify-between gap-6">
+          <BusinessIdentityHeader business={mode === "pharmacy" ? order.pharmacy : order.wholesaler} />
+          <div className="text-right text-xs">
+            {mode === "invoice" ? "Invoice no." : "Order reference"}: <b>{order.order_number}</b>
+            <br />Issued: <b>{formatReportDate(order.created_at)}</b>
+          </div>
+        </div>
         <h2 className="mt-2 text-xl font-bold uppercase">{modeLabels[mode]}</h2>
         {mode === "invoice" ? (
           <>
@@ -387,7 +403,7 @@ export function PrintableOrderDocument({
         </div>
       )}
       <footer className="mt-8 break-inside-avoid border-t border-black pt-2 text-center text-xs">
-        Developed by Daventra Technologies
+        Powered by DrugXOne · Developed by Daventra Technologies
       </footer>
     </article>
   );

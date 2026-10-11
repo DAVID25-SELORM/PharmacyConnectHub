@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
+import { DocumentBrandingSettings } from "@/components/documents/DocumentBrandingSettings";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/hooks/use-session";
@@ -676,6 +677,8 @@ export function ExternalProcurement({
         {tab === "workspaces" && <WorkspaceProcurementReport />}
         {tab === "settings" && context?.is_owner && (
           <section className={panel}>
+            <DocumentBrandingSettings businessId={business.id} businessName={business.name} />
+            <div className="border-t pt-6">
             <h2 className="text-lg font-semibold">Review policy</h2>
             <p>
               Assign active pharmacy members who are authorized to perform pharmacist reviews.
@@ -724,6 +727,7 @@ export function ExternalProcurement({
                 {s.name}
               </label>
             ))}
+            </div>
           </section>
         )}
       </main>
@@ -1527,7 +1531,7 @@ function PurchaseDetail({
                 act(async () => {
                   await downloadPdf(
                     `${p.reference}.pdf`,
-                    "EXTERNAL GOODS RECEIVED NOTE",
+                    `${pharmacyName} — GOODS RECEIVED NOTE`,
                     traceabilitySheets(p, pharmacyName),
                   );
                 })

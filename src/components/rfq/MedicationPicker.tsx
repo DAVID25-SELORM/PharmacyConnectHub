@@ -10,9 +10,11 @@ import { masterProductLabel, toIlikeTerm, type MasterProductSuggestion } from "@
 export function MedicationPicker({
   value,
   onChange,
+  onSelect,
 }: {
   value: string;
   onChange: (value: string) => void;
+  onSelect?: (product: MasterProductSuggestion) => void;
 }) {
   const [suggestions, setSuggestions] = useState<MasterProductSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -78,6 +80,7 @@ export function MedicationPicker({
                   e.preventDefault();
                   picked.current = label;
                   onChange(label);
+                  onSelect?.(product);
                   setSuggestions([]);
                   setOpen(false);
                 }}

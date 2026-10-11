@@ -10,11 +10,14 @@ import {
 
 export type PartyDetails = {
   name: string;
+  id?: string;
   address?: string | null;
   city?: string | null;
   region?: string | null;
   phone?: string | null;
+  public_email?: string | null;
   license_number?: string | null;
+  branding?: import("@/lib/document-branding").DocumentBranding | null;
 };
 
 export type DocumentOrder = {
