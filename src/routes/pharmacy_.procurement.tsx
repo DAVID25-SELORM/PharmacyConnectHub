@@ -10,7 +10,7 @@ export const Route = createFileRoute("/pharmacy_/procurement")({
     q: typeof s.q === "string" ? s.q : "",
     review: typeof s.review === "string" ? s.review : "",
     payment: typeof s.payment === "string" ? s.payment : "",
-    view: s.view === "history" ? "history" : "purchases",
+    view: s.view === "requests" ? "requests" : s.view === "history" ? "history" : "purchases",
   }),
   head: () => ({ meta: [{ title: "External Procurement - DrugXOne" }] }),
   component: Page,

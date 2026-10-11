@@ -1,5 +1,6 @@
 import { WorkspaceProcurementReport } from "./WorkspaceProcurementReport";
 import { SupplierProfile } from "./SupplierProfile";
+import { ExternalSupplyOrders } from "./ExternalSupplyOrders";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -292,6 +293,7 @@ export function ExternalProcurement({
         )}
         <nav className="flex flex-wrap gap-2" aria-label="Procurement sections">
           {[
+            "requests",
             "purchases",
             "suppliers",
             "history",
@@ -306,10 +308,13 @@ export function ExternalProcurement({
                 setOffset(0);
               }}
             >
-              {t === "history" ? "Product procurement history" : label(t)}
+              {t === "requests" ? "Requests & orders" : t === "history" ? "Product procurement history" : label(t)}
             </Button>
           ))}
         </nav>
+        {tab === "requests" && context && <ExternalSupplyOrders key={`${business.id}-${revision}`} pharmacyId={business.id} canRecord={context.can_record}
+          onReceive={(receipt) => { setEditing(null); setDraft(receipt); setRequest(crypto.randomUUID()); }}
+          onReceipt={(id) => void run(() => open(id))} />}
         {(tab === "purchases" || tab === "history") && (
           <section className={panel}>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -940,6 +945,7 @@ function PurchaseForm({
         <DialogHeader>
           <DialogTitle>Record external purchase</DialogTitle>
         </DialogHeader>
+        {d.external_order_id && <p className="rounded border p-3 text-sm">Linked purchase order: record only the quantities delivered now. Remove undelivered lines and adjust batch quantities to match. Keep ordered medicine names; select the actual seller and original source before review.</p>}
         <nav className="flex flex-wrap gap-2">
           {["Purchase & seller", "Original source", "Products & batches", "Review receipt"].map(
             (s, i) => (
@@ -1129,7 +1135,7 @@ function PurchaseForm({
                 remove={() => patch({ items: d.items.filter((_, n) => n !== index) })}
               />
             ))}
-            <Button variant="outline" onClick={() => patch({ items: [...d.items, newLine()] })}>
+            <Button disabled={!!d.external_order_id} variant="outline" onClick={() => patch({ items: [...d.items, newLine()] })}>
               Add medicine
             </Button>
           </div>
@@ -1272,6 +1278,7 @@ function ProductLine({
       <Field title="Search existing product catalogue">
         <Input
           placeholder="Type at least 2 characters"
+          disabled={!!i.external_order_line_id}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -1339,7 +1346,7 @@ function ProductLine({
         ].map((k) => (
           <Field key={k} title={label(k)}>
             <Input
-              disabled={!!i.master_product_id && !["registration", "barcode", "notes"].includes(k)}
+              disabled={(!!i.external_order_line_id && k === "name") || (!!i.master_product_id && !["registration", "barcode", "notes"].includes(k))}
               value={i.product[k as keyof typeof i.product] ?? ""}
               onChange={(e) => update({ ...i, product: { ...i.product, [k]: e.target.value } })}
             />

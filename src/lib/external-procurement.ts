@@ -72,6 +72,7 @@ export type Batch = {
   disposition?: string;
 };
 export type Line = {
+  external_order_line_id?: string;
   id?: string;
   master_product_id: string;
   inventory_item_id: string;
@@ -81,6 +82,7 @@ export type Line = {
   batches: Batch[];
 };
 export type Draft = {
+  external_order_id?: string;
   purchase_date: string;
   channel: keyof typeof CHANNELS;
   seller_contact_id: string;
@@ -97,6 +99,8 @@ export type Draft = {
   items: Line[];
 };
 export type Purchase = {
+  external_order_id?: string;
+  external_order_allocations?: { line_id: string; product_name: string; quantity: number }[];
   id: string;
   reference: string;
   purchase_date: string;
@@ -279,6 +283,7 @@ export const newDraft = (): Draft => ({
 });
 export function draftFromPurchase(p: Detail): Draft {
   return {
+    external_order_id: p.external_order_id,
     purchase_date: p.purchase_date,
     channel: p.channel,
     seller_contact_id: p.seller_contact_id ?? "",
@@ -294,6 +299,7 @@ export function draftFromPurchase(p: Detail): Draft {
     due_date: p.due_date ?? "",
     items: p.items.map((i) => ({
       ...i,
+      external_order_line_id: p.external_order_allocations?.find(a => a.product_name === i.product_snapshot.name)?.line_id,
       master_product_id: i.master_product_id ?? "",
       inventory_item_id: i.inventory_item_id ?? "",
       product: i.product_snapshot,
