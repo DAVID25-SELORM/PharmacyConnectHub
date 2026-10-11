@@ -295,102 +295,6 @@ export function DashboardHeader({
               </SelectContent>
             </Select>
           )}
-
-          {showNav && (
-            <nav className="hidden md:flex items-center gap-1">
-              <Link
-                to="/dashboard"
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <LayoutDashboard className="h-4 w-4 inline mr-2" />
-                Dashboard
-              </Link>
-              <Link
-                to={workspaceRoute}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <Package className="h-4 w-4 inline mr-2" />
-                {workspaceLabel}
-              </Link>
-              <Link
-                to="/staff"
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <Users className="h-4 w-4 inline mr-2" />
-                Team
-              </Link>
-              <Link
-                to={reportsRoute}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <BarChart3 className="h-4 w-4 inline mr-2" />
-                Reports
-              </Link>
-              <Link
-                to={rfqsRoute}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <FileQuestion className="h-4 w-4 inline mr-2" />
-                RFQs
-              </Link>
-              {showInventoryLink && (
-                <Link
-                  to="/pharmacy/inventory"
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-                >
-                  <PackageSearch className="h-4 w-4 inline mr-2" />
-                  Inventory
-                </Link>
-              )}
-              {showInventoryLink && showAccountingLink && (
-                <Link
-                  to="/pharmacy"
-                  search={{ tab: "credit" }}
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-                >
-                  <Wallet className="h-4 w-4 inline mr-2" />
-                  Credit
-                </Link>
-              )}
-              {business?.type === "pharmacy" &&
-                ["owner", "manager"].includes(business.staff_role) && (
-                  <Link
-                    to="/pharmacy/contacts"
-                    className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
-                  >
-                    <Users className="h-4 w-4 inline mr-2" />
-                    Contacts / CRM
-                  </Link>
-                )}
-              {showAccountingLink && (
-                <Link
-                  to={accountingRoute}
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-                >
-                  <Landmark className="h-4 w-4 inline mr-2" />
-                  Accounting
-                </Link>
-              )}
-              {showAuditLink && (
-                <Link
-                  to={auditRoute}
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-                >
-                  <ScrollText className="h-4 w-4 inline mr-2" />
-                  Audit log
-                </Link>
-              )}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-                >
-                  <ShieldCheck className="h-4 w-4 inline mr-2" />
-                  Admin
-                </Link>
-              )}
-            </nav>
-          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
@@ -412,6 +316,112 @@ export function DashboardHeader({
             <span className="hidden sm:inline">Sign out</span>
           </Button>
         </div>
+      </div>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {showNav && (
+          <nav className="flex items-center gap-1 overflow-x-auto whitespace-nowrap py-1 [&>a]:shrink-0">
+            <Link
+              to="/dashboard"
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <LayoutDashboard className="h-4 w-4 inline mr-2" />
+              Dashboard
+            </Link>
+            <Link
+              to={workspaceRoute}
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <Package className="h-4 w-4 inline mr-2" />
+              {workspaceLabel}
+            </Link>
+            <Link
+              to="/staff"
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <Users className="h-4 w-4 inline mr-2" />
+              Team
+            </Link>
+            <Link
+              to={reportsRoute}
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <BarChart3 className="h-4 w-4 inline mr-2" />
+              Reports
+            </Link>
+            <Link
+              to={rfqsRoute}
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+            >
+              <FileQuestion className="h-4 w-4 inline mr-2" />
+              RFQs
+            </Link>
+            {showInventoryLink && (
+              <Link
+                to="/pharmacy/inventory"
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              >
+                <PackageSearch className="h-4 w-4 inline mr-2" />
+                Inventory
+              </Link>
+            )}
+            {showInventoryLink && showAccountingLink && (
+              <Link
+                to="/pharmacy"
+                search={{ tab: "credit" }}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              >
+                <Wallet className="h-4 w-4 inline mr-2" />
+                Credit
+              </Link>
+            )}
+            {business?.type === "pharmacy" && (
+              <Link
+                to="/pharmacy/procurement"
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+              >
+                <Package className="h-4 w-4 inline mr-2" />
+                External purchases
+              </Link>
+            )}
+            {business?.type === "pharmacy" &&
+              ["owner", "manager"].includes(business.staff_role) && (
+                <Link
+                  to="/pharmacy/contacts"
+                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+                >
+                  <Users className="h-4 w-4 inline mr-2" />
+                  Contacts / CRM
+                </Link>
+              )}
+            {showAccountingLink && (
+              <Link
+                to={accountingRoute}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              >
+                <Landmark className="h-4 w-4 inline mr-2" />
+                Accounting
+              </Link>
+            )}
+            {showAuditLink && (
+              <Link
+                to={auditRoute}
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              >
+                <ScrollText className="h-4 w-4 inline mr-2" />
+                Audit log
+              </Link>
+            )}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+              >
+                <ShieldCheck className="h-4 w-4 inline mr-2" />
+                Admin
+              </Link>
+            )}
+          </nav>
+        )}
       </div>
     </header>
   );

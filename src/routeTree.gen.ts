@@ -33,6 +33,7 @@ import { Route as PharmacyAccountingRouteImport } from './routes/pharmacy_.accou
 import { Route as PharmacyAuditRouteImport } from './routes/pharmacy_.audit'
 import { Route as PharmacyContactsRouteImport } from './routes/pharmacy_.contacts'
 import { Route as PharmacyInventoryRouteImport } from './routes/pharmacy_.inventory'
+import { Route as PharmacyProcurementRouteImport } from './routes/pharmacy_.procurement'
 import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
 import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
 import { Route as WholesalerAccountingRouteImport } from './routes/wholesaler_.accounting'
@@ -160,6 +161,11 @@ const PharmacyInventoryRoute = PharmacyInventoryRouteImport.update({
   path: '/pharmacy/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PharmacyProcurementRoute = PharmacyProcurementRouteImport.update({
+  id: '/pharmacy_/procurement',
+  path: '/pharmacy/procurement',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PharmacyReportsRoute = PharmacyReportsRouteImport.update({
   id: '/pharmacy_/reports',
   path: '/pharmacy/reports',
@@ -216,6 +222,7 @@ export interface FileRoutesByFullPath {
   '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/contacts': typeof PharmacyContactsRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
+  '/pharmacy/procurement': typeof PharmacyProcurementRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler/accounting': typeof WholesalerAccountingRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/pharmacy/audit': typeof PharmacyAuditRoute
   '/pharmacy/contacts': typeof PharmacyContactsRoute
   '/pharmacy/inventory': typeof PharmacyInventoryRoute
+  '/pharmacy/procurement': typeof PharmacyProcurementRoute
   '/pharmacy/reports': typeof PharmacyReportsRoute
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler/accounting': typeof WholesalerAccountingRoute
@@ -281,6 +289,7 @@ export interface FileRoutesById {
   '/pharmacy_/audit': typeof PharmacyAuditRoute
   '/pharmacy_/contacts': typeof PharmacyContactsRoute
   '/pharmacy_/inventory': typeof PharmacyInventoryRoute
+  '/pharmacy_/procurement': typeof PharmacyProcurementRoute
   '/pharmacy_/reports': typeof PharmacyReportsRoute
   '/pharmacy_/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler_/accounting': typeof WholesalerAccountingRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
     | '/pharmacy/audit'
     | '/pharmacy/contacts'
     | '/pharmacy/inventory'
+    | '/pharmacy/procurement'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
     | '/wholesaler/accounting'
@@ -347,6 +357,7 @@ export interface FileRouteTypes {
     | '/pharmacy/audit'
     | '/pharmacy/contacts'
     | '/pharmacy/inventory'
+    | '/pharmacy/procurement'
     | '/pharmacy/reports'
     | '/pharmacy/rfqs'
     | '/wholesaler/accounting'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/pharmacy_/audit'
     | '/pharmacy_/contacts'
     | '/pharmacy_/inventory'
+    | '/pharmacy_/procurement'
     | '/pharmacy_/reports'
     | '/pharmacy_/rfqs'
     | '/wholesaler_/accounting'
@@ -407,6 +419,7 @@ export interface RootRouteChildren {
   PharmacyAuditRoute: typeof PharmacyAuditRoute
   PharmacyContactsRoute: typeof PharmacyContactsRoute
   PharmacyInventoryRoute: typeof PharmacyInventoryRoute
+  PharmacyProcurementRoute: typeof PharmacyProcurementRoute
   PharmacyReportsRoute: typeof PharmacyReportsRoute
   PharmacyRfqsRoute: typeof PharmacyRfqsRoute
   WholesalerAccountingRoute: typeof WholesalerAccountingRoute
@@ -585,6 +598,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PharmacyInventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pharmacy_/procurement': {
+      id: '/pharmacy_/procurement'
+      path: '/pharmacy/procurement'
+      fullPath: '/pharmacy/procurement'
+      preLoaderRoute: typeof PharmacyProcurementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pharmacy_/reports': {
       id: '/pharmacy_/reports'
       path: '/pharmacy/reports'
@@ -668,6 +688,7 @@ const rootRouteChildren: RootRouteChildren = {
   PharmacyAuditRoute: PharmacyAuditRoute,
   PharmacyContactsRoute: PharmacyContactsRoute,
   PharmacyInventoryRoute: PharmacyInventoryRoute,
+  PharmacyProcurementRoute: PharmacyProcurementRoute,
   PharmacyReportsRoute: PharmacyReportsRoute,
   PharmacyRfqsRoute: PharmacyRfqsRoute,
   WholesalerAccountingRoute: WholesalerAccountingRoute,

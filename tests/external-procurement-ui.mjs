@@ -1,0 +1,61 @@
+// Browser contract tests use mocked HTTP; real SQL authorization is tested separately.
+import {chromium} from "../.tmp/import-db/node_modules/playwright/index.mjs";
+import assert from "node:assert/strict";
+const browser=await chromium.launch({executablePath:"C:/Program Files/Google/Chrome/Application/chrome.exe",headless:true});
+const user={id:"00000000-0000-0000-0000-000000000001",email:"external-ui@example.test",aud:"authenticated",role:"authenticated",app_metadata:{},user_metadata:{},created_at:"2026-01-01T00:00:00Z"};
+const session={access_token:["eyJhbGciOiJIUzI1NiJ9",Buffer.from(JSON.stringify({sub:user.id,exp:9999999999,role:"authenticated"})).toString("base64url"),"test"].join("."),refresh_token:"test",expires_at:9999999999,expires_in:3600,token_type:"bearer",user};
+const business={id:"pharmacy-a",name:"Real Pharmacy",type:"pharmacy",verification_status:"approved",staff_role:"owner",owner_id:user.id};
+let payload=null;let reviewer=true;
+const purchase={id:"receipt-1",pharmacy_id:business.id,reference:"EXT-TEST-001",purchase_date:"2026-01-01",channel:"intermediary",seller_contact_id:"person-1",seller_company_id:null,source_company_id:null,source_type:"unknown",seller_snapshot:{name:"Kwame Mensah",phone:"0241234567"},source_snapshot:{},total_ghs:200,paid_ghs:50,credit_ghs:0,outstanding_ghs:150,payment_status:"part_paid",payment_method:"cash",review_status:"quarantined",verification_status:"unverified",posted_at:null,version:1,document_count:0,received_by:user.id,received_name:"Pharmacy Staff",items:[{id:"line-1",master_product_id:null,inventory_item_id:null,product_snapshot:{name:"Zuriplex",strength:"500 mg"},quantity:20,unit_cost_ghs:10,batches:[{id:"batch-a",batch_number:"ZR260502",expiry_date:"2028-05-31",quantity:12,remaining:12,disposition:"quarantine"},{id:"batch-b",batch_number:"ZR260503",expiry_date:"2028-06-30",quantity:8,remaining:8,disposition:"quarantine"}]}],documents:[],events:[],payments:[],returns:[],signals:{missing_source:true,missing_invoice:true,incomplete_batches:false,expired_batches:false,previous_unknown:4,changed_source:false,possible_duplicate:false}};
+const context=await browser.newContext({viewport:{width:1365,height:1000}});
+await context.addInitScript(s=>localStorage.setItem("sb-127-auth-token",JSON.stringify(s)),session);
+await context.route("http://127.0.0.1:54399/**",async route=>{
+ const path=new URL(route.request().url()).pathname;let data=[];
+ if(path.endsWith("/user"))data=user;
+ else if(path.endsWith("/user_roles"))data=[{role:"pharmacy"}];
+ else if(path.endsWith("/business_staff"))data=[{role:"owner",business}];
+ else if(path.endsWith("/businesses"))data=[business];
+ else if(path.endsWith("/rpc/external_procurement_context"))data={can_record:true,can_review:reviewer,can_pay:true,is_owner:true,collect_identity:false,reviewers:[],staff:[{id:user.id,name:"Pharmacy Owner"}],people:[{id:"person-1",name:"Kwame Mensah",phone:"0241234567"}],companies:[]};
+ else if(path.endsWith("/rpc/list_external_purchases"))data={rows:[purchase],summary:{count:1,spend:200,outstanding:150,verified:0,partially_verified:0,unverified:1,quarantined:2,awaiting_review:0,missing_documents:1}};
+ else if(path.endsWith("/rpc/get_external_purchase"))data=purchase;
+ else if(path.endsWith("/rpc/save_external_purchase")){payload=route.request().postDataJSON();data=purchase.id;}
+ else if(path.endsWith("/rpc/external_procurement_analytics"))data={rows:[],channels:[],count:0};
+ await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(data)});
+});
+const page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));
+try{
+ await page.goto("http://127.0.0.1:5186/pharmacy/procurement");
+ await page.getByRole("button",{name:"Record external purchase",exact:true}).waitFor();
+ await page.screenshot({path:".tmp/external-desktop.png",fullPage:true});
+ await page.getByRole("button",{name:/EXT-TEST-001/}).click();
+ await page.getByText("Original source could not be established.",{exact:true}).waitFor();
+ assert.equal(await page.getByText(/Batch ZR26050/).count(),2);
+ await page.getByRole("button",{name:"Close",exact:true}).click();
+ await page.getByRole("button",{name:"Record external purchase",exact:true}).click();
+ await page.getByLabel("Purchase channel",{exact:true}).selectOption("intermediary");
+ await page.getByLabel("Delivered / sold by",{exact:true}).selectOption("person-1");
+ await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await page.getByLabel("Original pharmaceutical source type",{exact:true}).selectOption("unknown");
+ await page.getByText(/this receipt will remain unverified/).waitFor();
+ await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await page.getByLabel("Name",{exact:true}).fill("Zuriplex");
+ await page.getByLabel("Total quantity (packs)",{exact:true}).fill("20");
+ await page.getByLabel("Unit cost (GHS)",{exact:true}).fill("10");
+ await page.getByLabel("Batch quantity",{exact:true}).fill("12");
+ await page.getByRole("button",{name:"Add another batch",exact:true}).click();
+ await page.getByLabel("Batch quantity",{exact:true}).nth(1).fill("8");
+ await page.setViewportSize({width:390,height:844});
+ await page.screenshot({path:".tmp/external-mobile-form.png"});
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"Mobile page must not overflow");
+ assert.ok(await page.getByRole("dialog").evaluate(el=>el.scrollWidth<=el.clientWidth+1),"Mobile dialog must not overflow");
+ await page.getByRole("button",{name:"Continue",exact:true}).click();
+ await page.getByRole("button",{name:"Save receipt & continue to evidence",exact:true}).click();
+ await page.getByRole("heading",{name:purchase.reference,exact:true}).waitFor();
+ assert.equal(payload.p_data.items[0].quantity,20);assert.equal(payload.p_data.items[0].batches.length,2);
+ assert.equal(payload.p_data.seller_contact_id,"person-1");assert.equal(payload.p_data.source_type,"unknown");
+ await page.getByRole("button",{name:"Close",exact:true}).click();
+ reviewer=false;await page.reload();await page.getByRole("button",{name:/EXT-TEST-001/}).click();
+ assert.equal(await page.getByRole("button",{name:"Approve & post saleable stock",exact:true}).count(),0,"Unassigned staff should not see approval action");
+ await page.screenshot({path:".tmp/external-mobile-detail.png"});
+ assert.deepEqual(errors,[]);console.log("PASS: desktop/mobile layout, separate seller/source, multi-batch entry, save payload and reviewer visibility.");
+}finally{await browser.close();}

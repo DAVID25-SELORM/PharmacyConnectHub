@@ -1,0 +1,146 @@
+-- Run ONLY on an isolated local database with zz.cc / zz.u fixtures; rolls back every change.
+BEGIN;
+CREATE FUNCTION pg_temp.check_external(ok BOOLEAN,description TEXT) RETURNS VOID LANGUAGE plpgsql AS $$ BEGIN
+ IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %',description; END IF; RAISE NOTICE 'PASS: %',description;
+END $$;
+CREATE FUNCTION pg_temp.expect_external_error(statement TEXT,expected TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE caught BOOLEAN:=false; BEGIN
+ BEGIN EXECUTE statement; EXCEPTION WHEN OTHERS THEN
+ IF position(expected IN SQLERRM)=0 THEN RAISE EXCEPTION 'Expected %, got %',expected,SQLERRM; END IF; caught:=true; END;
+ PERFORM pg_temp.check_external(caught,'Denied: '||expected);
+END $$;
+DO $$
+DECLARE f RECORD; contact UUID; company UUID; purchase UUID; unknown_purchase UUID; batch UUID; item UUID;
+ request UUID:=gen_random_uuid(); payload JSONB; result JSONB; paid UUID; r UUID; n INTEGER; other UUID; staff UUID; admin UUID; market_product UUID; market_stock INTEGER; plain_item UUID;
+BEGIN
+ SELECT * INTO f FROM zz.cc;
+ SELECT id INTO other FROM zz.u WHERE k='ph_other'; SELECT id INTO staff FROM zz.u WHERE k='nobody'; SELECT id INTO admin FROM zz.u WHERE k='admin';
+ PERFORM set_config('request.jwt.claim.sub',f.u_po::text,true);
+ PERFORM pg_temp.check_external(public.can_access_external_procurement(f.good),'Owner access');
+ PERFORM pg_temp.check_external(NOT public.can_review_external_purchase(f.good),'Owner is not implicitly a reviewer');
+ SELECT count(*) INTO n FROM public.businesses;
+ contact:=public.save_external_contact(f.good,'person','{"name":"External Test Intermediary","phone":"0241234567"}');
+ PERFORM pg_temp.check_external(n=(SELECT count(*) FROM public.businesses),'Contact does not create a business');
+ PERFORM pg_temp.check_external(contact=public.save_external_contact(f.good,'person','{"name":"External Test Intermediary","phone":"0241234567"}'),'Repeat contact is reused');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=contact),'Contact gains no app role');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_contact(%L,''person'',''{"name":"ID test","phone":"0241112222","identity_reference":"sensitive"}'')',f.good),'Identity collection is disabled');
+ company:=public.save_external_contact(f.good,'company','{"name":"External Source Ltd","license_reference":"TEST-LIC"}');
+ payload:=jsonb_build_object('purchase_date',current_date,'channel','intermediary','seller_contact_id',contact,
+ 'source_type','external_wholesaler','source_company_id',company,'source','{}'::jsonb,'invoice_number','TEST-EXT-001','payment_method','cash',
+ 'items',jsonb_build_array(jsonb_build_object('product',jsonb_build_object('name','External test medicine '||request::text,'strength','500 mg','pack_size','20'),
+ 'quantity',20,'unit_cost_ghs',10,'batches',jsonb_build_array(jsonb_build_object('quantity',12,'batch_number','EXT-A','expiry_date',current_date+365),jsonb_build_object('quantity',8,'batch_number','EXT-B','expiry_date',current_date+730)))));
+ purchase:=public.save_external_purchase(f.good,payload,request);
+ PERFORM pg_temp.check_external(purchase=public.save_external_purchase(f.good,payload,request),'Create retry is idempotent');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_purchase(%L,%L::jsonb,%L)',f.good,payload||'{"notes":"changed"}',request),'Request ID already used');
+ result:=public.get_external_purchase(purchase);
+ PERFORM pg_temp.check_external(result->>'total_ghs'='200.00','Server calculates cost');
+ PERFORM pg_temp.check_external(jsonb_array_length(result#>'{items,0,batches}')=2,'Multiple batches retained');
+ PERFORM pg_temp.check_external(result#>>'{seller_snapshot,name}'='External Test Intermediary' AND result#>>'{source_snapshot,name}'='External Source Ltd','Seller and original source separate');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IS NOT NULL),'Unapproved receipt posts no stock');
+ PERFORM public.review_external_purchase(purchase,'submit');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''Reviewed'')',purchase),'assigned active reviewer');
+ PERFORM public.configure_external_procurement(f.good,false,f.u_po,true);
+ PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''Reviewed'')',purchase),'Supporting invoice');
+ INSERT INTO storage.objects(bucket_id,name) VALUES('external-procurement',f.good||'/'||purchase||'/invoice.pdf');
+ PERFORM public.external_document_action(purchase,'supplier_invoice',f.good||'/'||purchase||'/invoice.pdf','invoice.pdf');
+ PERFORM public.review_external_purchase(purchase,'quarantined','Check source invoice');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_inventory_movements WHERE external_batch_id IS NOT NULL),'Quarantine posts no saleable stock');
+ PERFORM public.review_external_purchase(purchase,'approved','Source and batch evidence reviewed');
+ SELECT inventory_item_id,id INTO item,r FROM public.external_purchase_items WHERE purchase_id=purchase;
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=20,'Approval posts correct stock');
+ PERFORM pg_temp.check_external((SELECT count(*) FROM public.pharmacy_inventory_movements WHERE item_id=item)=2,'One receipt movement per batch');
+ PERFORM public.review_external_purchase(purchase,'approved','Retry');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=20,'Duplicate approval does not double post');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_purchase(%L,%L::jsonb,%L,%L,1)',f.good,payload,gen_random_uuid(),purchase),'not editable');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.adjust_pharmacy_inventory_stock(%L,-1,''adjust'',''other'',''Bypass'')',item),'traced external batches');
+ SELECT id INTO batch FROM public.external_purchase_batches WHERE item_id=r AND batch_number='EXT-A';
+ request:=gen_random_uuid();
+ r:=public.adjust_external_batch(batch,2,'return','Returned damaged packs','External Source Ltd',current_date,20,request);
+ PERFORM pg_temp.check_external(r=public.adjust_external_batch(batch,2,'return','Returned damaged packs','External Source Ltd',current_date,20,request),'Return retry is idempotent');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Return reverses saleable stock');
+ request:=gen_random_uuid();
+ PERFORM public.hold_external_batch(batch,true,'Recall investigation',request);
+ PERFORM public.hold_external_batch(batch,true,'Recall investigation',request);
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=8,'Recall hold removes only remaining units and is idempotent');
+ PERFORM pg_temp.check_external((public.get_external_purchase(purchase)->>'review_status')='quarantined','Recall hold visible on purchase');
+ PERFORM public.hold_external_batch(batch,false,'Recall resolved with source',gen_random_uuid());
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Release restores held units once');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.adjust_external_batch(%L,99,''return'',''too many'',''Source'',current_date,0,%L)',batch,gen_random_uuid()),'exceeds this batch');
+ paid:=public.record_external_payment(purchase,50,'cash','PART-1',current_date,gen_random_uuid());
+ result:=public.get_external_purchase(purchase);
+ PERFORM pg_temp.check_external((result->>'outstanding_ghs')::numeric=130 AND result->>'payment_status'='part_paid','Credit balances include payment and return credit');
+ PERFORM public.record_external_payment(purchase,-50,'cash','Reverse PART-1',current_date,gen_random_uuid(),paid);
+ PERFORM pg_temp.check_external((public.get_external_purchase(purchase)->>'outstanding_ghs')::numeric=180,'Payment reversal preserves ledger');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.record_external_payment(%L,181,''cash'',''overpayment'',current_date,%L)',purchase,gen_random_uuid()),'not exceed outstanding');
+ request:=gen_random_uuid();
+ unknown_purchase:=public.save_external_purchase(f.good,payload||jsonb_build_object('source_type','unknown','invoice_number','UNKNOWN-1'),request);
+ PERFORM public.review_external_purchase(unknown_purchase,'submit');
+ result:=public.get_external_purchase(unknown_purchase);
+ PERFORM pg_temp.check_external(result->>'verification_status'='unverified' AND result->>'review_status'='quarantined','Unknown source is quarantined on submission');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.review_external_purchase(%L,''approved'',''No evidence'')',unknown_purchase),'Original source must be established');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Unknown purchase never changes saleable stock');
+ result:=public.list_external_purchases(f.good,jsonb_build_object('q','EXT-A'));
+ PERFORM pg_temp.check_external((result#>>'{summary,count}')::integer=2,'Batch search reconstructs purchases');
+ result:=public.external_procurement_analytics(f.good,current_date,current_date,'External test medicine');
+ PERFORM pg_temp.check_external((result->>'count')::integer=2,'Analytics counts items, not batches');
+ PERFORM pg_temp.check_external((result#>>'{channels,0,units}')::integer=40,'Analytics quantity is not multiplied by documents or batches');
+ PERFORM pg_temp.check_external(EXISTS(SELECT 1 FROM public.external_purchase_events WHERE purchase_id=purchase AND action='INVENTORY_POSTED'),'Inventory audit exists');
+ PERFORM pg_temp.check_external(public.can_access_external_document(f.good||'/'||purchase||'/invoice.pdf'),'Owner document access');
+ PERFORM pg_temp.check_external(NOT public.can_access_external_document(f.good||'/'||purchase||'/other.pdf',true),'Posted evidence cannot be overwritten');
+
+ PERFORM set_config('request.jwt.claim.sub',other::text,true);
+ PERFORM pg_temp.check_external(NOT public.can_access_external_procurement(f.good),'Cross tenant authorization denied');
+ PERFORM pg_temp.check_external(NOT public.can_access_external_document(f.good||'/'||purchase||'/invoice.pdf'),'Cross tenant document denied');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.get_external_purchase(%L)',purchase),'not authorized');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.list_external_purchases(%L)',f.good),'Not authorized');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.save_external_contact(%L,''person'',''{"name":"Intruder","phone":"0241234567"}'')',f.good),'Not authorized');
+ SET LOCAL ROLE authenticated;
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchases WHERE pharmacy_id=f.good),'Purchase RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchase_items WHERE pharmacy_id=f.good),'Item RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchase_batches WHERE pharmacy_id=f.good),'Batch RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchase_documents WHERE pharmacy_id=f.good),'Document metadata RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchase_events WHERE pharmacy_id=f.good),'Audit RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM storage.objects WHERE bucket_id='external-procurement' AND name=f.good||'/'||purchase||'/invoice.pdf'),'Storage object RLS isolates tenant');
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.pharmacy_crm_representatives WHERE id=contact),'Contacts RLS isolates tenant');
+ PERFORM pg_temp.expect_external_error('UPDATE public.external_purchases SET review_status=''approved''','permission denied');
+ PERFORM pg_temp.expect_external_error('SELECT * FROM public.external_purchase_balances','permission denied');
+ RESET ROLE;
+
+ INSERT INTO public.business_staff(business_id,user_id,role,status) VALUES(f.good,staff,'cashier','active')
+ ON CONFLICT(business_id,user_id) DO UPDATE SET role='cashier',status='active';
+ PERFORM set_config('request.jwt.claim.sub',staff::text,true);
+ PERFORM pg_temp.check_external(public.can_access_external_procurement(f.good),'Ordinary process staff can record');
+ PERFORM pg_temp.check_external(NOT public.can_review_external_purchase(f.good),'Cashier cannot approve');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.configure_external_procurement(%L,false,%L,true)',f.good,staff),'Only the pharmacy owner');
+ PERFORM pg_temp.expect_external_error(format('SELECT public.record_external_payment(%L,1,''cash'',''staff'',current_date,%L)',purchase,gen_random_uuid()),'Accounting permission');
+ PERFORM set_config('request.jwt.claim.sub',f.u_po::text,true);
+ PERFORM public.configure_external_procurement(f.good,false,staff,true);
+ PERFORM set_config('request.jwt.claim.sub',staff::text,true);
+ PERFORM pg_temp.check_external(public.can_review_external_purchase(f.good),'Explicit active reviewer accepted');
+ UPDATE public.business_staff SET status='inactive' WHERE business_id=f.good AND user_id=staff;
+ PERFORM pg_temp.check_external(NOT public.can_review_external_purchase(f.good),'Inactive reviewer immediately loses approval');
+ PERFORM set_config('request.jwt.claim.sub',admin::text,true);
+ PERFORM pg_temp.check_external(NOT public.can_access_external_procurement(f.good),'Platform admin has no automatic procurement access');
+ SET LOCAL ROLE authenticated;
+ PERFORM pg_temp.check_external(NOT EXISTS(SELECT 1 FROM public.external_purchases WHERE pharmacy_id=f.good),'Admin RLS has no bypass');
+ RESET ROLE;
+ PERFORM set_config('request.jwt.claim.sub',f.u_po::text,true);
+ SET LOCAL ROLE authenticated;
+ PERFORM pg_temp.check_external(EXISTS(SELECT 1 FROM public.external_purchases WHERE id=purchase),'Owner direct read allowed');
+ PERFORM pg_temp.check_external(EXISTS(SELECT 1 FROM storage.objects WHERE bucket_id='external-procurement' AND name=f.good||'/'||purchase||'/invoice.pdf'),'Owner private storage read allowed');
+ PERFORM pg_temp.expect_external_error('DELETE FROM public.external_purchase_events','permission denied');
+ RESET ROLE;
+ PERFORM pg_temp.expect_external_error(format('UPDATE public.external_purchase_events SET action=''altered'' WHERE purchase_id=%L',purchase),'append-only');
+ -- Existing unbatched stock actions and marketplace checkout remain independent.
+ plain_item:=public.create_pharmacy_inventory_item(f.good,'Unbatched regression '||gen_random_uuid()::text,p_stock=>5);
+ PERFORM public.adjust_pharmacy_inventory_stock(plain_item,-2,'adjust','count_correction','Regression');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=plain_item)=3,'Legacy unbatched stock adjustments still work');
+ INSERT INTO public.products(wholesaler_id,name,brand,category,form,pack_size,price_ghs,stock,active)
+ VALUES(f.alpha,'External module marketplace regression','Generic','Medicine','Tablet','20',10,50,true) RETURNING id INTO market_product;
+ SELECT count(*) INTO market_stock FROM public.orders;
+ PERFORM public.create_marketplace_orders(f.u_po,f.good,jsonb_build_array(jsonb_build_object('productId',market_product,'quantity',2,'category','cash_private')));
+ PERFORM pg_temp.check_external((SELECT count(*) FROM public.orders)=market_stock+1,'Marketplace checkout still creates an order');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.products WHERE id=market_product)=48,'Marketplace reserves only wholesaler stock');
+ PERFORM pg_temp.check_external((SELECT stock FROM public.pharmacy_inventory_items WHERE id=item)=18,'Marketplace leaves external pharmacy stock unchanged');
+END $$;
+ROLLBACK;

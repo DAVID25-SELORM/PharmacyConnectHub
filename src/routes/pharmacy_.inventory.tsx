@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Download, Package, Plus } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -162,6 +162,7 @@ function PharmacyInventoryPage() {
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Inventory" showNav={true} />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-4 rounded-lg border bg-muted p-3 text-sm"><Link className="font-medium text-primary underline" to="/pharmacy/procurement" search={{ review: "quarantined" }}>View quarantined external receipts and batch holds</Link><p>Quarantined units are excluded from the stock counts below.</p></div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold">Inventory</h1>
@@ -251,6 +252,7 @@ function PharmacyInventoryPage() {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{item.name}</span>
+                          <Link className="block text-xs text-primary underline" to="/pharmacy/procurement" search={{ q: item.name, view: "history" }}>Procurement history</Link>
                           <Badge variant="outline" className="whitespace-nowrap">
                             {ITEM_TYPE_LABELS[item.item_type]}
                           </Badge>

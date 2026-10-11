@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText, ShieldCheck, Wallet } from "lucide-react";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -137,6 +137,7 @@ function PharmacyReportsPage() {
         />
 
         <Tabs value={tab} onValueChange={setTab} className="mt-6">
+          <Button asChild variant="outline" className="mb-4"><Link to="/pharmacy/procurement" search={{ view: "history" }}>Product purchases across marketplace & external channels</Link></Button>
           <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="orders">Orders &amp; Payments</TabsTrigger>
