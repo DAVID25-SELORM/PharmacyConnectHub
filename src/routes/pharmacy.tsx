@@ -1,3 +1,14 @@
+import { useOrderFilter } from "@/hooks/use-order-filter";
+import {
+  mergeOrderSummary,
+  hasOrderDetails,
+  LatestOrderRequest,
+  orderDateRange,
+  orderDate,
+  ORDER_STAGES,
+  stageLabel,
+} from "@/lib/order-history";
+import { lineAmount } from "@/lib/order-documents";
 import { CartQuantityInput } from "@/components/pharmacy/CartQuantityInput";
 import { PharmacyCreditRequest } from "@/components/credit/CreditAccountRequests";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
@@ -188,6 +199,11 @@ type WholesalerSummary = {
 };
 
 type OrderRow = {
+  pharmacy_id: string;
+  pharmacy?: PartyDetails;
+  detailLoaded?: boolean;
+  return_eligible?: boolean;
+  return_deadline?: string;
   id: string;
   order_number: string;
   status:
@@ -224,6 +240,7 @@ type OrderRow = {
     id?: string;
     product_id?: string | null;
     product_name: string;
+    catalog_details?: string | null;
     quantity: number;
     supplied_quantity?: number | null;
     unit_price_ghs: number;
@@ -280,6 +297,42 @@ function PharmacyDashboardContent() {
   const [creditTerms, setCreditTerms] = useState<Record<string, CreditTerms>>({});
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [totalOrderCount, setTotalOrderCount] = useState(0);
+  const [workspaceTotal, setWorkspaceTotal] = useState(0);
+  const [orderCounts, setOrderCounts] = useState({
+    active: 0,
+    awaiting: 0,
+    transit: 0,
+    delivered: 0,
+  });
+  const [historySuppliers, setHistorySuppliers] = useState<Array<{ id: string; name: string }>>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const orderRequests = useRef(new LatestOrderRequest());
+  const currentBusiness = useRef(businessId);
+  currentBusiness.current = businessId;
+  const detailCache = useRef(new Map<string, OrderRow>());
+  useEffect(() => {
+    detailCache.current.clear();
+    setOrders([]);
+    setWorkspaceTotal(0);
+    setTotalOrderCount(0);
+    setOrderCounts({ active: 0, awaiting: 0, transit: 0, delivered: 0 });
+  }, [businessId]);
+  const validTab = (value: string | null) =>
+    ["catalog", "lists", "orders", "returns", "statements", "credit"].includes(value ?? "")
+      ? value!
+      : "catalog";
+  const [activeTab, setActiveTab] = useState(() =>
+    typeof window === "undefined"
+      ? "catalog"
+      : validTab(new URLSearchParams(window.location.search).get("tab")),
+  );
+  useEffect(() => {
+    const restore = () =>
+      setActiveTab(validTab(new URLSearchParams(window.location.search).get("tab")));
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   const [placing, setPlacing] = useState(false);
 
   useEffect(() => {
@@ -394,7 +447,11 @@ function PharmacyDashboardContent() {
       },
     ) => {
       if (!businessId) return;
-      const { data, error } = await (supabase as any).rpc("list_pharmacy_order_history", {
+      const request = orderRequests.current.start();
+      setOrdersLoading(true);
+      setOrdersError(null);
+      const { data, error } = await (supabase as any).rpc("list_pharmacy_orders_scoped", {
+        p_pharmacy_id: businessId,
         p_page: query.page,
         p_page_size: 20,
         p_search: query.search || null,
@@ -407,89 +464,82 @@ function PharmacyDashboardContent() {
         p_wholesaler_id: query.wholesalerId === "all" ? null : query.wholesalerId,
         p_purchase_category: query.purchaseCategory === "all" ? null : query.purchaseCategory,
       });
+      if (!orderRequests.current.current(request) || currentBusiness.current !== businessId) return;
+      setOrdersLoading(false);
       if (error) {
+        setOrdersError(
+          "We couldn't load your orders. Please retry. Your previous results are hidden.",
+        );
+        setOrders([]);
         toast.error("We couldn't load your orders. Please try again.");
         return;
       }
       const rows = Array.isArray(data?.orders) ? data.orders : [];
       setTotalOrderCount(Number(data?.total_count ?? 0));
+      setWorkspaceTotal(Number(data?.workspace_total ?? 0));
+      setOrderCounts(data?.counts ?? { active: 0, awaiting: 0, transit: 0, delivered: 0 });
+      setHistorySuppliers(data?.suppliers ?? []);
       setOrders(
-        (current) =>
-          rows.map((row: Record<string, unknown>) => ({
-            ...row,
-            paystack_reference: null,
-            accepted_at: null,
-            picking_started_at: null,
-            packed_at: null,
-            ready_for_dispatch_at: null,
-            dispatched_at: null,
-            delivered_at: null,
-            cancelled_at: null,
-            paid_at: null,
-            payment_confirmed_at: null,
-            receipt_sent_at: null,
-            receipt_sent_to: null,
-            ...current.find((order) => order.id === row.id),
-            ...row,
-            wholesaler: row.wholesaler_name ? { name: String(row.wholesaler_name) } : null,
-            order_items: current.find((order) => order.id === row.id)?.order_items ?? [],
-            item_count: Number(row.item_count ?? 0),
-            unit_count: Number(row.unit_count ?? 0),
-          })) as OrderRow[],
+        rows.map((row: Record<string, unknown>) =>
+          mergeOrderSummary<OrderRow>(row, detailCache.current.get(String(row.id))),
+        ),
       );
     },
     [businessId],
   );
 
-  const loadOrderDetail = async (orderId: string, expectedItemCount?: number) => {
-    const { data, error } = await (supabase as any).rpc("get_pharmacy_order_detail", {
-      p_order_id: orderId,
-    });
-    if (error || !data?.order) {
-      console.error("[Drugxone] get_pharmacy_order_detail failed", {
-        orderId,
-        error,
-        response: data,
+  const loadOrderDetail = useCallback(
+    async (orderId: string, expectedItemCount?: number) => {
+      const scope = businessId;
+      const { data, error } = await (supabase as any).rpc("get_pharmacy_order_scoped", {
+        p_pharmacy_id: scope,
+        p_order_id: orderId,
       });
-      toast.error("We couldn't load this order. Please try again.");
-      return null;
-    }
-    const detail = data.order as OrderRow & { items?: OrderRow["order_items"] };
-    let items = Array.isArray(detail.items) ? detail.items : [];
-    if (items.length === 0) {
-      const fallback = await supabase
-        .from("order_items")
-        .select("product_name,quantity,unit_price_ghs")
-        .eq("order_id", orderId)
-        .order("id");
-      if (!fallback.error && Array.isArray(fallback.data)) {
-        items = fallback.data as OrderRow["order_items"];
-      } else if (fallback.error) {
-        console.error("[Drugxone] order_items fallback query failed", {
+      if (currentBusiness.current !== scope) return null;
+      if (error || !data?.order || data.order.pharmacy_id !== scope) {
+        console.error("[Drugxone] get_pharmacy_order_detail failed", {
           orderId,
-          error: fallback.error,
+          error,
+          response: data,
         });
+        toast.error("We couldn't load this order. Please try again.");
+        return null;
       }
-    }
-    const hydrated = { ...detail, order_items: items };
-    if ((expectedItemCount ?? hydrated.item_count ?? 0) > 0 && hydrated.order_items.length === 0) {
-      console.error("[Drugxone] order detail returned no items", {
-        orderId,
-        expectedItemCount: expectedItemCount ?? hydrated.item_count,
-        response: data,
-      });
-      toast.error(
-        "This order has items, but the detail response was empty. Check the Supabase migration and browser console.",
+      const detail = data.order as OrderRow & { items?: OrderRow["order_items"] };
+      const items = Array.isArray(detail.items) ? detail.items : [];
+      const hydrated = {
+        ...detail,
+        pharmacy: data.pharmacy,
+        detailLoaded: true,
+        order_items: items,
+      };
+      if (
+        (expectedItemCount ?? hydrated.item_count ?? 0) > 0 &&
+        hydrated.order_items.length === 0
+      ) {
+        console.error("[Drugxone] order detail returned no items", {
+          orderId,
+          expectedItemCount: expectedItemCount ?? hydrated.item_count,
+          response: data,
+        });
+        toast.error(
+          "Order details are incomplete. Please retry or contact support with the order reference.",
+        );
+        return null;
+      }
+      if (currentBusiness.current !== scope) return null;
+      detailCache.current.set(orderId, hydrated);
+      setOrders((current) =>
+        current.some((order) => order.id === orderId)
+          ? current.map((order) => (order.id === orderId ? { ...order, ...hydrated } : order))
+          : [...current, hydrated],
       );
-      return null;
-    }
-    setOrders((current) =>
-      current.map((order) => (order.id === orderId ? { ...order, ...hydrated } : order)),
-    );
-    return hydrated;
-  };
+      return hydrated;
+    },
+    [businessId],
+  );
   useEffect(() => {
-    if (businessId) {
+    if (businessId && activeTab !== "orders") {
       void loadOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -898,7 +948,11 @@ function PharmacyDashboardContent() {
         <div className="mb-6">
           <h1 className="font-display text-3xl font-bold">{business.name}</h1>
           <p className="mt-1 text-muted-foreground">
-            Browse the catalog and order from verified wholesalers across Ghana.
+            {activeTab === "orders"
+              ? "Track orders, review deliveries and view order documents."
+              : activeTab === "returns"
+                ? "Track return requests and supplier decisions."
+                : "Browse the catalog and order from verified wholesalers across Ghana."}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             {approvedWholesalers.length > 0
@@ -937,28 +991,22 @@ function PharmacyDashboardContent() {
         />
 
         <Tabs
-          defaultValue={(() => {
-            const tab =
-              typeof window !== "undefined"
-                ? new URLSearchParams(window.location.search).get("tab")
-                : null;
-            return tab === "orders" ||
-              tab === "lists" ||
-              tab === "returns" ||
-              tab === "statements" ||
-              (tab === "credit" && canViewAccounting("pharmacy", business.staff_role))
-              ? tab
-              : "catalog";
-          })()}
+          value={activeTab}
+          onValueChange={(value) => {
+            setActiveTab(value);
+            const url = new URL(window.location.href);
+            url.searchParams.set("tab", value);
+            window.history.pushState(window.history.state, "", url);
+          }}
           className="w-full"
         >
-          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
+          <TabsList className="mb-6 h-auto min-h-9 max-w-full justify-start overflow-x-auto [&>button]:shrink-0">
             <TabsTrigger value="catalog">
               Catalog ({approvedWholesalers.length} wholesaler
               {approvedWholesalers.length === 1 ? "" : "s"})
             </TabsTrigger>
             <TabsTrigger value="lists">Reorder lists ({reorderLists.lists.length})</TabsTrigger>
-            <TabsTrigger value="orders">My orders ({orders.length})</TabsTrigger>
+            <TabsTrigger value="orders">My orders ({workspaceTotal})</TabsTrigger>
             <TabsTrigger value="returns">Returns</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
             {canViewAccounting("pharmacy", business.staff_role) && (
@@ -1009,12 +1057,15 @@ function PharmacyDashboardContent() {
           )}
           <TabsContent value="orders">
             <OrdersView
-              orders={orders}
+              key={businessId}
+              orders={orders.filter((order) => order.pharmacy_id === businessId)}
+              counts={orderCounts}
+              loading={ordersLoading}
+              error={ordersError}
               totalCount={totalOrderCount}
               loadOrders={loadOrders}
               loadOrderDetail={loadOrderDetail}
-              wholesalers={approvedWholesalers}
-              pharmacy={business}
+              wholesalers={historySuppliers}
               onReorder={canOrder ? reorderFromOrder : undefined}
               onRequestReturn={
                 canOrder ? (id, label) => setReturnOrder({ id, order_number: label }) : undefined
@@ -1025,7 +1076,9 @@ function PharmacyDashboardContent() {
               canChangePayment={["owner", "manager", "cashier", "accountant"].includes(
                 business?.staff_role ?? "",
               )}
-              canRespondToSupply={["owner", "manager", "cashier"].includes(business?.staff_role ?? "")}
+              canRespondToSupply={["owner", "manager", "cashier"].includes(
+                business?.staff_role ?? "",
+              )}
             />
           </TabsContent>
         </Tabs>
@@ -1422,9 +1475,11 @@ function CartSheet({
                       {methodFor(wid) === "pay_now" && (
                         <p className="text-muted-foreground">
                           You will pay online right after checkout
-                          {onlinePayments.mode === "test" ? " (test mode: no real money moves)" : ""}. The
-                          supplier is told once the payment is confirmed, and the order is held for you
-                          until then.
+                          {onlinePayments.mode === "test"
+                            ? " (test mode: no real money moves)"
+                            : ""}
+                          . The supplier is told once the payment is confirmed, and the order is
+                          held for you until then.
                         </p>
                       )}
                       {["bank_transfer", "momo", "cheque", "other"].includes(methodFor(wid)) && (
@@ -1859,7 +1914,10 @@ function CatalogView({
   );
 }
 
-function OrdersView({
+export function OrdersView({
+  counts,
+  loading,
+  error,
   orders,
   totalCount,
   loadOrders,
@@ -1870,10 +1928,11 @@ function OrdersView({
   canReclassify = false,
   canChangePayment = false,
   canRespondToSupply = false,
-  pharmacy = null,
 }: {
+  counts: { active: number; awaiting: number; transit: number; delivered: number };
+  loading: boolean;
+  error: string | null;
   canRespondToSupply?: boolean;
-  pharmacy?: PartyDetails | null;
   canReclassify?: boolean;
   canChangePayment?: boolean;
   onRequestReturn?: (orderId: string, orderLabel: string) => void;
@@ -1882,63 +1941,69 @@ function OrdersView({
   totalCount: number;
   loadOrders: (query?: OrderHistoryQuery) => Promise<void>;
   loadOrderDetail: (id: string, expectedItemCount?: number) => Promise<OrderRow | null>;
-  wholesalers: WholesalerSummary[];
+  wholesalers: Array<{ id: string; name: string }>;
 }) {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
-  // A notification can link straight to an order (?order=<id>): open it once the list has loaded.
-  const linkedOrder = useRef<string | null>(
+  const linkedOrder = useRef(
     typeof window !== "undefined" ? linkedOrderId(window.location.search) : null,
   );
+  const [linkedDetail, setLinkedDetail] = useState<OrderRow | null>(null);
+  const [linkedError, setLinkedError] = useState<string | null>(null);
   useEffect(() => {
     const id = linkedOrder.current;
-    const found = id ? orders.find((order) => order.id === id) : null;
-    if (!id || !found) return;
+    if (!id || loading) return;
     linkedOrder.current = null;
-    void (async () => {
-      if (found.order_items.length === 0 && !(await loadOrderDetail(id, found.item_count))) return;
-      setOpenOrderId(id);
-      window.setTimeout(
-        () => document.getElementById(`order-${id}`)?.scrollIntoView({ block: "start", behavior: "smooth" }),
-        200,
-      );
-    })();
-  }, [orders, loadOrderDetail]);
+    void loadOrderDetail(id).then((detail) => {
+      if (detail) {
+        setLinkedDetail(detail);
+        setOpenOrderId(id);
+      } else setLinkedError("This linked order is unavailable in the selected pharmacy.");
+    });
+  }, [loading, loadOrderDetail]);
   const [supply, setSupply] = useState<SupplyMap>({});
   const [supplyTick, setSupplyTick] = useState(0);
-  const orderIdsKey = orders.map((order) => order.id).join(",");
+  const [supplyState, setSupplyState] = useState<{ key: string; error: boolean }>({
+    key: "",
+    error: false,
+  });
+  const pageOrders =
+    linkedDetail && !orders.some((order) => order.id === linkedDetail.id)
+      ? [linkedDetail, ...orders]
+      : orders;
+  const orderIdsKey = pageOrders.map((order) => order.id).join(",");
   useEffect(() => {
     let cancelled = false;
-    void loadOrderSupply(orderIdsKey ? orderIdsKey.split(",") : []).then((map) => {
-      if (!cancelled) setSupply(map);
-    });
+    setSupplyState({ key: "", error: false });
+    void loadOrderSupply(orderIdsKey ? orderIdsKey.split(",") : [], true)
+      .then((map) => {
+        if (!cancelled) {
+          setSupply(map);
+          setSupplyState({ key: orderIdsKey, error: false });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSupplyState({ key: orderIdsKey, error: true });
+      });
     return () => {
       cancelled = true;
     };
   }, [orderIdsKey, supplyTick]);
   const [classifyTarget, setClassifyTarget] = useState<ClassificationTarget | null>(null);
   const [settlementTarget, setSettlementTarget] = useState<SettlementTarget | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [payment, setPayment] = useState("all");
-  const [sort, setSort] = useState("newest");
-  const [range, setRange] = useState("all");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [wholesalerId, setWholesalerId] = useState("all");
-  const [purchaseCategory, setPurchaseCategory] = useState("all");
-  const [page, setPage] = useState(1);
+  const [query, setQuery] = useOrderFilter("query", "");
+  const [status, setStatus] = useOrderFilter("status", "all");
+  const [payment, setPayment] = useOrderFilter("payment", "all");
+  const [sort, setSort] = useOrderFilter("sort", "newest");
+  const [range, setRange] = useOrderFilter("range", "all");
+  const [customFrom, setCustomFrom] = useOrderFilter("customFrom", "");
+  const [customTo, setCustomTo] = useOrderFilter("customTo", "");
+  const [wholesalerId, setWholesalerId] = useOrderFilter("wholesalerId", "all");
+  const [purchaseCategory, setPurchaseCategory] = useOrderFilter("purchaseCategory", "all");
+  const [pageValue, setPageValue] = useOrderFilter("page", "1");
+  const page = Math.max(1, Number(pageValue) || 1);
+  const setPage = (next: number | ((current: number) => number)) =>
+    setPageValue(String(typeof next === "function" ? next(page) : next));
   const pageSize = 20;
-  const counts = useMemo(
-    () => ({
-      active: orders.filter((o) =>
-        ["pending", "accepted", "packed", "dispatched"].includes(o.status),
-      ).length,
-      awaiting: orders.filter((o) => o.payment_status === "unpaid").length,
-      transit: orders.filter((o) => ["packed", "dispatched"].includes(o.status)).length,
-      delivered: orders.filter((o) => o.status === "delivered").length,
-    }),
-    [orders],
-  );
   const hasFilters =
     query.trim() !== "" ||
     status !== "all" ||
@@ -1947,19 +2012,33 @@ function OrdersView({
     wholesalerId !== "all" ||
     purchaseCategory !== "all";
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
-  const pageOrders = orders;
-  const customRangeReady = range !== "custom" || (customFrom !== "" && customTo !== "");
+
+  const dates = orderDateRange(customFrom, customTo);
+  const customRangeReady = range !== "custom" || !dates.error;
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const [retry, setRetry] = useState(0);
+  const resetFilters = () => {
+    setQuery("");
+    setStatus("all");
+    setPayment("all");
+    setRange("all");
+    setCustomFrom("");
+    setCustomTo("");
+    setWholesalerId("all");
+    setPurchaseCategory("all");
+    setPage(1);
+  };
   useEffect(() => {
     if (!customRangeReady) return;
     void loadOrders({
       page,
-      search: query,
+      search: debouncedQuery,
       status,
       payment,
       sort,
       range,
-      from: customFrom ? new Date(customFrom).toISOString() : undefined,
-      to: customTo ? new Date(`${customTo}T23:59:59.999`).toISOString() : undefined,
+      from: dates.from,
+      to: dates.to,
       wholesalerId,
       purchaseCategory,
     });
@@ -1967,23 +2046,41 @@ function OrdersView({
     loadOrders,
     page,
     payment,
-    query,
+    debouncedQuery,
+    retry,
     sort,
     status,
     range,
     customFrom,
     customTo,
     customRangeReady,
+    dates.from,
+    dates.to,
     wholesalerId,
     purchaseCategory,
   ]);
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
+      {linkedDetail && !orders.some((order) => order.id === linkedDetail.id) && (
+        <p role="status">
+          The linked order is shown above your filtered results.{" "}
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setLinkedDetail(null);
+              const url = new URL(window.location.href);
+              url.searchParams.delete("order");
+              window.history.replaceState(window.history.state, "", url);
+            }}
+          >
+            Dismiss linked order
+          </Button>
+        </p>
+      )}
+      {linkedError && <p role="alert">{linkedError}</p>}
+      <p className="text-xs text-muted-foreground">Totals for this pharmacy across all orders</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryCard label="Active Orders" value={counts.active} />
         <SummaryCard label="Awaiting Payment" value={counts.awaiting} />
         <SummaryCard label="In Transit" value={counts.transit} />
@@ -2003,7 +2100,7 @@ function OrdersView({
             className="pl-9"
           />
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
           <Select
             value={status}
             onValueChange={(value) => {
@@ -2011,12 +2108,17 @@ function OrdersView({
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Order status" className="w-full sm:w-40">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>
+              {["pending", "accepted", "picking", "ready_for_dispatch"].map((stage) => (
+                <SelectItem key={stage} value={stage}>
+                  {stageLabel(stage)}
+                </SelectItem>
+              ))}
               <SelectItem value="packed">Packed</SelectItem>
               <SelectItem value="dispatched">Dispatched</SelectItem>
               <SelectItem value="delivered">Delivered</SelectItem>
@@ -2030,7 +2132,7 @@ function OrdersView({
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Payment status" className="w-full sm:w-40">
               <SelectValue placeholder="Payment" />
             </SelectTrigger>
             <SelectContent>
@@ -2048,7 +2150,7 @@ function OrdersView({
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Purchase category" className="w-full sm:w-40">
               <SelectValue placeholder="Purchase category" />
             </SelectTrigger>
             <SelectContent>
@@ -2068,7 +2170,7 @@ function OrdersView({
                 setPage(1);
               }}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger aria-label="Supplier" className="w-full sm:w-44">
                 <SelectValue placeholder="Supplier" />
               </SelectTrigger>
               <SelectContent>
@@ -2088,7 +2190,7 @@ function OrdersView({
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Date range" className="w-full sm:w-40">
               <SelectValue placeholder="Date range" />
             </SelectTrigger>
             <SelectContent>
@@ -2101,7 +2203,7 @@ function OrdersView({
             </SelectContent>
           </Select>
           <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger aria-label="Sort orders" className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -2136,15 +2238,16 @@ function OrdersView({
               className="w-40"
             />
             {!customRangeReady && (
-              <span className="text-xs text-muted-foreground">Choose both dates.</span>
+              <span className="text-xs text-muted-foreground">{dates.error}</span>
             )}
           </div>
         )}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {["all", "active", "packed", "dispatched", "delivered", "cancelled"].map((item) => (
+        {ORDER_STAGES.map((item) => (
           <Button
             key={item}
+            aria-pressed={status === item}
             size="sm"
             variant={status === item ? "secondary" : "ghost"}
             onClick={() => {
@@ -2152,11 +2255,25 @@ function OrdersView({
               setPage(1);
             }}
           >
-            {item[0].toUpperCase() + item.slice(1)}
+            {stageLabel(item)}
           </Button>
         ))}
       </div>
-      {pageOrders.length === 0 && (
+      {hasFilters && (
+        <Button variant="outline" onClick={resetFilters}>
+          Clear filters
+        </Button>
+      )}
+      {(loading || query !== debouncedQuery) && <p role="status">Loading orders?</p>}
+      {error && (
+        <p role="alert">
+          {error}{" "}
+          <Button variant="outline" onClick={() => setRetry((value) => value + 1)}>
+            Retry orders
+          </Button>
+        </p>
+      )}
+      {!loading && !error && customRangeReady && pageOrders.length === 0 && (
         <Card className="p-10 text-center text-muted-foreground" role="status">
           <p>{hasFilters ? "No orders match your filters." : "No orders yet"}</p>
           <p className="mt-2 text-sm">
@@ -2164,232 +2281,286 @@ function OrdersView({
               ? "Try different filters or clear the filters to see all orders."
               : "Orders you place with approved wholesalers will appear here."}
           </p>
-          {hasFilters && (
-            <Button
-              className="mt-4"
-              variant="outline"
-              onClick={() => {
-                setQuery("");
-                setStatus("all");
-                setPayment("all");
-                setRange("all");
-                setCustomFrom("");
-                setCustomTo("");
-                setWholesalerId("all");
-                setPurchaseCategory("all");
-                setPage(1);
-              }}
-            >
-              Clear filters
-            </Button>
-          )}
         </Card>
       )}
-      {pageOrders.map((raw) => {
-        const o = withSupply(raw, supply);
-        const open = openOrderId === o.id;
-        const units = o.order_items.reduce((total, item) => total + (item.supplied_quantity ?? item.quantity), 0);
-        return (
-          <Card key={o.id} id={`order-${o.id}`} className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-display text-lg font-bold">{o.order_number}</span>
-                  <StatusBadge status={o.status} />
-                  <PaymentBadge method={o.payment_method} status={o.payment_status} cancelled={o.status === "cancelled"} />
-                  {o.purchase_category && (
-                    <Badge className={purchaseCategoryBadgeClass(o.purchase_category)}>
-                      {purchaseCategoryLabel(o.purchase_category)}
+      {!loading &&
+        query === debouncedQuery &&
+        !error &&
+        customRangeReady &&
+        pageOrders.map((raw) => {
+          const o =
+            supplyState.key === orderIdsKey && !supplyState.error ? withSupply(raw, supply) : raw;
+          const open = openOrderId === o.id;
+          const detailReady = hasOrderDetails(o);
+          const financialReady =
+            detailReady && supplyState.key === orderIdsKey && !supplyState.error;
+          const units = o.order_items.reduce(
+            (total, item) => total + (item.supplied_quantity ?? item.quantity),
+            0,
+          );
+          return (
+            <Card
+              key={o.id}
+              id={`order-${o.id}`}
+              className={`p-4 ${open ? "ring-2 ring-primary/20" : ""}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-display text-lg font-bold">{o.order_number}</span>
+                    <StatusBadge status={o.status} />
+                    <Badge variant="outline">
+                      {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
                     </Badge>
-                  )}
-                </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  From{" "}
-                  <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span> ·{" "}
-                  {new Date(o.created_at).toLocaleDateString()} · {timeAgo(o.created_at)}
-                  {o.procurement_reference && (
-                    <>
-                      {" · "}
-                      <span title="Part of a multi-supplier purchase">
-                        {o.procurement_reference}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-display text-xl font-bold">{formatGHS(shownTotal(o))}</div>
-                {o.effective_total_ghs != null && (
-                  <div className="text-xs text-muted-foreground">placed as {formatGHS(o.total_ghs)}</div>
-                )}
-                {o.has_open_amendment && (
-                  <div className="text-xs font-medium text-amber-600">A change needs your decision</div>
-                )}
-                {backorderBadge(o.backorder_state) && (
-                  <div className="text-xs font-medium text-primary">
-                    {backorderBadge(o.backorder_state)}
+                    {o.purchase_category && (
+                      <Badge className={purchaseCategoryBadgeClass(o.purchase_category)}>
+                        {purchaseCategoryLabel(o.purchase_category)}
+                      </Badge>
+                    )}
                   </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  {o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    From{" "}
+                    <span className="font-medium text-foreground">{o.wholesaler?.name ?? "—"}</span>{" "}
+                    · {orderDate(o.created_at)}
+                    {o.procurement_reference && (
+                      <>
+                        {" · "}
+                        <span title="Part of a multi-supplier purchase">
+                          {o.procurement_reference}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-display text-xl font-bold">
+                    {supplyState.key === orderIdsKey && !supplyState.error
+                      ? formatGHS(shownTotal(o))
+                      : "Verifying amount..."}
+                  </div>
+                  {o.effective_total_ghs != null && (
+                    <div className="text-xs text-muted-foreground">
+                      placed as {formatGHS(o.total_ghs)}
+                    </div>
+                  )}
+                  {o.has_open_amendment && (
+                    <div className="text-xs font-medium text-amber-600">
+                      A change needs your decision
+                    </div>
+                  )}
+                  {backorderBadge(o.backorder_state) && (
+                    <div className="text-xs font-medium text-primary">
+                      {backorderBadge(o.backorder_state)}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {o.item_count ?? o.order_items.length} item(s) · {o.unit_count ?? units} unit(s)
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
-              {canRespondToSupply && isAwaitingOnlinePayment(o) && <PayNowButton orderId={o.id} />}
-              {onRequestReturn && o.status === "delivered" && (
+              <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+                {canRespondToSupply && isAwaitingOnlinePayment(o) && (
+                  <PayNowButton orderId={o.id} />
+                )}
+                {onRequestReturn && o.status === "delivered" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!o.return_eligible}
+                    aria-label={`Request return for ${o.order_number}`}
+                    title={
+                      o.return_eligible
+                        ? `Return by ${orderDate(o.return_deadline!)}`
+                        : "Return window closed or eligibility unavailable"
+                    }
+                    onClick={() => onRequestReturn(o.id, o.order_number)}
+                  >
+                    {o.return_eligible ? "Request return" : "Return unavailable"}
+                  </Button>
+                )}
+                {onReorder && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Reorder ${o.order_number}`}
+                    onClick={() => void onReorder(o.id, o.order_number)}
+                  >
+                    Reorder
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => onRequestReturn(o.id, o.order_number)}
-                >
-                  Request return
-                </Button>
-              )}
-              {onReorder && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void onReorder(o.id, o.order_number)}
-                >
-                  Reorder
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (open) {
-                    setOpenOrderId(null);
-                    return;
-                  }
-                  if (o.order_items.length === 0) {
-                    const detail = await loadOrderDetail(o.id, o.item_count);
-                    if (!detail) return;
-                  }
-                  setOpenOrderId(o.id);
-                }}
-                aria-expanded={open}
-              >
-                {open ? "Hide Order" : "View Order"}
-              </Button>
-            </div>
-            {open && (
-              <>
-                <OrderTimeline o={o} />
-                <SupplyChangePanel
-                  orderId={o.id}
-                  orderStatus={o.status}
-                  paymentStatus={o.payment_status}
-                  side="pharmacy"
-                  canAct={canRespondToSupply}
-                  printable={forDocument({ ...o, pharmacy, wholesaler: o.wholesaler ?? null })}
-                  onChanged={() => {
-                    setSupplyTick((value) => value + 1);
-                    void loadOrderDetail(o.id);
+                  onClick={async () => {
+                    if (open) {
+                      setOpenOrderId(null);
+                      return;
+                    }
+                    if (!hasOrderDetails(o)) {
+                      const detail = await loadOrderDetail(o.id, o.item_count);
+                      if (!detail) return;
+                    }
+                    setOpenOrderId(o.id);
                   }}
-                />
-                <DeliveryCheckPanel
-                  orderId={o.id}
-                  orderStatus={o.status}
-                  side="pharmacy"
-                  canAct={canRespondToSupply}
-                  refreshKey={supplyTick}
-                  onChanged={() => {
-                    setSupplyTick((value) => value + 1);
-                    void loadOrderDetail(o.id);
-                  }}
-                />
-                <OrderActivityTimeline orderId={o.id} />
-
-                <ReceiptStatusPanel order={o} />
-
-                <OnlinePaymentPanel orderId={o.id} paymentMethod={o.payment_method} />
-
-                <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
-
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm">
-                  <div>
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                      Payment
-                    </div>
-                    <div className="font-medium">
-                      {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
-                    </div>
-                  </div>
-                  {canChangePayment && canChangeSettlement(o) && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setSettlementTarget({
-                          orderId: o.id,
-                          orderNumber: o.order_number,
-                          current: effectiveSettlementMethod(o),
-                        })
-                      }
-                    >
-                      Change payment method
-                    </Button>
+                  aria-label={`${open ? "Hide" : "View"} order ${o.order_number}`}
+                  aria-expanded={open}
+                >
+                  {open ? "Hide Order" : "View Order"}
+                </Button>
+              </div>
+              {open && !detailReady && (
+                <p role="status">
+                  Order details are incomplete.{" "}
+                  <Button onClick={() => void loadOrderDetail(o.id, o.item_count)}>
+                    Reload details
+                  </Button>
+                </p>
+              )}
+              {open && detailReady && (
+                <>
+                  <OrderTimeline o={o} />
+                  {!financialReady && (
+                    <p role="alert">
+                      {supplyState.error
+                        ? "Supply details could not be verified. Documents are unavailable."
+                        : "Verifying supply details before showing amounts and documents?"}{" "}
+                      <Button variant="outline" onClick={() => setSupplyTick((value) => value + 1)}>
+                        Retry supply details
+                      </Button>
+                    </p>
                   )}
-                </div>
+                  {financialReady && (
+                    <>
+                      <SupplyChangePanel
+                        orderId={o.id}
+                        orderStatus={o.status}
+                        paymentStatus={o.payment_status}
+                        side="pharmacy"
+                        canAct={canRespondToSupply}
+                        printable={forDocument({
+                          ...o,
+                          pharmacy: o.pharmacy,
+                          wholesaler: o.wholesaler ?? null,
+                        })}
+                        onChanged={() => {
+                          setSupplyTick((value) => value + 1);
+                          void loadOrderDetail(o.id);
+                        }}
+                      />
+                    </>
+                  )}
+                  <DeliveryCheckPanel
+                    orderId={o.id}
+                    orderStatus={o.status}
+                    side="pharmacy"
+                    canAct={canRespondToSupply}
+                    refreshKey={supplyTick}
+                    onChanged={() => {
+                      setSupplyTick((value) => value + 1);
+                      void loadOrderDetail(o.id);
+                    }}
+                  />
+                  <OrderActivityTimeline orderId={o.id} />
 
-                <OrderPrintActions
-                  order={forDocument({ ...o, pharmacy, wholesaler: o.wholesaler ?? null })}
-                />
+                  <ReceiptStatusPanel order={o} />
 
-                <div className="mt-4 divide-y divide-border rounded-xl border border-border">
-                  {o.order_items.map((it, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 p-3 text-sm">
-                      <div className="min-w-0">
-                        <div className="font-medium">{it.product_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatGHS(it.unit_price_ghs)} × {it.supplied_quantity ?? it.quantity}
-                          {it.supplied_quantity != null && it.supplied_quantity !== it.quantity
-                            ? ` (ordered ${it.quantity})`
-                            : ""}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge className={purchaseCategoryBadgeClass(it.purchase_category)}>
-                            {purchaseCategoryLabel(it.purchase_category)}
-                          </Badge>
-                          {canReclassify && it.id && o.status !== "cancelled" && (
-                            <button
-                              type="button"
-                              className="text-xs font-medium text-primary hover:underline"
-                              onClick={() =>
-                                setClassifyTarget({
-                                  itemId: it.id!,
-                                  productName: it.product_name,
-                                  current: it.purchase_category,
-                                  orderNumber: o.order_number,
-                                })
-                              }
-                            >
-                              Change classification
-                            </button>
-                          )}
-                        </div>
+                  <OnlinePaymentPanel orderId={o.id} paymentMethod={o.payment_method} />
+
+                  <DeliveryPanel orderId={o.id} status={o.status} side="pharmacy" canEdit={false} />
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-3 text-sm">
+                    <div>
+                      <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                        Payment
                       </div>
                       <div className="font-medium">
-                        {formatGHS(Number(it.unit_price_ghs) * it.quantity)}
+                        {settlementSummary(effectiveSettlementMethod(o), o.payment_status)}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
-        );
-      })}
+                    {canChangePayment && canChangeSettlement(o) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setSettlementTarget({
+                            orderId: o.id,
+                            orderNumber: o.order_number,
+                            current: effectiveSettlementMethod(o),
+                          })
+                        }
+                      >
+                        Change payment method
+                      </Button>
+                    )}
+                  </div>
+
+                  {financialReady && (
+                    <OrderPrintActions
+                      order={forDocument({
+                        ...o,
+                        pharmacy: o.pharmacy,
+                        wholesaler: o.wholesaler ?? null,
+                      })}
+                    />
+                  )}
+
+                  <div className="mt-4 divide-y divide-border rounded-xl border border-border">
+                    {o.order_items.map((it, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 p-3 text-sm">
+                        <div className="min-w-0">
+                          <div className="font-medium">{it.product_name}</div>
+                          <p className="text-xs text-muted-foreground">
+                            {it.catalog_details
+                              ? `Current catalogue: ${it.catalog_details}`
+                              : "Product specifications were not recorded."}
+                          </p>
+                          <div className="text-xs text-muted-foreground">
+                            {formatGHS(it.unit_price_ghs)} × {it.supplied_quantity ?? it.quantity}
+                            {it.supplied_quantity != null && it.supplied_quantity !== it.quantity
+                              ? ` (ordered ${it.quantity})`
+                              : ""}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <Badge className={purchaseCategoryBadgeClass(it.purchase_category)}>
+                              {purchaseCategoryLabel(it.purchase_category)}
+                            </Badge>
+                            {canReclassify && it.id && o.status !== "cancelled" && (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-primary hover:underline"
+                                onClick={() =>
+                                  setClassifyTarget({
+                                    itemId: it.id!,
+                                    productName: it.product_name,
+                                    current: it.purchase_category,
+                                    orderNumber: o.order_number,
+                                  })
+                                }
+                              >
+                                Change classification
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="font-medium">
+                          {financialReady ? formatGHS(lineAmount(it)) : "Amount unavailable"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </Card>
+          );
+        })}
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>
-          Showing {pageOrders.length} of {totalCount} orders
+          Showing {orders.length} of {totalCount} matching orders
         </span>
         <div className="flex gap-2">
           <Button
@@ -2446,7 +2617,8 @@ function ReceiptStatusPanel({ order }: { order: OrderRow }) {
     body = `The receipt was emailed ${timeAgo(order.receipt_sent_at)}${order.receipt_sent_to ? ` to ${order.receipt_sent_to}` : ""}.`;
   } else if (order.payment_status === "paid") {
     title = "Payment confirmed";
-    body = "Payment has been confirmed. Your receipt email is being prepared by the wholesaler.";
+    body =
+      "Payment is confirmed. No receipt email is recorded as sent. Contact the supplier with your order reference for a receipt.";
   } else if (order.status !== "delivered") {
     title = "Receipt locked";
     body = "The receipt will only be issued after the order is delivered and payment is confirmed.";

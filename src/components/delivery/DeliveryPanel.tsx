@@ -112,7 +112,17 @@ export function DeliveryPanel({
     !hasProof(delivery) &&
     !showDispatchButton &&
     !showProofButton;
-  if (nothingToShow) return null;
+  if (nothingToShow)
+    return (
+      <section className="mt-4 rounded-xl border p-3 text-sm" aria-label="Delivery">
+        <h4 className="font-semibold">Delivery</h4>
+        <p className="text-muted-foreground">
+          {status === "delivered"
+            ? "Marked delivered by the supplier. No dispatch details or proof of delivery have been provided."
+            : "Awaiting dispatch details. Tracking and expected arrival will appear when the supplier provides them."}
+        </p>
+      </section>
+    );
 
   return (
     <section className="mt-4 rounded-xl border border-border p-3 text-sm" aria-label="Delivery">

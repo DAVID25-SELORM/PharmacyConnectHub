@@ -26,11 +26,17 @@ export type SupplySummary = {
 export type SupplyMap = Record<string, SupplySummary>;
 
 /** Summaries for the amended orders among `orderIds` (un-amended orders are simply absent). Never throws. */
-export async function loadOrderSupply(orderIds: string[]): Promise<SupplyMap> {
+export async function loadOrderSupply(
+  orderIds: string[],
+  requireVerified = false,
+): Promise<SupplyMap> {
   const ids = [...new Set(orderIds)].filter(Boolean);
   if (ids.length === 0) return {};
   const { data, error } = await db.rpc("order_supply_summary", { p_order_ids: ids });
-  if (error || !Array.isArray(data)) return {};
+  if (error || !Array.isArray(data)) {
+    if (requireVerified) throw new Error("Supply details could not be verified.");
+    return {};
+  }
   const map: SupplyMap = {};
   for (const row of data as SupplySummary[]) map[row.order_id] = row;
   return map;

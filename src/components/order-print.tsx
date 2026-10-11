@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { formatGHS } from "@/lib/format";
 import {
   canPrintInvoice,
@@ -44,6 +50,7 @@ export type PrintableOrder = {
   wholesaler?: PartyDetails | null;
   order_items: Array<{
     product_name: string;
+    catalog_details?: string | null;
     quantity: number;
     /** What the wholesaler is committed to supply once the order has been amended. Absent = as ordered. */
     supplied_quantity?: number | null;
@@ -89,7 +96,9 @@ export function OrderPrintActions({
     const previousTitle = document.title;
     document.title = `${modeLabels[mode]} - ${order.order_number}`;
     window.print();
-    window.setTimeout(() => { document.title = previousTitle; }, 0);
+    window.setTimeout(() => {
+      document.title = previousTitle;
+    }, 0);
   };
   return (
     <div className="mt-4">
@@ -117,9 +126,20 @@ export function OrderPrintActions({
         <Dialog open onOpenChange={(open) => !open && setMode(null)}>
           <DialogContent className="max-h-[94dvh] max-w-5xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{modeLabels[mode]} · {order.order_number}</DialogTitle>
+              <DialogTitle>
+                {modeLabels[mode]} · {order.order_number}
+              </DialogTitle>
+              <DialogDescription>
+                Review the document before printing. Printing does not change the order or confirm
+                payment.
+              </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end print:hidden"><Button onClick={print}><Printer className="mr-2 h-4 w-4" />Print</Button></div>
+            <div className="flex justify-end print:hidden">
+              <Button onClick={print}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </Button>
+            </div>
             <PrintableOrderDocument order={order} mode={mode} preview />
           </DialogContent>
         </Dialog>
@@ -162,10 +182,13 @@ export function PrintableOrderDocument({
     <article className={`print-document ${preview ? "block" : "hidden print:block"}`}>
       <header className="mb-6 border-b-2 border-black pb-3">
         <div className="flex items-start justify-between gap-6">
-          <BusinessIdentityHeader business={mode === "pharmacy" ? order.pharmacy : order.wholesaler} />
+          <BusinessIdentityHeader
+            business={mode === "pharmacy" ? order.pharmacy : order.wholesaler}
+          />
           <div className="text-right text-xs">
             {mode === "invoice" ? "Invoice no." : "Order reference"}: <b>{order.order_number}</b>
-            <br />Issued: <b>{formatReportDate(order.created_at)}</b>
+            <br />
+            Issued: <b>{formatReportDate(order.created_at)}</b>
           </div>
         </div>
         <h2 className="mt-2 text-xl font-bold uppercase">{modeLabels[mode]}</h2>
@@ -291,6 +314,9 @@ export function PrintableOrderDocument({
                   {item.sku && <div className="text-xs">SKU: {item.sku}</div>}
                 </td>
                 <td className="p-3">
+                  {item.catalog_details && (
+                    <div className="text-xs">Current catalogue: {item.catalog_details}</div>
+                  )}
                   {[
                     item.strength,
                     item.form ?? item.product?.form,
