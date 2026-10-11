@@ -9,6 +9,7 @@ import { EnterpriseRfqEditor } from "./EnterpriseRfqEditor";
 import { EnterpriseRfqDetail } from "./EnterpriseRfqDetail";
 import { PharmacyRfqDetail } from "./PharmacyRfqDetail";
 import { WholesalerRfqDetail } from "./WholesalerRfqDetail";
+import { DocumentBrandingSettings } from "@/components/documents/DocumentBrandingSettings";
 export function EnterpriseRfqWorkspace() {
   const { business } = useSession();
   return business ? <RfqWorkspace key={business.id} business={business} /> : null;
@@ -117,6 +118,12 @@ function RfqWorkspace({ business }: { business: Business }) {
             </Button>
           </div>
         </div>
+        {manage && (
+          <details className="rounded border p-4">
+            <summary className="cursor-pointer font-medium">Document branding settings</summary>
+            <DocumentBrandingSettings businessId={business.id} businessName={business.name} />
+          </details>
+        )}
         {report && (
           <section className="rounded border p-4">
             <h2 className="font-semibold">Procurement report for selected dates</h2>

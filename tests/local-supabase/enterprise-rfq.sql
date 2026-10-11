@@ -2,7 +2,7 @@
 BEGIN;
 DO $$
 DECLARE c RECORD; r UUID; item UUID; versionid UUID; qid UUID; groupid UUID; orderid UUID; payload JSONB; alloc JSONB; result JSONB;
- buyer UUID; seller UUID; seller_two UUID; other_w UUID; other_product UUID; req UUID:=gen_random_uuid(); stock_before INTEGER; failed BOOLEAN; count_visible INTEGER; open_r UUID; open_item UUID; open_version UUID;
+ buyer UUID; seller UUID; seller_two UUID; other_w UUID; other_product UUID; req UUID:=gen_random_uuid(); stock_before INTEGER; failed BOOLEAN; count_visible INTEGER; open_r UUID; open_item UUID; open_version UUID; negotiation UUID; bad JSONB;
 BEGIN
  SELECT * INTO c FROM zz.cc LIMIT 1;
  SELECT owner_id INTO buyer FROM public.businesses WHERE id=c.good;
@@ -28,6 +28,26 @@ BEGIN
  versionid:=public.save_enterprise_quote(r,c.alpha,payload||'{"reason":"Updated terms"}',true,1,gen_random_uuid());
  IF (SELECT count(*) FROM public.rfq_quote_versions WHERE quote_id=qid)<>2 THEN RAISE EXCEPTION 'Quote history overwritten'; END IF;
  PERFORM set_config('request.jwt.claim.sub',buyer::text,true);
+ -- Exercise the actual negotiation RPC, including values that SQL NULL logic can miss.
+ FOREACH bad IN ARRAY ARRAY['null'::jsonb,'[]'::jsonb,'{}'::jsonb,'{"price":null}'::jsonb,'{"price":0}'::jsonb,'{"price":{}}'::jsonb,'{"delivery":" "}'::jsonb,'{"quantity":1.5}'::jsonb,'{"price":1,"quantity":2}'::jsonb] LOOP
+ failed:=false;
+ BEGIN PERFORM public.rfq_negotiate(r,c.alpha,versionid,bad); EXCEPTION WHEN raise_exception THEN failed:=true; END;
+ IF NOT failed THEN RAISE EXCEPTION 'Invalid proposal accepted: %',bad; END IF;
+ END LOOP;
+ FOREACH bad IN ARRAY ARRAY['{"quantity":10}'::jsonb,'{"delivery":"Tomorrow"}'::jsonb,'{"credit":"30 days"}'::jsonb,'{"substitution":"Requested brand"}'::jsonb] LOOP
+ negotiation:=public.rfq_negotiate(r,c.alpha,versionid,bad);
+ PERFORM set_config('request.jwt.claim.sub',seller::text,true);
+ PERFORM public.rfq_respond_negotiation(negotiation,'rejected','Original terms apply');
+ PERFORM set_config('request.jwt.claim.sub',buyer::text,true);
+ END LOOP;
+ negotiation:=public.rfq_negotiate(r,c.alpha,versionid,'{"price":11.11}'::jsonb);
+ PERFORM set_config('request.jwt.claim.sub',seller::text,true);
+ versionid:=public.save_enterprise_quote(r,c.alpha,payload||'{"reason":"Negotiation response"}',true,2,gen_random_uuid());
+ PERFORM public.rfq_respond_negotiation(negotiation,'accepted','Confirmed pricing in new revision',versionid);
+ IF (SELECT status FROM public.rfq_negotiations WHERE id=negotiation)<>'accepted' THEN RAISE EXCEPTION 'Negotiation response not saved'; END IF;
+ IF public.rfq_document(r,versionid)->'issuer'->>'id'<>c.alpha::text THEN RAISE EXCEPTION 'Quotation issuer must be supplier'; END IF;
+ PERFORM set_config('request.jwt.claim.sub',buyer::text,true);
+ IF public.rfq_document(r)->'issuer'->>'id'<>c.good::text THEN RAISE EXCEPTION 'RFQ issuer must be pharmacy'; END IF;
  alloc:=jsonb_build_array(jsonb_build_object('versionId',versionid,'quoteItemId',(SELECT id FROM public.rfq_quote_items WHERE rfq_quote_id=qid),'quantity',6,'acceptAlternative',true,'category','cash_private'));
  SELECT stock INTO stock_before FROM public.products WHERE id=c.p_item_a;
  req:=gen_random_uuid(); result:=public.propose_rfq_awards(r,alloc,'cod',req); groupid:=(result->>0)::uuid;
@@ -77,6 +97,12 @@ BEGIN
  PERFORM set_config('request.jwt.claim.sub',buyer::text,true);
  result:=public.rfq_procurement_report(c.good,NULL,NULL);
  IF NOT (result ? 'viewedInvitations' AND result ? 'submittedQuotesNotAwarded' AND result ? 'requestedProducts') THEN RAISE EXCEPTION 'Procurement report is missing participant metrics'; END IF;
+ -- Scheduled reminders must record each eligible invitation only once.
+ UPDATE public.rfqs SET response_deadline=now()+interval '12 hours' WHERE id=open_r;
+ PERFORM public.run_enterprise_rfq_deadline_reminders();
+ IF (SELECT count(*) FROM public.rfq_reminder_receipts WHERE rfq_id=open_r AND wholesaler_id=other_w)<>1 THEN RAISE EXCEPTION 'Scheduled reminder not recorded'; END IF;
+ PERFORM public.run_enterprise_rfq_deadline_reminders();
+ IF (SELECT count(*) FROM public.rfq_reminder_receipts WHERE rfq_id=open_r AND wholesaler_id=other_w)<>1 THEN RAISE EXCEPTION 'Scheduled reminder duplicated'; END IF;
  -- No broad administrative commercial access without an audited investigation.
  PERFORM set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
  SET LOCAL ROLE authenticated;

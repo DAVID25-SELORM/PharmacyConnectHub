@@ -20,6 +20,9 @@ BEGIN
       RAISE EXCEPTION 'Missing function: %', signature;
     END IF;
   END LOOP;
+  IF position('jsonb_object_length' IN pg_get_functiondef('public.rfq_negotiate(uuid,uuid,uuid,jsonb)'::regprocedure))>0 THEN
+    RAISE EXCEPTION 'Apply 20261117100000_rfq_production_corrections.sql: negotiation still uses an unsupported function';
+  END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=to_regclass('public.business_document_branding') AND relrowsecurity) THEN
     RAISE EXCEPTION 'Branding table or row security missing';
   END IF;
