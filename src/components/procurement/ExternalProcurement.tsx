@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { WorkspaceProcurementReport } from "./WorkspaceProcurementReport";
 import { SupplierProfile } from "./SupplierProfile";
 import { ExternalSupplyOrders } from "./ExternalSupplyOrders";
@@ -308,13 +309,27 @@ export function ExternalProcurement({
                 setOffset(0);
               }}
             >
-              {t === "requests" ? "Requests & orders" : t === "history" ? "Product procurement history" : label(t)}
+              {t === "requests"
+                ? "Requests & orders"
+                : t === "history"
+                  ? "Product procurement history"
+                  : label(t)}
             </Button>
           ))}
         </nav>
-        {tab === "requests" && context && <ExternalSupplyOrders key={`${business.id}-${revision}`} pharmacyId={business.id} canRecord={context.can_record}
-          onReceive={(receipt) => { setEditing(null); setDraft(receipt); setRequest(crypto.randomUUID()); }}
-          onReceipt={(id) => void run(() => open(id))} />}
+        {tab === "requests" && context && (
+          <ExternalSupplyOrders
+            key={`${business.id}-${revision}`}
+            pharmacyId={business.id}
+            canRecord={context.can_record}
+            onReceive={(receipt) => {
+              setEditing(null);
+              setDraft(receipt);
+              setRequest(crypto.randomUUID());
+            }}
+            onReceipt={(id) => void run(() => open(id))}
+          />
+        )}
         {(tab === "purchases" || tab === "history") && (
           <section className={panel}>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -681,56 +696,58 @@ export function ExternalProcurement({
         {tab === "workspaces" && <WorkspaceProcurementReport />}
         {tab === "settings" && context?.is_owner && (
           <section className={panel}>
-            <a href="/settings" className="text-primary underline">Manage document branding in Business Settings</a>
+            <a href="/settings" className="text-primary underline">
+              Manage document branding in Business Settings
+            </a>
             <div className="border-t pt-6">
-            <h2 className="text-lg font-semibold">Review policy</h2>
-            <p>
-              Assign active pharmacy members who are authorized to perform pharmacist reviews.
-              Assignment records authorization; it does not verify professional credentials. Unknown
-              sources cannot be approved for saleable stock.
-            </p>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={context.collect_identity}
-                disabled={busy}
-                onChange={(e) =>
-                  void run(async () => {
-                    await externalRpc("configure_external_procurement", {
-                      p_pharmacy_id: business.id,
-                      p_collect_identity: e.target.checked,
-                    });
-                    reload();
-                  })
-                }
-              />
-              Enable optional identity-reference collection
-            </label>
-            <p className="text-sm text-muted-foreground">
-              Collect only a necessary reference, never identity document images. Disabling
-              collection preserves previously recorded evidence.
-            </p>
-            {context.staff.map((s) => (
-              <label key={s.id} className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">Review policy</h2>
+              <p>
+                Assign active pharmacy members who are authorized to perform pharmacist reviews.
+                Assignment records authorization; it does not verify professional credentials.
+                Unknown sources cannot be approved for saleable stock.
+              </p>
+              <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={context.reviewers.includes(s.id)}
+                  checked={context.collect_identity}
                   disabled={busy}
                   onChange={(e) =>
                     void run(async () => {
                       await externalRpc("configure_external_procurement", {
                         p_pharmacy_id: business.id,
-                        p_collect_identity: context.collect_identity,
-                        p_reviewer: s.id,
-                        p_enabled: e.target.checked,
+                        p_collect_identity: e.target.checked,
                       });
                       reload();
                     })
                   }
                 />
-                {s.name}
+                Enable optional identity-reference collection
               </label>
-            ))}
+              <p className="text-sm text-muted-foreground">
+                Collect only a necessary reference, never identity document images. Disabling
+                collection preserves previously recorded evidence.
+              </p>
+              {context.staff.map((s) => (
+                <label key={s.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={context.reviewers.includes(s.id)}
+                    disabled={busy}
+                    onChange={(e) =>
+                      void run(async () => {
+                        await externalRpc("configure_external_procurement", {
+                          p_pharmacy_id: business.id,
+                          p_collect_identity: context.collect_identity,
+                          p_reviewer: s.id,
+                          p_enabled: e.target.checked,
+                        });
+                        reload();
+                      })
+                    }
+                  />
+                  {s.name}
+                </label>
+              ))}
             </div>
           </section>
         )}
@@ -742,7 +759,13 @@ export function ExternalProcurement({
           context={context}
           pharmacy={business.id}
           busy={busy}
-          close={() => setDraft(null)}
+          close={() => {
+            void confirmAction(
+              "Discard unsaved receipt changes? Saved receipts remain available to continue editing.",
+            ).then((discard) => {
+              if (discard) setDraft(null);
+            });
+          }}
           contact={setContactKind}
           save={() =>
             void run(async () => {
@@ -945,7 +968,13 @@ function PurchaseForm({
         <DialogHeader>
           <DialogTitle>Record external purchase</DialogTitle>
         </DialogHeader>
-        {d.external_order_id && <p className="rounded border p-3 text-sm">Linked purchase order: record only the quantities delivered now. Remove undelivered lines and adjust batch quantities to match. Keep ordered medicine names; select the actual seller and original source before review.</p>}
+        {d.external_order_id && (
+          <p className="rounded border p-3 text-sm">
+            Linked purchase order: record only the quantities delivered now. Remove undelivered
+            lines and adjust batch quantities to match. Keep ordered medicine names; select the
+            actual seller and original source before review.
+          </p>
+        )}
         <nav className="flex flex-wrap gap-2">
           {["Purchase & seller", "Original source", "Products & batches", "Review receipt"].map(
             (s, i) => (
@@ -1135,7 +1164,11 @@ function PurchaseForm({
                 remove={() => patch({ items: d.items.filter((_, n) => n !== index) })}
               />
             ))}
-            <Button disabled={!!d.external_order_id} variant="outline" onClick={() => patch({ items: [...d.items, newLine()] })}>
+            <Button
+              disabled={!!d.external_order_id}
+              variant="outline"
+              onClick={() => patch({ items: [...d.items, newLine()] })}
+            >
               Add medicine
             </Button>
           </div>
@@ -1346,12 +1379,37 @@ function ProductLine({
         ].map((k) => (
           <Field key={k} title={label(k)}>
             <Input
-              disabled={(!!i.external_order_line_id && k === "name") || (!!i.master_product_id && !["registration", "barcode", "notes"].includes(k))}
+              disabled={
+                (!!i.external_order_line_id && k === "name") ||
+                (!!i.master_product_id && !["registration", "barcode", "notes"].includes(k))
+              }
               value={i.product[k as keyof typeof i.product] ?? ""}
               onChange={(e) => update({ ...i, product: { ...i.product, [k]: e.target.value } })}
             />
           </Field>
         ))}
+        {i.external_order_line_id && i.external_order_unit && i.external_order_unit !== "packs" && (
+          <Field title={`Inventory packs per ordered unit (${i.external_order_unit})`}>
+            <Input
+              type="number"
+              min="1"
+              max="1000000"
+              step="1"
+              value={i.external_packs_per_unit ?? ""}
+              onChange={(e) =>
+                update({
+                  ...i,
+                  external_packs_per_unit: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+            <p className="text-xs">
+              Confirm the actual inventory pack definition. One bottle can be one inventory pack; a
+              box may contain multiple packs. The first saved conversion is retained for this order
+              line.
+            </p>
+          </Field>
+        )}
         <Field title="Total quantity (packs)">
           <Input
             type="number"
@@ -1360,8 +1418,16 @@ function ProductLine({
             value={i.quantity}
             onChange={(e) => update({ ...i, quantity: Number(e.target.value) })}
           />
+          {i.external_order_unit && i.external_order_unit !== "packs" && (
+            <p className="text-xs">
+              {i.external_packs_per_unit
+                ? `${i.quantity / i.external_packs_per_unit} ${i.external_order_unit} received`
+                : "Confirm conversion before saving."}{" "}
+              Enter actual inventory packs and matching batch quantities.
+            </p>
+          )}
         </Field>
-        <Field title="Unit cost (GHS)">
+        <Field title="Cost per inventory pack (GHS)">
           <Input
             type="number"
             min="0"
@@ -1562,7 +1628,7 @@ function PurchaseDetail({
             </Button>
             {c.can_record && editable && (
               <Button variant="outline" onClick={edit}>
-                Edit receipt
+                Continue / edit receipt
               </Button>
             )}
           </div>

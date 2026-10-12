@@ -50,6 +50,7 @@ export type Context = {
   companies: Contact[];
 };
 export type Product = {
+  unit?: string;
   name: string;
   brand?: string;
   generic_name?: string;
@@ -73,6 +74,8 @@ export type Batch = {
 };
 export type Line = {
   external_order_line_id?: string;
+  external_order_unit?: string;
+  external_packs_per_unit?: number;
   id?: string;
   master_product_id: string;
   inventory_item_id: string;
@@ -100,7 +103,14 @@ export type Draft = {
 };
 export type Purchase = {
   external_order_id?: string;
-  external_order_allocations?: { line_id: string; product_name: string; quantity: number }[];
+  external_order_allocations?: {
+    line_id: string;
+    product_name: string;
+    quantity: number;
+    unit?: string;
+    packs_per_unit?: number;
+    inventory_packs?: number;
+  }[];
   id: string;
   reference: string;
   purchase_date: string;
@@ -299,7 +309,15 @@ export function draftFromPurchase(p: Detail): Draft {
     due_date: p.due_date ?? "",
     items: p.items.map((i) => ({
       ...i,
-      external_order_line_id: p.external_order_allocations?.find(a => a.product_name === i.product_snapshot.name)?.line_id,
+      external_order_line_id: p.external_order_allocations?.find(
+        (a) => a.product_name === i.product_snapshot.name,
+      )?.line_id,
+      external_order_unit: p.external_order_allocations?.find(
+        (a) => a.product_name === i.product_snapshot.name,
+      )?.unit,
+      external_packs_per_unit: p.external_order_allocations?.find(
+        (a) => a.product_name === i.product_snapshot.name,
+      )?.packs_per_unit,
       master_product_id: i.master_product_id ?? "",
       inventory_item_id: i.inventory_item_id ?? "",
       product: i.product_snapshot,
@@ -329,6 +347,17 @@ export function validateDraft(d: Draft): string | null {
     return "Enter the original source name or choose Unknown.";
   if (!d.items.length) return "Add at least one medicine.";
   for (const i of d.items) {
+    if (
+      i.external_order_line_id &&
+      i.external_order_unit &&
+      i.external_order_unit !== "packs" &&
+      (!Number.isSafeInteger(i.external_packs_per_unit) ||
+        !i.external_packs_per_unit ||
+        i.external_packs_per_unit < 1 ||
+        i.external_packs_per_unit > 1000000 ||
+        !Number.isInteger(i.quantity / i.external_packs_per_unit))
+    )
+      return "Confirm inventory packs per ordered unit, and enter a whole number of ordered units received.";
     if (!i.product.name.trim()) return "Enter a product name or choose a catalogue product.";
     if (
       !Number.isSafeInteger(i.quantity) ||

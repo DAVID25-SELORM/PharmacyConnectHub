@@ -1,3 +1,4 @@
+import { ConfirmationHost } from "@/lib/confirm-action";
 import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -32,6 +33,7 @@ function RootComponent() {
   return (
     <>
       <Outlet />
+      <ConfirmationHost />
       <Toaster richColors position="top-right" />
     </>
   );

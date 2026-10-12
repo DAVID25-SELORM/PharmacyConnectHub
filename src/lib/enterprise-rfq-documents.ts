@@ -10,7 +10,9 @@ import { resolveDocumentBranding, type DocumentBusiness } from "./document-brand
 import { supabase } from "@/integrations/supabase/client";
 type Document = {
   historical?: boolean;
-  issuer?: DocumentBusiness & { branding?: DocumentBusiness["branding"] & { logo_path?: string | null } };
+  issuer?: DocumentBusiness & {
+    branding?: DocumentBusiness["branding"] & { logo_path?: string | null };
+  };
   rfq: EnterpriseRfq;
   pharmacy: string;
   supplier: string | null;
@@ -32,7 +34,11 @@ export async function exportRfqDocument(
     p_group_id: groupId ?? null,
   });
   const title = data.award ? "Award" : data.version ? "Quotation" : "Request for quotation";
-  const identity = resolveDocumentBranding(data.issuer ?? { name: data.version && !data.award ? data.supplier ?? "Supplier" : data.pharmacy });
+  const identity = resolveDocumentBranding(
+    data.issuer ?? {
+      name: data.version && !data.award ? (data.supplier ?? "Supplier") : data.pharmacy,
+    },
+  );
   const columns = data.award
     ? ["Medicine", "Offered quantity", "Unit price GHS"]
     : data.version
@@ -63,9 +69,11 @@ export async function exportRfqDocument(
           i.minimum_shelf_life_days,
         ]);
   const metadata = [
-    ...(!data.historical ? [["Branding history", "Original branding was not recorded; current identity is shown."]] : []),
+    ...(!data.historical
+      ? [["Branding history", "Original branding was not recorded; current identity is shown."]]
+      : []),
     ["Issued by", identity.name],
-    ...identity.contactLines.map(line => ["Contact", line]),
+    ...identity.contactLines.map((line) => ["Contact", line]),
     ...(identity.display_name ? [["Trading name", identity.display_name]] : []),
     ["Document", title],
     ["Reference", data.rfq.reference],
@@ -77,8 +85,13 @@ export async function exportRfqDocument(
     ["Instructions", data.rfq.delivery_instructions ?? ""],
     ["Payment preference", data.rfq.payment_preference],
   ];
-  if (identity.payment_instructions) metadata.push(["Payment instructions", identity.payment_instructions]);
-  if (identity.signatory_name) metadata.push(["Authorized signatory", [identity.signatory_name, identity.signatory_title].filter(Boolean).join(" — ")]);
+  if (identity.payment_instructions)
+    metadata.push(["Payment instructions", identity.payment_instructions]);
+  if (identity.signatory_name)
+    metadata.push([
+      "Authorized signatory",
+      [identity.signatory_name, identity.signatory_title].filter(Boolean).join(" — "),
+    ]);
   if (identity.footer_note) metadata.push(["Issuer note", identity.footer_note]);
   if (data.version)
     metadata.push(
@@ -109,43 +122,46 @@ export async function exportRfqDocument(
     xlsx.writeFile(book, `${filename}.xlsx`);
     return;
   }
-  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-  ]);
-  const pdf = new jsPDF();
-  let logo: string | null = null;
+  const { buildBusinessDocumentPdf, loadDocumentLogo } = await import("./business-document-pdf");
   const path = data.issuer?.branding?.logo_path;
-  if (path) {
-    const url = supabase.storage.from("business-document-logos").getPublicUrl(path).data.publicUrl;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Logo could not be loaded. Retry the export.");
-    const bitmap = await createImageBitmap(await response.blob());
-    const canvas = document.createElement("canvas");
-    canvas.width = 160; canvas.height = 80;
-    const scale = Math.min(160 / bitmap.width, 80 / bitmap.height);
-    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, bitmap.width * scale, bitmap.height * scale);
-    bitmap.close();
-    logo = canvas.toDataURL("image/png");
-  }
-  if (logo) pdf.addImage(logo, "PNG", 14, 10, 40, 20);
-  autoTable(pdf, { startY: logo ? 34 : 14, body: [[identity.name], [title]], theme: "plain", styles: { fontSize: 16 } });
-  const headerEnd = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  autoTable(pdf, { startY: headerEnd + 4, body: metadata, theme: "plain", styles: { fontSize: 9 } });
-  const end = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  autoTable(pdf, {
-    startY: end + 6,
-    head: [columns],
-    body: rows,
-    styles: { fontSize: 8 },
-    margin: { bottom: 20 },
-    headStyles: { fillColor: identity.accentColor },
-  });
-  const pages = pdf.getNumberOfPages();
-  for (let page = 1; page <= pages; page++) {
-    pdf.setPage(page);
-    pdf.setFontSize(8);
-    pdf.text(`Generated through DrugXOne | ${page} / ${pages}`, 14, 290);
-  }
+  const logo = await loadDocumentLogo(
+    path
+      ? supabase.storage.from("business-document-logos").getPublicUrl(path).data.publicUrl
+      : identity.logo_url,
+  );
+  // Header owns issuer identity; keep commercial metadata separate from branding history.
+  const excluded = new Set([
+    "Branding history",
+    "Issued by",
+    "Contact",
+    "Trading name",
+    "Document",
+    "Reference",
+    "Issuer note",
+    "Authorized signatory",
+  ]);
+  const pdf = buildBusinessDocumentPdf(
+    {
+      title,
+      reference: data.rfq.reference,
+      issuer: data.issuer ?? { name: identity.name },
+      metadata: metadata
+        .filter(([key, value]) => !excluded.has(key) && value)
+        .map(([key, value]) => [key, value]),
+      columns,
+      rows: rows.map((row) => row.map((value) => String(value ?? ""))),
+      notes: [
+        ...(!data.historical
+          ? ["Original branding was not recorded; current business identity is displayed."]
+          : []),
+        ...(identity.signatory_name
+          ? [
+              `Authorized signatory: ${[identity.signatory_name, identity.signatory_title].filter(Boolean).join(" - ")}`,
+            ]
+          : []),
+      ],
+    },
+    logo,
+  );
   pdf.save(`${filename}.pdf`);
 }

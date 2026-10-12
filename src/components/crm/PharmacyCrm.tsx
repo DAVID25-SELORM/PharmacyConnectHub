@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
@@ -258,18 +259,23 @@ export function PharmacyCrm() {
       ]);
       const sheets = [{ name: "Representatives", headers, rows }];
       if (pdf)
-        await downloadPdf("representatives.pdf", "Pharmacy representatives - private", [
-          {
-            name: "Contact details",
-            headers: headers.slice(0, 9),
-            rows: rows.map((r) => r.slice(0, 9)),
-          },
-          {
-            name: "Relationships and follow-ups",
-            headers: [headers[0], ...headers.slice(9)],
-            rows: rows.map((r) => [r[0], ...r.slice(9)]),
-          },
-        ], business.id);
+        await downloadPdf(
+          "representatives.pdf",
+          "Pharmacy representatives - private",
+          [
+            {
+              name: "Contact details",
+              headers: headers.slice(0, 9),
+              rows: rows.map((r) => r.slice(0, 9)),
+            },
+            {
+              name: "Relationships and follow-ups",
+              headers: [headers[0], ...headers.slice(9)],
+              rows: rows.map((r) => [r[0], ...r.slice(9)]),
+            },
+          ],
+          business.id,
+        );
       else await downloadXlsx("representatives.xlsx", sheets);
     } catch (e) {
       setError(String(e));
@@ -287,9 +293,9 @@ export function PharmacyCrm() {
       size="sm"
       variant="ghost"
       disabled={busy}
-      onClick={() => {
+      onClick={async () => {
         if (
-          window.confirm(
+          await confirmAction(
             row.archived
               ? "Restore this record?"
               : "Archive this record? Its history will be retained.",
@@ -485,7 +491,7 @@ export function PharmacyCrm() {
                 <Button
                   key={key}
                   variant={tab === key ? "default" : "outline"}
-                  onClick={() => {
+                  onClick={async () => {
                     setTab(key);
                     setPage(0);
                     setSearch("");

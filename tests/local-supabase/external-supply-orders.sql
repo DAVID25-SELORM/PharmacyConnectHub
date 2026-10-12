@@ -49,6 +49,27 @@ BEGIN
  PERFORM pg_temp.assert((SELECT count(*)>=3 FROM external_supply_order_events WHERE order_id=oid),'Document changes audited');
  denied:=false; BEGIN PERFORM public.save_external_purchase_before_orders(pharmacy,payload,gen_random_uuid()); EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
  PERFORM pg_temp.assert(denied,'Old receipt function cannot bypass linkage guard');
+
+ -- Non-pack receipts retain order units separately from stock packs.
+ data:=jsonb_build_object('kind','order','supplier','Conversion supplier','lines',jsonb_build_array(jsonb_build_object('id',line_id,'name','Conversion item','quantity',4,'unit','boxes','unit_price',10)));
+ oid:=public.save_external_supply_order(pharmacy,data,gen_random_uuid());
+ PERFORM public.transition_external_supply_order(oid,1,'issued');
+ payload:=jsonb_build_object('external_order_id',oid,'purchase_date',current_date,'channel','unknown','source_type','unknown','source','{}'::jsonb,'items',jsonb_build_array(jsonb_build_object('external_order_line_id',line_id,'external_order_unit','boxes','product',jsonb_build_object('name','Conversion item'),'quantity',10,'unit_cost_ghs',2,'batches',jsonb_build_array(jsonb_build_object('quantity',10)))));
+ denied:=false; BEGIN PERFORM public.save_external_purchase(pharmacy,payload,gen_random_uuid()); EXCEPTION WHEN OTHERS THEN denied:=true; END;
+ PERFORM pg_temp.assert(denied,'Non-pack delivery requires explicit conversion');
+ payload:=jsonb_set(payload,'{items,0,external_packs_per_unit}','5');
+ req:=gen_random_uuid();receipt:=public.save_external_purchase(pharmacy,payload,req);
+ PERFORM pg_temp.assert((SELECT external_order_allocations#>>'{0,quantity}'='2' AND external_order_allocations#>>'{0,inventory_packs}'='10' FROM external_purchases WHERE id=receipt),'Two boxes are recorded separately from ten inventory packs');
+ PERFORM pg_temp.assert(public.save_external_purchase(pharmacy,payload,req)=receipt,'Converted receipt retry is idempotent');
+ denied:=false; BEGIN PERFORM public.save_external_purchase(pharmacy,jsonb_set(payload,'{items,0,external_packs_per_unit}','2'),gen_random_uuid()); EXCEPTION WHEN OTHERS THEN denied:=true; END;
+ PERFORM pg_temp.assert(denied,'Later receipt cannot change established conversion');
+ denied:=false; BEGIN PERFORM public.save_external_purchase(pharmacy,jsonb_set(jsonb_set(payload,'{items,0,quantity}','15'),'{items,0,batches,0,quantity}','15'),gen_random_uuid()); EXCEPTION WHEN OTHERS THEN denied:=true; END;
+ PERFORM pg_temp.assert(denied,'Converted over-delivery rejected in ordered units');
+ denied:=false; BEGIN PERFORM public.save_external_purchase(pharmacy,jsonb_set(jsonb_set(payload,'{items,0,quantity}','6'),'{items,0,batches,0,quantity}','6'),gen_random_uuid()); EXCEPTION WHEN OTHERS THEN denied:=true; END;
+ PERFORM pg_temp.assert(denied,'Fractional ordered units rejected');
+ receipt2:=public.save_external_purchase(pharmacy,payload,gen_random_uuid());
+ PERFORM pg_temp.assert((SELECT sum((external_order_allocations#>>'{0,quantity}')::numeric)=4 FROM external_purchases WHERE external_order_id=oid),'Partial converted deliveries fulfil exactly four boxes');
+ PERFORM pg_temp.assert((SELECT COALESCE(sum(stock),0)=initial_stock FROM pharmacy_inventory_items WHERE pharmacy_id=pharmacy),'Converted unreviewed receipts never post stock');
  PERFORM set_config('request.jwt.claim.sub',outsider::text,true);
  PERFORM pg_temp.assert((SELECT count(*)=0 FROM external_supply_orders WHERE id=oid),'Unrelated user cannot read order');
  denied:=false; BEGIN PERFORM public.transition_external_supply_order(oid,4,'shared'); EXCEPTION WHEN OTHERS THEN denied:=true; END;

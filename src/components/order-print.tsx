@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { rfqCall } from "@/lib/enterprise-rfq";
 import { toast } from "sonner";
-import { Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,11 @@ import { purchaseCategoryLabel, type PurchaseCategory } from "@/lib/purchase-cat
 import { formatReportDate } from "@/lib/reports";
 import { BusinessIdentityHeader } from "@/components/documents/BusinessDocument";
 
+import { CommercialDocument } from "./documents/CommercialDocument";
+import { orderDocumentModel } from "@/lib/order-document-model";
+import { documentFileName } from "@/lib/document-branding";
+import { supabase } from "@/integrations/supabase/client";
+
 export type OrderPrintMode = "pharmacy" | "pick-pack" | "delivery" | "invoice";
 
 export type PrintableOrder = {
@@ -33,6 +38,8 @@ export type PrintableOrder = {
   order_number: string;
   created_at: string;
   total_ghs: number;
+  amount_paid_ghs?: number | null;
+  balance_due_ghs?: number | null;
   /** Set once a partial supply has been accepted; the total to charge and collect. */
   effective_total_ghs?: number | null;
   subtotal_ghs?: number | null;
@@ -93,25 +100,92 @@ export function OrderPrintActions({
   order: PrintableOrder;
   wholesaler?: boolean;
 }) {
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; pages: number } | null>(null);
+  useEffect(
+    () => () => {
+      if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+    },
+    [pdfPreview],
+  );
+  const [exporting, setExporting] = useState(false);
   const [mode, setMode] = useState<OrderPrintMode | null>(null);
-  const [identity, setIdentity] = useState<{ key: string; issuer: PartyDetails; historical: boolean } | null>(null);
+  const [identity, setIdentity] = useState<{
+    key: string;
+    issuer: PartyDetails;
+    historical: boolean;
+  } | null>(null);
   const [identityError, setIdentityError] = useState(false);
   const identityKey = `${order.id}:${mode}`;
   useEffect(() => {
-    setIdentity(null); setIdentityError(false);
+    setIdentity(null);
+    setIdentityError(false);
+    setPdfPreview(null);
     if (!mode || !order.id) return;
     let active = true;
-    void rfqCall<{ issuer: PartyDetails; historical: boolean }>("get_order_document_identity", { p_order_id: order.id, p_kind: mode })
-      .then(result => { if (active) setIdentity({ ...result, key: identityKey }); }, () => { if (active) setIdentityError(true); });
-    return () => { active = false; };
+    void rfqCall<{ issuer: PartyDetails; historical: boolean }>("get_order_document_identity", {
+      p_order_id: order.id,
+      p_kind: mode,
+    }).then(
+      (result) => {
+        if (active) setIdentity({ ...result, key: identityKey });
+      },
+      () => {
+        if (active) setIdentityError(true);
+      },
+    );
+    return () => {
+      active = false;
+    };
   }, [identityKey, order.id, mode]);
   const ready = !order.id || identity?.key === identityKey;
-  const printable = identity?.key === identityKey ? { ...order, [mode === "pharmacy" ? "pharmacy" : "wholesaler"]: identity.issuer } : order;
-  const print = async () => {
-    if (!mode || !ready) return;
+  const printable =
+    identity?.key === identityKey
+      ? { ...order, [mode === "pharmacy" ? "pharmacy" : "wholesaler"]: identity.issuer }
+      : order;
+  const download = async (preview = false) => {
+    if (!mode || !ready || exporting || mode === "pick-pack") return;
+    setExporting(true);
     try {
-      await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>(".print-document img")).map(img => img.decode()));
-    } catch { toast.error("The document logo could not be loaded. Retry before printing."); return; }
+      const { buildBusinessDocumentPdf, loadDocumentLogo } =
+        await import("@/lib/business-document-pdf");
+      const model = orderDocumentModel(printable, mode);
+      const branding = model.issuer?.branding;
+      const url = branding?.logo_path
+        ? supabase.storage.from("business-document-logos").getPublicUrl(branding.logo_path).data
+            .publicUrl
+        : branding?.logo_url;
+      const logo = await loadDocumentLogo(url);
+      const pdf = buildBusinessDocumentPdf(model, logo);
+      if (preview)
+        setPdfPreview({
+          url: URL.createObjectURL(pdf.output("blob")),
+          pages: pdf.getNumberOfPages(),
+        });
+      else pdf.save(documentFileName(model.title, model.reference));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "PDF could not be created.");
+    } finally {
+      setExporting(false);
+    }
+  };
+  const print = async () => {
+    if (!mode || !ready || exporting) return;
+    // Commercial documents print from their actual A4 PDF, never the portalled
+    // dashboard DOM. Modal sizing and scroll position must not affect paper output.
+    if (mode !== "pick-pack") {
+      await download(true);
+      return;
+    }
+    try {
+      await Promise.all(
+        Array.from(document.querySelectorAll<HTMLImageElement>(".print-document img")).map((img) =>
+          img.decode(),
+        ),
+      );
+    } catch {
+      toast.error("The document logo could not be loaded. Retry before printing.");
+      return;
+    }
     const previousTitle = document.title;
     document.title = `${modeLabels[mode]} - ${order.order_number}`;
     window.print();
@@ -149,20 +223,75 @@ export function OrderPrintActions({
                 {modeLabels[mode]} · {order.order_number}
               </DialogTitle>
               <DialogDescription>
-                Review the document before printing. Printing does not change the order or confirm
-                payment.
+                {mode === "pick-pack"
+                  ? "Select A4 portrait and turn off browser headers and footers."
+                  : "Print opens the A4 PDF. Use its printer button, or download it and print at actual size."}
+                {" "}Printing does not confirm payment.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end print:hidden">
-              <Button onClick={print} disabled={!ready}>
+            <div className="flex flex-wrap justify-end gap-2 print:hidden">
+              {mode !== "pick-pack" && (
+                <Button variant="outline" onClick={() => download()} disabled={!ready || exporting}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {exporting ? "Preparing PDF..." : "Download PDF"}
+                </Button>
+              )}
+              {mode !== "pick-pack" && (
+                <Button
+                  variant="outline"
+                  onClick={() => download(true)}
+                  disabled={!ready || exporting}
+                >
+                  Preview PDF pages
+                </Button>
+              )}
+              <Button onClick={print} disabled={!ready || exporting}>
                 <Printer className="mr-2 h-4 w-4" />
                 Print
               </Button>
             </div>
-            {identityError ? <p role="alert">Document identity could not be loaded. Close and reopen this preview to retry.</p> : !ready ? <p role="status">Loading document identity…</p> : <>
-              {identity?.historical === false && <p className="text-xs text-muted-foreground">Legacy document: original branding was not recorded; current business identity is displayed.</p>}
-              <PrintableOrderDocument order={printable} mode={mode} preview />
-            </>}
+            {identityError ? (
+              <p role="alert">
+                Document identity could not be loaded. Close and reopen this preview to retry.
+              </p>
+            ) : !ready ? (
+              <p role="status">Loading document identity…</p>
+            ) : (
+              <>
+                {identity?.historical === false && (
+                  <p className="text-xs text-muted-foreground">
+                    Legacy document: original branding was not recorded; current business identity
+                    is displayed.
+                  </p>
+                )}
+                {pdfPreview && (
+                  <div className="no-print">
+                    <p>
+                      {pdfPreview.pages} A4 {pdfPreview.pages === 1 ? "page" : "pages"} - Use the
+                      PDF viewer to print this exact paginated layout.
+                    </p>
+                    <a
+                      href={pdfPreview.url}
+                      download={documentFileName(modeLabels[mode!], order.order_number)}
+                      className="inline-block my-2 underline"
+                    >
+                      Download this PDF to print
+                    </a>
+                    <iframe
+                      title="A4 PDF preview"
+                      src={pdfPreview.url}
+                      className="h-[70vh] w-full border"
+                    />
+                    <Button variant="ghost" onClick={() => setPdfPreview(null)}>
+                      Close PDF preview
+                    </Button>
+                  </div>
+                )}
+                <div className={pdfPreview ? "hidden" : "overflow-x-auto"}>
+                  <PrintableOrderDocument order={printable} mode={mode} preview />
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
       )}
@@ -193,6 +322,8 @@ export function PrintableOrderDocument({
   mode: OrderPrintMode;
   preview?: boolean;
 }) {
+  if (["invoice", "pharmacy", "delivery"].includes(mode))
+    return <CommercialDocument model={orderDocumentModel(order, mode)} preview={preview} />;
   const operational = mode === "pick-pack" || mode === "delivery";
   const priced = mode === "pharmacy" || mode === "invoice";
   const items = mode === "pick-pack" ? sortPrintableItems(order.order_items) : order.order_items;
@@ -451,8 +582,12 @@ export function PrintableOrderDocument({
         </div>
       )}
       <footer className="mt-8 break-inside-avoid border-t border-black pt-2 text-center text-xs">
-        <p className="break-words">{(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.branding?.footer_note}</p>
-        Issued by {(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.name ?? "the issuing business"} via Drugxone.
+        <p className="break-words">
+          {(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.branding?.footer_note}
+        </p>
+        Issued by{" "}
+        {(mode === "pharmacy" ? order.pharmacy : order.wholesaler)?.name ?? "the issuing business"}{" "}
+        via Drugxone.
       </footer>
     </article>
   );

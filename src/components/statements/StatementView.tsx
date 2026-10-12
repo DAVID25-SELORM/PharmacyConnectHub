@@ -71,6 +71,59 @@ export function StatementView({
     void load();
   }, [load]);
 
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const exportPdf = async () => {
+    if (!statement || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const identity = await (
+        await import("@/lib/document-identity")
+      ).loadDocumentIdentity(statement.wholesaler.id);
+      const { buildBusinessDocumentPdf, loadDocumentLogo } =
+        await import("@/lib/business-document-pdf");
+      const { documentMoney } = await import("@/lib/business-document-model");
+      const pdf = buildBusinessDocumentPdf(
+        {
+          title: "Statement of account",
+          reference: "",
+          issuer: identity,
+          recipient: { label: "Customer", name: statement.pharmacy.name },
+          metadata: [
+            ["From", formatReportDate(statement.from)],
+            [
+              "Through",
+              formatReportDate(new Date(new Date(statement.to).getTime() - 1).toISOString()),
+            ],
+          ],
+          columns: ["Description / date", "Charges (GHS)", "Payments (GHS)", "Balance (GHS)"],
+          numericColumns: [1, 2, 3],
+          rows: statement.lines.map((line) => [
+            `${lineDescription(line)}\n${formatReportDate(line.date)}`,
+            documentMoney(line.debit),
+            documentMoney(line.credit),
+            documentMoney(line.balance),
+          ]),
+          summary: [
+            ["Opening balance", documentMoney(statement.opening_balance)],
+            ["Total charges", documentMoney(statement.total_debits)],
+            ["Total payments", documentMoney(statement.total_credits)],
+            ["Closing balance (GHS)", documentMoney(statement.closing_balance)],
+          ],
+          notes: statement.truncated
+            ? [
+                "Only the first 2,000 lines are shown. Choose a shorter date range for the full list.",
+              ]
+            : [],
+        },
+        await loadDocumentLogo(identity.branding?.logo_url),
+      );
+      pdf.save(`statement-${applied.from}-${applied.to}.pdf`);
+    } catch {
+      toast.error("Statement PDF could not be created. Please retry.");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
   const print = async () => {
     if (!statement) return;
     const win = window.open("", "_blank");
@@ -78,10 +131,14 @@ export function StatementView({
     win.document.open();
     win.addEventListener("load", () => win.print(), { once: true });
     try {
-      const identity = await (await import("@/lib/document-identity")).loadDocumentIdentity(statement.wholesaler.id);
+      const identity = await (
+        await import("@/lib/document-identity")
+      ).loadDocumentIdentity(statement.wholesaler.id);
       win.document.write(statementPrintHtml(statement, identity));
     } catch {
-      win.close(); toast.error("Statement identity could not be loaded. Retry printing."); return;
+      win.close();
+      toast.error("Statement identity could not be loaded. Retry printing.");
+      return;
     }
     win.document.close();
   };
@@ -122,6 +179,14 @@ export function StatementView({
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={!statement}>
             <Download className="mr-1 h-4 w-4" aria-hidden="true" />
             CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportPdf}
+            disabled={!statement || exportingPdf}
+          >
+            Download PDF
           </Button>
           <Button variant="outline" size="sm" onClick={print} disabled={!statement}>
             <Printer className="mr-1 h-4 w-4" aria-hidden="true" />

@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { reviewBusinessEvidence, type EvidenceDocument } from "@/lib/review-business-evidence";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
@@ -91,9 +92,9 @@ function ReviewDialog({
     if (!row) return;
     if (
       !documentsComplete(row) &&
-      !window.confirm(
+      !(await confirmAction(
         `${row.business_name} has only ${row.docs_uploaded} of ${row.docs_required} required documents. Approve anyway?`,
-      )
+      ))
     )
       return;
     setBusy(true);
@@ -147,7 +148,7 @@ function ReviewDialog({
                   variant="ghost"
                   size="sm"
                   disabled={busy}
-                  onClick={() => {
+                  onClick={async () => {
                     setDocsReady(false);
                     setDocsRevision((value) => value + 1);
                   }}
@@ -349,7 +350,7 @@ function VerificationQueuePage() {
               key={item.value}
               size="sm"
               variant={status === item.value ? "secondary" : "ghost"}
-              onClick={() => {
+              onClick={async () => {
                 setStatus(item.value);
                 setPage(0);
               }}

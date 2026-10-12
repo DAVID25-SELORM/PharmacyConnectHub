@@ -1,3 +1,13 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { buildReportPdf, reportExportSheets, type ReportExportPayload } from "@/lib/reports";
 import { Download, FileSpreadsheet, Printer, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +33,7 @@ export function ReportsHeader({
   onReset,
   onExportCsv,
   onExportXlsx,
+  getExportPayload,
   exporting = false,
   exportDisabled = false,
 }: {
@@ -34,109 +45,170 @@ export function ReportsHeader({
   onReset: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
+  getExportPayload: () => ReportExportPayload;
   exporting?: boolean;
   exportDisabled?: boolean;
 }) {
   const { business } = useSession();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
+  const preparePrint = async () => {
+    const payload = getExportPayload();
+    if (!payload) {
+      toast.info("No report data is ready to print.");
+      return;
+    }
+    setPreparing(true);
+    try {
+      const pdf = await buildReportPdf(title, reportExportSheets(payload), business?.id);
+      if (pdf) setPreview(URL.createObjectURL(pdf.output("blob")));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not prepare report.");
+    } finally {
+      setPreparing(false);
+    }
+  };
   return (
-    <><div className="hidden print:block mb-6">{business && <BusinessIdentityHeader business={business} />}<h1>{title}</h1><p>{subtitle}</p></div><div className="print:hidden">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-bold">{title}</h1>
-          <p className="mt-1 text-muted-foreground">{subtitle}</p>
-        </div>
+    <>
+      <div className="hidden print:block mb-6">
+        {business && <BusinessIdentityHeader business={business} />}
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
       </div>
+      <div className="print:hidden">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-bold">{title}</h1>
+            <p className="mt-1 text-muted-foreground">{subtitle}</p>
+          </div>
+        </div>
 
-      <form
-        aria-label="Report date range"
-        className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/20 p-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onApply();
+        <form
+          aria-label="Report date range"
+          className="mt-4 flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/20 p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onApply();
+          }}
+        >
+          <div>
+            <Label htmlFor="report-range" className="text-xs text-muted-foreground">
+              Date range
+            </Label>
+            <select
+              id="report-range"
+              className={selectClass}
+              value={draft.range}
+              onChange={(event) =>
+                onDraftChange({ ...draft, range: event.target.value as ReportRangeState["range"] })
+              }
+            >
+              {REPORT_RANGES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {draft.range === "custom" && (
+            <>
+              <div>
+                <Label htmlFor="report-from" className="text-xs text-muted-foreground">
+                  From
+                </Label>
+                <Input
+                  id="report-from"
+                  type="date"
+                  value={draft.from}
+                  onChange={(event) => onDraftChange({ ...draft, from: event.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="report-to" className="text-xs text-muted-foreground">
+                  To
+                </Label>
+                <Input
+                  id="report-to"
+                  type="date"
+                  value={draft.to}
+                  onChange={(event) => onDraftChange({ ...draft, to: event.target.value })}
+                />
+              </div>
+            </>
+          )}
+
+          <Button type="submit" variant="hero" size="sm">
+            Apply
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onReset}>
+            <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" />
+            Reset
+          </Button>
+
+          <div className="ml-auto flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onExportCsv}
+              disabled={exporting || exportDisabled}
+            >
+              <Download className="mr-1 h-4 w-4" aria-hidden="true" />
+              {exporting ? "Exporting..." : "Export CSV"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onExportXlsx}
+              disabled={exporting || exportDisabled}
+            >
+              <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" />
+              {exporting ? "Exporting..." : "Export XLSX"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={preparePrint}
+              disabled={preparing || exporting || exportDisabled}
+            >
+              <Printer className="mr-1 h-4 w-4" aria-hidden="true" />
+              {preparing ? "Preparing..." : "Print / PDF"}
+            </Button>
+          </div>
+        </form>
+      </div>
+      <Dialog
+        open={Boolean(preview)}
+        onOpenChange={(open) => {
+          if (!open) setPreview(null);
         }}
       >
-        <div>
-          <Label htmlFor="report-range" className="text-xs text-muted-foreground">
-            Date range
-          </Label>
-          <select
-            id="report-range"
-            className={selectClass}
-            value={draft.range}
-            onChange={(event) =>
-              onDraftChange({ ...draft, range: event.target.value as ReportRangeState["range"] })
-            }
-          >
-            {REPORT_RANGES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {draft.range === "custom" && (
-          <>
-            <div>
-              <Label htmlFor="report-from" className="text-xs text-muted-foreground">
-                From
-              </Label>
-              <Input
-                id="report-from"
-                type="date"
-                value={draft.from}
-                onChange={(event) => onDraftChange({ ...draft, from: event.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="report-to" className="text-xs text-muted-foreground">
-                To
-              </Label>
-              <Input
-                id="report-to"
-                type="date"
-                value={draft.to}
-                onChange={(event) => onDraftChange({ ...draft, to: event.target.value })}
-              />
-            </div>
-          </>
-        )}
-
-        <Button type="submit" variant="hero" size="sm">
-          Apply
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onReset}>
-          <RotateCcw className="mr-1 h-4 w-4" aria-hidden="true" />
-          Reset
-        </Button>
-
-        <div className="ml-auto flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onExportCsv}
-            disabled={exporting || exportDisabled}
-          >
-            <Download className="mr-1 h-4 w-4" aria-hidden="true" />
-            {exporting ? "Exporting..." : "Export CSV"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onExportXlsx}
-            disabled={exporting || exportDisabled}
-          >
-            <FileSpreadsheet className="mr-1 h-4 w-4" aria-hidden="true" />
-            {exporting ? "Exporting..." : "Export XLSX"}
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="mr-1 h-4 w-4" aria-hidden="true" />
-            Print
-          </Button>
-        </div>
-      </form>
-    </div></>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>
+              Use the PDF viewer to print or download the A4 report.
+            </DialogDescription>
+          </DialogHeader>
+          {preview && (
+            <>
+              <a href={preview} download="report.pdf" className="underline">
+                Download PDF
+              </a>
+              <iframe title="Report PDF preview" src={preview} className="h-[70vh] w-full" />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
