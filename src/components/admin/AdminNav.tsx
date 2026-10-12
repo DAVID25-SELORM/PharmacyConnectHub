@@ -4,6 +4,7 @@ import {
   BarChart3,
   ClipboardCheck,
   CreditCard,
+  Landmark,
   LayoutDashboard,
   ShieldCheck,
 } from "lucide-react";
@@ -14,6 +15,7 @@ const ITEMS = [
   { to: "/admin/activity", label: "Activity", icon: Activity, exact: false },
   { to: "/admin/reports", label: "Reports", icon: BarChart3, exact: false },
   { to: "/admin/payments", label: "Payments", icon: CreditCard, exact: false },
+  { to: "/admin/billing", label: "Billing", icon: Landmark, exact: false },
   { to: "/admin/staff", label: "Platform Team", icon: ShieldCheck, exact: false },
 ] as const;
 

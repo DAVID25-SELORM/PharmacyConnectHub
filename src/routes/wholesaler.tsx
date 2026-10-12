@@ -53,6 +53,7 @@ import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment } from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { OnlinePaymentsPanel } from "@/components/wholesaler/OnlinePaymentsPanel";
+import { BillingPanel } from "@/components/billing/BillingPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -432,6 +433,7 @@ function WholesalerDashboardContent() {
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="credit">Credit</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="online-payments">Online payments</TabsTrigger>}
+            {canRecordCreditPayment && <TabsTrigger value="billing">Billing</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -471,6 +473,11 @@ function WholesalerDashboardContent() {
                 canManage={canManageProducts}
                 canDispute={canDisputeCreditInvoice}
               />
+            </TabsContent>
+          )}
+          {canRecordCreditPayment && (
+            <TabsContent value="billing">
+              <BillingPanel businessId={business.id} />
             </TabsContent>
           )}
           {canRecordCreditPayment && (

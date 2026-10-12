@@ -62,6 +62,7 @@ import {
   useReadySuppliers,
 } from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
+import { BillingPanel } from "@/components/billing/BillingPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { StatusBadge, PaymentBadge, OrderTimeline } from "@/components/order-status";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -319,7 +320,9 @@ function PharmacyDashboardContent() {
     setOrderCounts({ active: 0, awaiting: 0, transit: 0, delivered: 0 });
   }, [businessId]);
   const validTab = (value: string | null) =>
-    ["catalog", "lists", "orders", "returns", "statements", "credit"].includes(value ?? "")
+    ["catalog", "lists", "orders", "returns", "statements", "credit", "billing"].includes(
+      value ?? "",
+    )
       ? value!
       : "catalog";
   const [activeTab, setActiveTab] = useState(() =>
@@ -1012,6 +1015,9 @@ function PharmacyDashboardContent() {
             {canViewAccounting("pharmacy", business.staff_role) && (
               <TabsTrigger value="credit">Credit</TabsTrigger>
             )}
+            {["owner", "manager", "finance", "accountant"].includes(business.staff_role ?? "") && (
+              <TabsTrigger value="billing">Billing</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="catalog">
@@ -1053,6 +1059,11 @@ function PharmacyDashboardContent() {
           {canViewAccounting("pharmacy", business.staff_role) && (
             <TabsContent value="credit">
               <CreditPayablesPanel pharmacyId={business.id} />
+            </TabsContent>
+          )}
+          {["owner", "manager", "finance", "accountant"].includes(business.staff_role ?? "") && (
+            <TabsContent value="billing">
+              <BillingPanel businessId={business.id} />
             </TabsContent>
           )}
           <TabsContent value="orders">

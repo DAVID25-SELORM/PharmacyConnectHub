@@ -25,6 +25,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StaffRouteImport } from './routes/staff'
 import { Route as WholesalerRouteImport } from './routes/wholesaler'
 import { Route as AdminActivityRouteImport } from './routes/admin.activity'
+import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminPaymentsRouteImport } from './routes/admin.payments'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminStaffRouteImport } from './routes/admin.staff'
@@ -120,6 +121,11 @@ const WholesalerRoute = WholesalerRouteImport.update({
 const AdminActivityRoute = AdminActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBillingRoute = AdminBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByTo {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
@@ -289,6 +297,7 @@ export interface FileRoutesById {
   '/staff': typeof StaffRoute
   '/wholesaler': typeof WholesalerRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/billing': typeof AdminBillingRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/staff': typeof AdminStaffRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/billing'
     | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/billing'
     | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
@@ -393,6 +404,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/wholesaler'
     | '/admin/activity'
+    | '/admin/billing'
     | '/admin/payments'
     | '/admin/reports'
     | '/admin/staff'
@@ -555,6 +567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminActivityRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/billing': {
+      id: '/admin/billing'
+      path: '/billing'
+      fullPath: '/admin/billing'
+      preLoaderRoute: typeof AdminBillingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/payments': {
       id: '/admin/payments'
       path: '/payments'
@@ -672,6 +691,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminBillingRoute: typeof AdminBillingRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminStaffRoute: typeof AdminStaffRoute
@@ -680,6 +700,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminBillingRoute: AdminBillingRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminStaffRoute: AdminStaffRoute,
