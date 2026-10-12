@@ -272,7 +272,7 @@ BEGIN
   PERFORM zz.check('6: with the platform DISABLED every business is disabled', public.billing_effective_mode(alpha) = 'disabled' AND public.billing_effective_mode(oth) = 'disabled');
   r := zz.val_as((SELECT u_wo FROM zz.bx), 'SELECT public.admin_billing_set_mode(''shadow'', ''Trying to switch'')');
   PERFORM zz.check('6: a business cannot change the platform mode', r LIKE 'ERR: Only platform administrators%', r);
-  PERFORM zz.check('6: ACTIVE cannot be switched on yet', zz.adm('SELECT public.admin_billing_set_mode(''active'', ''Go live now'')') LIKE 'ERR: Active billing cannot be switched on yet%');
+  PERFORM zz.check('6: ACTIVE cannot be switched on here: it has its own checklist', zz.adm('SELECT public.admin_billing_set_mode(''active'', ''Go live now'')') LIKE 'ERR: Active billing is switched on through the activation checklist%');
   PERFORM zz.check('6: a mode must be one of the three', zz.adm('SELECT public.admin_billing_set_mode(''turbo'', ''Go faster'')') LIKE 'ERR: Choose disabled, shadow or active.%');
   PERFORM zz.check('6: a reason is required', zz.adm('SELECT public.admin_billing_set_mode(''shadow'', '''')') LIKE 'ERR: A reason of at least 5%');
   PERFORM zz.adm('SELECT public.admin_billing_set_mode(''shadow'', ''Start shadow billing'')');

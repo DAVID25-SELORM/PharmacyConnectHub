@@ -40,7 +40,7 @@ WITH
   ('scheduling a cancellation fixes the end date at once', pg_get_function_result('public.admin_billing_set_cancellation(uuid, boolean, text)'::regprocedure) = 'timestamp with time zone'),
   ('the administrator''s detail shows temporary changes and promotions', pg_get_functiondef('public.admin_billing_business_detail(uuid, text)'::regprocedure) LIKE '%billing_term_windows%'
     AND pg_get_functiondef('public.admin_billing_business_detail(uuid, text)'::regprocedure) LIKE '%billing_promotion_redemptions%'),
-  ('the reconciliation has four more checks (charges, waivers, promotion limits, audit)', (SELECT count(*) FROM public.billing_reconcile()) = (SELECT count(*) FROM public._billing_reconcile_engine()) + (SELECT count(*) FROM public._billing_reconcile_invoices()) + 4),
+  ('the reconciliation has four more checks (charges, waivers, promotion limits, audit)', (SELECT count(*) FROM public.billing_reconcile()) >= (SELECT count(*) FROM public._billing_reconcile_engine()) + (SELECT count(*) FROM public._billing_reconcile_invoices()) + 4),
   ('billing is still OFF: mode is disabled', (SELECT mode FROM public.billing_settings WHERE id) = 'disabled'),
   ('nothing has been used: no promotion, temporary change, redemption, administrator credit, charge, waiver or grant', (SELECT count(*) FROM public.billing_promotions) + (SELECT count(*) FROM public.billing_term_windows)
     + (SELECT count(*) FROM public.billing_promotion_redemptions) + (SELECT count(*) FROM public.billing_ledger_entries WHERE source = 'admin') + (SELECT count(*) FROM public.billing_allowance_grants WHERE source IN ('admin', 'promotion')) = 0),

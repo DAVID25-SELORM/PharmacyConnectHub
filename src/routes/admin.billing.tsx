@@ -4,6 +4,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminBillingInvoicesSection } from "@/components/billing/AdminBillingInvoicesSection";
 import { AdminBillingOrganizationsSection } from "@/components/billing/AdminBillingOrganizationsSection";
 import { AdminBillingOverviewSection } from "@/components/billing/AdminBillingOverviewSection";
+import { AdminBillingRolloutSection } from "@/components/billing/AdminBillingRolloutSection";
 import { AdminBillingPromotionsSection } from "@/components/billing/AdminBillingPromotionsSection";
 import { AdminBillingPlansSection } from "@/components/billing/AdminBillingPlansSection";
 import { AdminBillingReconciliationSection } from "@/components/billing/AdminBillingReconciliationSection";
@@ -35,6 +36,7 @@ function AdminBillingPage() {
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="plans">Plans</TabsTrigger>
             <TabsTrigger value="promotions">Promotions</TabsTrigger>
+            <TabsTrigger value="rollout">Go live</TabsTrigger>
             <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
@@ -51,6 +53,9 @@ function AdminBillingPage() {
           </TabsContent>
           <TabsContent value="promotions">
             <AdminBillingPromotionsSection />
+          </TabsContent>
+          <TabsContent value="rollout">
+            <AdminBillingRolloutSection />
           </TabsContent>
           <TabsContent value="reconciliation">
             <AdminBillingReconciliationSection />

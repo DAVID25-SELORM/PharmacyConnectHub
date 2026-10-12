@@ -456,7 +456,13 @@ export function AdminBillingOrganizationsSection() {
                   <TableCell>
                     <Badge variant="outline">{r.paused ? "paused" : r.status}</Badge>
                   </TableCell>
-                  <TableCell>{r.effective_mode}</TableCell>
+                  <TableCell>
+                    {r.activated_at
+                      ? `Live since ${dateText(r.activated_at)}`
+                      : r.effective_mode === "shadow"
+                        ? "Shadow (held back)"
+                        : r.effective_mode}
+                  </TableCell>
                   <TableCell className="text-right">{formatGHS(r.subscription_amount)}</TableCell>
                   <TableCell className="text-right">
                     {formatGHS(r.transaction_fees_amount)}

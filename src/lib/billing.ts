@@ -55,6 +55,8 @@ export type BillingOrderRow = {
 
 export type MyBilling = {
   state: BillingState;
+  /** What a suspended account may not do (only when the administrator has switched the restriction on). */
+  restriction?: "none" | "new_orders";
   business_type: "pharmacy" | "wholesaler";
   business_name?: string;
   currency?: string;
@@ -82,6 +84,9 @@ export type MyBilling = {
     ends_at: string | null;
     paused: boolean;
     exempt_from_transaction_fees: boolean | null;
+    grace_until?: string | null;
+    past_due_since?: string | null;
+    activated_at?: string | null;
   };
   free_orders?: {
     launch_granted: number;
@@ -138,12 +143,46 @@ export function stateMessage(state: BillingState): string {
     case "grace_period":
       return "A payment is overdue. Your account keeps working during the grace period; please settle the balance.";
     case "suspended":
-      return "Your subscription is suspended. Please contact DrugXOne.";
+      return "Your account is suspended because an invoice is overdue. Please pay it under Invoices, or contact DrugXOne.";
     case "paused":
       return "Billing is paused for your business. Nothing is being charged while it is paused.";
     case "cancelled":
       return "This subscription has ended.";
   }
+}
+
+/** One more sentence for the banner: the date that matters, or what is paused. Nothing when there is nothing more to say. */
+export function stateDetail(
+  state: BillingState,
+  sub: { grace_until?: string | null; activated_at?: string | null } | undefined,
+  restriction: "none" | "new_orders" | undefined,
+  now: Date = new Date(),
+): string | null {
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  if ((state === "past_due" || state === "grace_period") && sub?.grace_until) {
+    return new Date(sub.grace_until).getTime() > now.getTime()
+      ? `Please pay by ${day(sub.grace_until)} to avoid your account being suspended.`
+      : "Please pay as soon as you can.";
+  }
+  if (state === "suspended") {
+    return restriction === "new_orders"
+      ? "While the invoice is unpaid, new orders cannot be placed. Orders already in progress carry on."
+      : null;
+  }
+  if (
+    state === "not_started" &&
+    sub?.activated_at &&
+    new Date(sub.activated_at).getTime() > now.getTime()
+  ) {
+    return `Billing starts on ${day(sub.activated_at)}.`;
+  }
+  return null;
 }
 
 /** How one order was billed, in plain business words. */
@@ -321,6 +360,8 @@ export type OrganizationRow = {
   billing_mode: string | null;
   effective_mode: "disabled" | "shadow" | "active";
   billing_starts_at: string;
+  activated_at?: string | null;
+  grace_until?: string | null;
   trial_end: string | null;
   exempt: boolean;
   paused: boolean;
@@ -510,6 +551,11 @@ export const RECONCILIATION_LABELS: Record<string, string> = {
   fee_waived_more_than_charged: "Fee waivers larger than the fee charged",
   promotion_redeemed_beyond_its_limit: "Promotions given to more businesses than their limit",
   admin_ledger_entry_without_audit: "Credits or charges by an administrator with no audit record",
+  billing_scheduler_not_running: "The scheduled billing run has stopped",
+  live_business_not_activated: "Businesses following live billing that were never put live",
+  real_period_before_activation: "Real billing periods that ended before the business went live",
+  real_assessment_before_activation: "Real order assessments dated before the business went live",
+  account_status_does_not_match_invoices: "Account statuses that do not match the overdue invoices",
   invoice_overdue_but_not_marked: "Unpaid invoices past their due date that are not marked overdue",
 };
 

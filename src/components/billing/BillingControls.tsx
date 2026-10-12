@@ -48,6 +48,7 @@ import {
 } from "@/lib/billing-controls";
 import { fetchPlans, type BusinessBillingDetail, type PlanRow } from "@/lib/billing";
 import { dateText } from "@/lib/billing-invoices";
+import { extendGrace, fetchRolloutStatus, goLiveBusiness } from "@/lib/billing-rollout";
 
 type Field = {
   key: string;
@@ -92,6 +93,7 @@ export function BillingControls({
   const sub = (detail.subscription ?? {}) as Record<string, unknown>;
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [promos, setPromos] = useState<PromotionRow[]>([]);
+  const [platformMode, setPlatformMode] = useState<string>("disabled");
   const [open, setOpen] = useState<Action | null>(null);
   const [ending, setEnding] = useState<string | null>(null);
 
@@ -102,6 +104,9 @@ export function BillingControls({
     fetchPromotions()
       .then(setPromos)
       .catch(() => setPromos([]));
+    fetchRolloutStatus()
+      .then((st) => setPlatformMode(st.platform.mode))
+      .catch(() => setPlatformMode("disabled"));
   }, []);
 
   const actions = useMemo<Action[]>(() => {
@@ -401,11 +406,57 @@ export function BillingControls({
         return "Promotion applied.";
       },
     });
+    const status = String(sub.status ?? "");
+    if (
+      platformMode === "active" &&
+      !sub.activated_at &&
+      status !== "cancelled" &&
+      sub.billing_mode !== "disabled"
+    ) {
+      list.push({
+        id: "golive",
+        label: "Put this business live",
+        description:
+          "Starts its real billing. Its first real bill starts at that moment, its free trial restarts from it, and no earlier order is ever charged. Leave the date empty to start now (or choose a day up to 90 days ahead).",
+        fields: [{ key: "from", label: "Starts on (optional)", type: "date" }],
+        submit: "Go live",
+        run: async (v) => {
+          const r = await goLiveBusiness(
+            businessId,
+            v.from ? dateFromInput(v.from) : null,
+            v.reason.trim(),
+          );
+          return `Live from ${dateText(r.activated_at)}${r.trial_end ? `; free trial to ${dateText(r.trial_end)}` : ""}.`;
+        },
+      });
+    }
+    if (["past_due", "grace_period", "suspended"].includes(status)) {
+      list.push({
+        id: "grace",
+        label: "Extend the grace period",
+        description:
+          "Gives a business with an overdue invoice more time (for example a promise to pay). Until that date its account is in its grace period instead of suspended.",
+        fields: [
+          { key: "until", label: "Grace lasts until", type: "date", initial: todayPlus(14) },
+        ],
+        submit: "Extend grace",
+        run: async (v) => {
+          const d = dateFromInput(v.until);
+          if (!d) throw new Error("Choose the date.");
+          const r = await extendGrace(businessId, d, v.reason.trim());
+          return `Grace extended to ${dateText(r.until)}.`;
+        },
+      });
+    }
     return list;
   }, [
     detail,
     plans,
     promos,
+    platformMode,
+    sub.activated_at,
+    sub.status,
+    sub.billing_mode,
     businessId,
     isWholesaler,
     sub.trial_end,

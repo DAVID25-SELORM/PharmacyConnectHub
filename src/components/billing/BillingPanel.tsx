@@ -21,6 +21,7 @@ import {
   fetchMyBilling,
   periodLabel,
   planSummary,
+  stateDetail,
   stateMessage,
   type BillingState,
   type MyBilling,
@@ -124,6 +125,11 @@ export function BillingPanel({ businessId }: { businessId: string }) {
         <p className="text-sm text-muted-foreground" data-testid="billing-state-message">
           {stateMessage(data.state)}
         </p>
+        {stateDetail(data.state, data.subscription, data.restriction) && (
+          <p className="text-sm font-medium" data-testid="billing-state-detail">
+            {stateDetail(data.state, data.subscription, data.restriction)}
+          </p>
+        )}
         {data.subscription?.cancel_at_period_end && data.subscription.ends_at && (
           <p className="text-sm text-muted-foreground">
             Your subscription ends on {dateText(data.subscription.ends_at)}.
