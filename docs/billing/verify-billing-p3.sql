@@ -25,7 +25,7 @@ WITH
   ('the read functions run with the owner''s rights and a fixed search path (they check the caller themselves)', (SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace
     AND proname IN ('billing_my_overview', 'admin_billing_overview', 'admin_billing_organizations', 'admin_billing_business_detail') AND prosecdef AND proconfig IS NOT NULL
     AND EXISTS (SELECT 1 FROM unnest(proconfig) c WHERE c LIKE 'search_path=%')) = 4),
-  ('the business function checks the caller's role and business before reading anything', pg_get_functiondef('public.billing_my_overview(uuid)'::regprocedure) LIKE '%billing_user_can_view%'),
+  ('the business function checks that the caller is allowed to see that business before reading anything', pg_get_functiondef('public.billing_my_overview(uuid)'::regprocedure) LIKE '%billing_user_can_view%'),
   ('the administrator functions check for an administrator', pg_get_functiondef('public.admin_billing_overview(timestamp with time zone, timestamp with time zone, text, text, text)'::regprocedure) LIKE '%_billing_admin_only%'
     AND pg_get_functiondef('public.admin_billing_organizations(text, text, text, text, text, integer, integer)'::regprocedure) LIKE '%_billing_admin_only%'
     AND pg_get_functiondef('public.admin_billing_business_detail(uuid, text)'::regprocedure) LIKE '%_billing_admin_only%'),
