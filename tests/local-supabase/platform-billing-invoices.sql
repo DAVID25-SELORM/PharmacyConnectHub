@@ -139,17 +139,17 @@ DO $$
 DECLARE w1 UUID := (SELECT w1 FROM zz.w); w3 UUID := (SELECT w3 FROM zz.w); w4 UUID := (SELECT w4 FROM zz.w); p UUID;
 BEGIN
   SELECT id INTO p FROM public.billing_periods WHERE business_id = w1 AND period_start = (SELECT m2 FROM zz.t) AND NOT shadow;
-  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w1, p, 'manual_credit', 15, 'Goodwill credit', 'admin', 'inv-test-credit-w1');
+  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w1, p, 'manual_credit', 15, 'Goodwill credit', 'system', 'inv-test-credit-w1');
   UPDATE public.billing_periods SET credits_amount = 15 WHERE id = p;
   SELECT id INTO p FROM public.billing_periods WHERE business_id = w1 AND period_start = (SELECT m1 FROM zz.t) AND NOT shadow;
-  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, charged_amount, reason, source, idempotency_key) VALUES (w1, p, 'manual_debit', 10, 'Onboarding support', 'admin', 'inv-test-debit-w1');
+  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, charged_amount, reason, source, idempotency_key) VALUES (w1, p, 'manual_debit', 10, 'Onboarding support', 'system', 'inv-test-debit-w1');
   UPDATE public.billing_periods SET debits_amount = 10 WHERE id = p;
   -- Inv W3 and Inv W4 are given credits larger than their July subscription: the surplus carries forward.
   SELECT id INTO p FROM public.billing_periods WHERE business_id = w3 AND period_start = (SELECT m3 FROM zz.t) AND NOT shadow;
-  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w3, p, 'manual_credit', 30, 'Service credit', 'admin', 'inv-test-credit-w3');
+  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w3, p, 'manual_credit', 30, 'Service credit', 'system', 'inv-test-credit-w3');
   UPDATE public.billing_periods SET credits_amount = 30 WHERE id = p;
   SELECT id INTO p FROM public.billing_periods WHERE business_id = w4 AND period_start = (SELECT m3 FROM zz.t) AND NOT shadow;
-  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w4, p, 'manual_credit', 40, 'Service credit', 'admin', 'inv-test-credit-w4');
+  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, reason, source, idempotency_key) VALUES (w4, p, 'manual_credit', 40, 'Service credit', 'system', 'inv-test-credit-w4');
   UPDATE public.billing_periods SET credits_amount = 40 WHERE id = p;
 END $$;
 
@@ -272,7 +272,7 @@ END $$;
 DO $$
 DECLARE w1 UUID := (SELECT w1 FROM zz.w); jul UUID := (zz.per(w1, (SELECT m3 FROM zz.t))).id; i UUID := zz.inv(w1, (SELECT m3 FROM zz.t)); r TEXT;
 BEGIN
-  r := zz.try(format('INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, charged_amount, reason, source, idempotency_key) VALUES (%L, %L, ''manual_debit'', 5, ''Late charge'', ''admin'', ''inv-late-1'')', w1, jul));
+  r := zz.try(format('INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, charged_amount, reason, source, idempotency_key) VALUES (%L, %L, ''manual_debit'', 5, ''Late charge'', ''system'', ''inv-late-1'')', w1, jul));
   PERFORM zz.check('5: even directly, nothing can be written into an invoiced period''s ledger', r LIKE 'ERR: This billing period is already invoiced or closed%', r);
   r := zz.try(format('UPDATE public.billing_periods SET transaction_fees_amount = 99 WHERE id = %L', jul));
   PERFORM zz.check('5: an invoiced period''s figures cannot be changed', r LIKE 'ERR: An invoiced billing period is final%', r);
@@ -550,7 +550,7 @@ BEGIN
   BEGIN
     SET LOCAL session_replication_role = replica;
     INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, charged_amount, reason, source, idempotency_key, created_at)
-    SELECT w1, period_id, 'manual_debit', 1, 'Sneaked in', 'admin', 'inv-test-sneak', issued_at + interval '1 minute' FROM public.billing_invoices WHERE id = aug;
+    SELECT w1, period_id, 'manual_debit', 1, 'Sneaked in', 'system', 'inv-test-sneak', issued_at + interval '1 minute' FROM public.billing_invoices WHERE id = aug;
     found := (SELECT string_agg(check_name, ',') FROM public.billing_reconcile() WHERE finding_count > 0);
     RAISE EXCEPTION 'undo';
   EXCEPTION WHEN OTHERS THEN NULL; END;

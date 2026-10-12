@@ -4,6 +4,7 @@ import { AdminNav } from "@/components/admin/AdminNav";
 import { AdminBillingInvoicesSection } from "@/components/billing/AdminBillingInvoicesSection";
 import { AdminBillingOrganizationsSection } from "@/components/billing/AdminBillingOrganizationsSection";
 import { AdminBillingOverviewSection } from "@/components/billing/AdminBillingOverviewSection";
+import { AdminBillingPromotionsSection } from "@/components/billing/AdminBillingPromotionsSection";
 import { AdminBillingPlansSection } from "@/components/billing/AdminBillingPlansSection";
 import { AdminBillingReconciliationSection } from "@/components/billing/AdminBillingReconciliationSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,8 +24,8 @@ function AdminBillingPage() {
           <h1 className="font-display text-2xl font-bold">Platform Billing</h1>
           <p className="text-sm text-muted-foreground">
             Subscriptions, platform fees and what DrugXOne earns. Figures come straight from the
-            billing records; the only things you change here are payments you record and the invoice
-            settings.
+            billing records. What you change here is a business's billing controls, the payments you
+            record, promotions and the invoice settings; every change needs a reason and is audited.
           </p>
         </div>
         <Tabs defaultValue="overview" className="w-full">
@@ -33,6 +34,7 @@ function AdminBillingPage() {
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="plans">Plans</TabsTrigger>
+            <TabsTrigger value="promotions">Promotions</TabsTrigger>
             <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
@@ -46,6 +48,9 @@ function AdminBillingPage() {
           </TabsContent>
           <TabsContent value="plans">
             <AdminBillingPlansSection />
+          </TabsContent>
+          <TabsContent value="promotions">
+            <AdminBillingPromotionsSection />
           </TabsContent>
           <TabsContent value="reconciliation">
             <AdminBillingReconciliationSection />

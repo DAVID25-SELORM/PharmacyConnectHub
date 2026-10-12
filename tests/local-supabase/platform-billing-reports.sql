@@ -222,7 +222,7 @@ DO $$
 DECLARE j JSONB; wa UUID := (SELECT wa FROM zz.rw); per UUID;
 BEGIN
   SELECT p.id INTO per FROM public.billing_periods p WHERE p.business_id = wa AND NOT p.shadow AND p.period_start <= now() AND p.period_end > now();
-  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, idempotency_key, reason, source) VALUES (wa, per, 'manual_credit', 5, 'rep:credit1', 'Goodwill credit', 'admin');
+  INSERT INTO public.billing_ledger_entries(business_id, period_id, entry_type, credit_amount, idempotency_key, reason, source) VALUES (wa, per, 'manual_credit', 5, 'rep:credit1', 'Goodwill credit', 'system');
   UPDATE public.billing_periods SET credits_amount = credits_amount + 5 WHERE id = per;
   j := zz.val_as((SELECT wa_owner FROM zz.users), format('SELECT public.billing_my_overview(%L)::text', wa))::jsonb;
   PERFORM zz.check('5: a credit appears under credits and adjustments, and the bill drops by it (110 less 5 = 105)', jsonb_array_length(j -> 'credits_and_adjustments') = 1 AND j -> 'credits_and_adjustments' -> 0 ->> 'reason' = 'Goodwill credit'

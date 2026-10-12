@@ -385,7 +385,11 @@ export type BusinessBillingDetail = {
     used: number;
   }[];
   periods?: (MyBillingPeriod & { id: string; fees_before_cap: number })[];
-  assessments?: (BillingOrderRow & { calculated_fee: number | null; rule_version: string })[];
+  assessments?: (BillingOrderRow & {
+    order_id?: string;
+    calculated_fee: number | null;
+    rule_version: string;
+  })[];
   ledger?: {
     created_at: string;
     entry_type: string;
@@ -434,6 +438,24 @@ export type BusinessBillingDetail = {
     reason: string | null;
   }[];
   credit_available?: number;
+  windows?: {
+    id: string;
+    starts_at: string;
+    ends_at: string;
+    overrides: Record<string, unknown>;
+    source: "promotion" | "admin";
+    promotion_code: string | null;
+    reason: string;
+    ended_early_at: string | null;
+    running: boolean;
+  }[];
+  promotions?: {
+    code: string;
+    name: string;
+    redeemed_at: string;
+    applied: Record<string, unknown>;
+    reason: string;
+  }[];
 };
 
 export async function fetchAdminBusinessBilling(
@@ -484,6 +506,10 @@ export const RECONCILIATION_LABELS: Record<string, string> = {
   invoice_numbers_have_a_gap: "Invoice numbers with a gap",
   credit_used_more_than_available: "Credit used beyond what was available",
   period_not_invoiced_when_it_should_be: "Ended periods that were not invoiced in time",
+  period_debits_differ_from_ledger: "Period charge totals that differ from the ledger",
+  fee_waived_more_than_charged: "Fee waivers larger than the fee charged",
+  promotion_redeemed_beyond_its_limit: "Promotions given to more businesses than their limit",
+  admin_ledger_entry_without_audit: "Credits or charges by an administrator with no audit record",
   invoice_overdue_but_not_marked: "Unpaid invoices past their due date that are not marked overdue",
 };
 

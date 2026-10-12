@@ -40,7 +40,7 @@ WITH
     AND pg_get_functiondef('public.billing_my_invoices(uuid, integer, integer)'::regprocedure) LIKE '%billing_user_can_view%' AND pg_get_functiondef('public.billing_my_invoice(uuid)'::regprocedure) LIKE '%billing_user_can_view%'),
   ('the scheduled run now issues invoices and marks overdue ones', pg_get_functiondef('public.billing_run_scheduled(timestamp with time zone)'::regprocedure) LIKE '%billing_issue_invoices%'
     AND pg_get_functiondef('public.billing_run_scheduled(timestamp with time zone)'::regprocedure) LIKE '%billing_mark_overdue%'),
-  ('the reconciliation covers invoices and payments (ten more checks than before)', (SELECT count(*) FROM public.billing_reconcile()) = (SELECT count(*) FROM public._billing_reconcile_engine()) + 10),
+  ('the reconciliation covers invoices and payments (ten more checks than before)', (SELECT count(*) FROM public.billing_reconcile()) >= (SELECT count(*) FROM public._billing_reconcile_engine()) + 10),
   ('the administrator dashboard reports invoiced, collected, outstanding, overdue and not-yet-invoiced separately', pg_get_functiondef('public._billing_flavor_summary(boolean, timestamp with time zone, timestamp with time zone, uuid[])'::regprocedure) LIKE '%not_yet_invoiced%'),
   ('billing is still OFF: mode is disabled', (SELECT mode FROM public.billing_settings WHERE id) = 'disabled'),
   ('nothing is invoiced or paid, and no invoice number has been used', (SELECT count(*) FROM public.billing_invoices) + (SELECT count(*) FROM public.billing_invoice_lines) + (SELECT count(*) FROM public.billing_payments) = 0

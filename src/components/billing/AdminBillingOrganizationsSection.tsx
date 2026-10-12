@@ -40,6 +40,7 @@ import {
   type PlanRow,
 } from "@/lib/billing";
 import { INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/billing-invoices";
+import { BillingControls } from "./BillingControls";
 
 const PAGE = 20;
 const ALL = "all";
@@ -56,6 +57,7 @@ const dateText = (iso: string | null | undefined) =>
 function BusinessDetail({ businessId, flavor }: { businessId: string; flavor: "real" | "shadow" }) {
   const [detail, setDetail] = useState<BusinessBillingDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setDetail(null);
@@ -71,7 +73,7 @@ function BusinessDetail({ businessId, flavor }: { businessId: string; flavor: "r
     return () => {
       cancelled = true;
     };
-  }, [businessId, flavor]);
+  }, [businessId, flavor, reload]);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!detail) return <Skeleton className="h-40" />;
@@ -84,6 +86,9 @@ function BusinessDetail({ businessId, flavor }: { businessId: string; flavor: "r
   const terms = detail.terms_now as Record<string, unknown> | null;
   return (
     <div className="space-y-5 text-sm" data-testid="billing-detail">
+      {flavor === "real" && (
+        <BillingControls detail={detail} onChanged={() => setReload((n) => n + 1)} />
+      )}
       <section className="space-y-1">
         <h4 className="font-semibold">Terms in force</h4>
         {terms ? (
@@ -156,6 +161,21 @@ function BusinessDetail({ businessId, flavor }: { businessId: string; flavor: "r
           </Table>
         </div>
       </section>
+      {(detail.promotions ?? []).length > 0 && (
+        <section className="space-y-1" data-testid="detail-promotions">
+          <h4 className="font-semibold">Promotions received</h4>
+          <ul className="divide-y">
+            {(detail.promotions ?? []).map((p) => (
+              <li key={p.code} className="py-1.5">
+                {p.code}{" "}
+                <span className="text-xs text-muted-foreground">
+                  {dateText(p.redeemed_at)} · {p.reason}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="space-y-1" data-testid="detail-invoices">
         <h4 className="font-semibold">Invoices</h4>
         {(detail.invoices ?? []).length === 0 ? (

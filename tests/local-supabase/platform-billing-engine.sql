@@ -442,7 +442,7 @@ DECLARE w UUID := (SELECT w8 FROM zz.w4); x UUID; y UUID; q RECORD; i INT; r JSO
 BEGIN
   -- a poisoned ledger key makes this order's billing fail every time
   x := zz.mkorder(w, 1000, 0, '2026-03-25 10:00+00');
-  INSERT INTO public.billing_ledger_entries(business_id, entry_type, idempotency_key, reason, source) VALUES (w, 'manual_debit', 'fee:' || x || ':primary:r', 'Poison for the test', 'admin');
+  INSERT INTO public.billing_ledger_entries(business_id, entry_type, idempotency_key, reason, source) VALUES (w, 'manual_debit', 'fee:' || x || ':primary:r', 'Poison for the test', 'system');
   PERFORM zz.deliver(x);
   UPDATE zz.q SET poison = x;
   PERFORM zz.check('K: the order is DELIVERED even though its billing failed', (SELECT status FROM public.orders WHERE id = x) = 'delivered');
