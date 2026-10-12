@@ -332,17 +332,38 @@ export function AdminBillingOverviewSection() {
 
           <Group
             title="Collections"
-            note="Nothing is invoiced or collected yet: invoices and payments arrive in a later release."
+            note="Four different numbers: accrued (above), invoiced, collected, and what is still owed on invoices. Accrued is not the same as collected."
           >
-            <Metric label="Invoiced" value={formatGHS(summary.invoiced)} testId="m-invoiced" />
-            <Metric label="Collected" value={formatGHS(summary.collected)} testId="m-collected" />
+            <Metric
+              label="Invoiced"
+              value={formatGHS(summary.invoiced)}
+              hint="Invoices issued in this period"
+              testId="m-invoiced"
+            />
+            <Metric
+              label="Collected"
+              value={formatGHS(summary.collected)}
+              hint="Payments received in this period, less reversals"
+              testId="m-collected"
+            />
             <Metric
               label="Outstanding"
               value={formatGHS(summary.outstanding)}
-              hint="Accrued and not yet paid"
+              hint="Owed on invoices, not yet paid"
               testId="m-outstanding"
             />
-            <Metric label="Overdue" value={formatGHS(summary.overdue)} testId="m-overdue" />
+            <Metric
+              label="Overdue"
+              value={formatGHS(summary.overdue)}
+              hint="Part of outstanding that is past its due date"
+              testId="m-overdue"
+            />
+            <Metric
+              label="Accrued, not yet invoiced"
+              value={formatGHS(summary.not_yet_invoiced ?? 0)}
+              hint="The open billing periods"
+              testId="m-not-invoiced"
+            />
           </Group>
         </>
       )}

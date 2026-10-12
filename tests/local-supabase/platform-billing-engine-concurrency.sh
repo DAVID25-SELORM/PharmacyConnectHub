@@ -120,7 +120,7 @@ check "3: the second, racing it, found it already assessed (no error)" "$(grep -
 check "3: exactly one assessment and one fee entry exist" "$([ "$N" = "1" ] && [ "$L" = "1" ] && echo true || echo false)" "assessments=$N ledger=$L"
 
 # ----- Afterwards everything reconciles ----------------------------------------------------------------------------------------------------------------------------------
-BAD=$($P -c "SELECT count(*) FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name <> 'billing_queue_stuck'")
+BAD=$($P -c "SELECT count(*) FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name NOT IN ('billing_queue_stuck', 'period_not_invoiced_when_it_should_be')")
 check "all: the reconciliation finds nothing wrong after the concurrent runs" "$([ "$BAD" = "0" ] && echo true || echo false)" "$($P -c "SELECT string_agg(check_name || '=' || finding_count, ';') FROM public.billing_reconcile() WHERE finding_count > 0")"
 
 $P -c "UPDATE public.billing_settings SET mode = 'disabled'" >/dev/null

@@ -399,8 +399,8 @@ END $$;
 DO $$
 DECLARE r RECORD; n INT; sub_id UUID; per UUID; w UUID := (SELECT w5 FROM zz.w3); a UUID;
 BEGIN
-  PERFORM zz.check('J: after every scenario above the reconciliation finds NOTHING wrong (period totals, counters, ledger, free numbers, caps, queue)', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0), (SELECT string_agg(check_name || '=' || finding_count || ' ' || details::text, '; ') FROM public.billing_reconcile() WHERE finding_count > 0));
-  PERFORM zz.check('J: the administrator''s view says healthy', (zz.adm('SELECT public.admin_billing_reconciliation()::text')::jsonb ->> 'healthy')::boolean);
+  PERFORM zz.check('J: after every scenario above the reconciliation finds NOTHING wrong (period totals, counters, ledger, free numbers, caps, queue)', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name <> 'period_not_invoiced_when_it_should_be'), (SELECT string_agg(check_name || '=' || finding_count || ' ' || details::text, '; ') FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name <> 'period_not_invoiced_when_it_should_be'));
+  PERFORM zz.check('J: the administrator''s view says healthy', NOT EXISTS (SELECT 1 FROM jsonb_array_elements(zz.adm('SELECT public.admin_billing_reconciliation()::text')::jsonb -> 'checks') c WHERE (c ->> 'count')::INTEGER > 0 AND c ->> 'check' <> 'period_not_invoiced_when_it_should_be'));
   SELECT id INTO per FROM public.billing_periods WHERE business_id = w AND period_start = '2026-03-01+00';
   UPDATE public.billing_periods SET transaction_fees_amount = transaction_fees_amount + 1 WHERE id = per;
   PERFORM zz.check('J: a period whose fee total no longer matches the ledger is reported', (SELECT finding_count FROM public.billing_reconcile() WHERE check_name = 'period_transaction_fees_differ_from_ledger') = 1);
@@ -432,7 +432,7 @@ BEGIN
   DELETE FROM public.order_billing_assessments WHERE outcome = 'excluded' AND billable_gmv = 1 AND terms_snapshot = '{}'::jsonb;
   ALTER TABLE public.order_billing_assessments ENABLE TRIGGER trg_billing_assessments_append_only;
   CREATE UNIQUE INDEX order_billing_primary_real_idx ON public.order_billing_assessments (order_id) WHERE kind = 'primary' AND NOT shadow;
-  PERFORM zz.check('J: and clean again once everything is put back', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0), (SELECT string_agg(check_name || '=' || finding_count, '; ') FROM public.billing_reconcile() WHERE finding_count > 0));
+  PERFORM zz.check('J: and clean again once everything is put back', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name <> 'period_not_invoiced_when_it_should_be'), (SELECT string_agg(check_name || '=' || finding_count, '; ') FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name <> 'period_not_invoiced_when_it_should_be'));
 END $$;
 
 -- K. A failure in billing never stops a delivery; the queue retries ------------------------------------------------------------------------------------------------------------------------------
@@ -486,7 +486,7 @@ BEGIN
   PERFORM zz.check('L: the earlier shadow assessments are untouched and shadow and real never mix', (SELECT count(*) FROM public.order_billing_assessments WHERE business_id = w AND shadow) = 4 AND (SELECT count(*) FROM public.order_billing_assessments WHERE business_id = w AND NOT shadow) = 3
     AND (SELECT count(*) FROM public.order_billing_assessments WHERE business_id = w AND shadow AND outcome = 'free_onboarding') = 2);
   PERFORM zz.check('L: the owner now sees the real rows only', zz.val_as((SELECT owner_id FROM public.businesses WHERE id = w), 'SELECT count(*)::text FROM public.order_billing_assessments') = '3');
-  PERFORM zz.check('L: both worlds reconcile', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name NOT IN ('billing_queue_stuck', 'delivered_order_not_assessed')), (SELECT string_agg(check_name, ',') FROM public.billing_reconcile() WHERE finding_count > 0));
+  PERFORM zz.check('L: both worlds reconcile', NOT EXISTS (SELECT 1 FROM public.billing_reconcile() WHERE finding_count > 0 AND check_name NOT IN ('billing_queue_stuck', 'delivered_order_not_assessed', 'period_not_invoiced_when_it_should_be')), (SELECT string_agg(check_name, ',') FROM public.billing_reconcile() WHERE finding_count > 0));
 END $$;
 
 -- M. Trial and cancellation ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------

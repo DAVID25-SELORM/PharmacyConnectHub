@@ -255,6 +255,7 @@ export type FlavorSummary = {
   collected: number;
   outstanding: number;
   overdue: number;
+  not_yet_invoiced: number;
 };
 
 export type AdminBillingOverview = {
@@ -409,6 +410,30 @@ export type BusinessBillingDetail = {
     attempts: number;
     error: string | null;
   }[];
+  invoices?: {
+    id: string;
+    invoice_number: string;
+    period_start: string;
+    period_end: string;
+    issued_at: string;
+    due_at: string;
+    total_amount: number;
+    amount_paid: number;
+    outstanding_amount: number;
+    status: "issued" | "partially_paid" | "paid" | "overdue";
+  }[];
+  payments?: {
+    id: string;
+    invoice_number: string;
+    kind: "payment" | "reversal";
+    amount: number;
+    method: string;
+    reference: string | null;
+    received_at: string;
+    recorded_at: string;
+    reason: string | null;
+  }[];
+  credit_available?: number;
 };
 
 export async function fetchAdminBusinessBilling(
@@ -448,6 +473,18 @@ export const RECONCILIATION_LABELS: Record<string, string> = {
   onboarding_grant_overused: "Launch free orders used more than granted",
   period_fees_exceed_the_cap: "Periods whose fees exceed the cap",
   billing_queue_stuck: "Billing retries that are stuck",
+  invoice_lines_differ_from_total: "Invoice lines that do not add up to the invoice total",
+  invoice_differs_from_its_period: "Invoices that differ from their billing period",
+  invoice_paid_differs_from_payments: "Invoices whose paid amount differs from their payments",
+  period_paid_or_status_differs_from_invoice:
+    "Periods whose paid amount or status differs from their invoice",
+  payment_exceeds_invoice_or_reversal_differs:
+    "Payments larger than their invoice, or reversals that do not match",
+  entries_added_to_an_invoiced_period: "Entries added to a period after it was invoiced",
+  invoice_numbers_have_a_gap: "Invoice numbers with a gap",
+  credit_used_more_than_available: "Credit used beyond what was available",
+  period_not_invoiced_when_it_should_be: "Ended periods that were not invoiced in time",
+  invoice_overdue_but_not_marked: "Unpaid invoices past their due date that are not marked overdue",
 };
 
 export type PlanRow = {

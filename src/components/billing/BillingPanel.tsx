@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BillingInvoices } from "./BillingInvoices";
 import {
   Table,
   TableBody,
@@ -358,6 +359,8 @@ export function BillingPanel({ businessId }: { businessId: string }) {
           </ul>
         </Card>
       )}
+
+      <BillingInvoices businessId={businessId} />
 
       {(data.periods?.length ?? 0) > 0 && (
         <Card className="space-y-3 p-4" data-testid="billing-history">

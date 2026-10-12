@@ -39,6 +39,7 @@ import {
   type OrganizationRow,
   type PlanRow,
 } from "@/lib/billing";
+import { INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/billing-invoices";
 
 const PAGE = 20;
 const ALL = "all";
@@ -154,6 +155,54 @@ function BusinessDetail({ businessId, flavor }: { businessId: string; flavor: "r
             </TableBody>
           </Table>
         </div>
+      </section>
+      <section className="space-y-1" data-testid="detail-invoices">
+        <h4 className="font-semibold">Invoices</h4>
+        {(detail.invoices ?? []).length === 0 ? (
+          <p className="text-muted-foreground">No invoice has been issued.</p>
+        ) : (
+          <ul className="divide-y">
+            {(detail.invoices ?? []).map((i) => (
+              <li key={i.id} className="flex flex-wrap justify-between gap-2 py-1.5">
+                <span>
+                  {i.invoice_number} · {periodLabel(i.period_start, i.period_end)}
+                </span>
+                <span>
+                  {formatGHS(i.total_amount)} · {INVOICE_STATUS_LABELS[i.status]}
+                  {i.outstanding_amount > 0 ? ` · ${formatGHS(i.outstanding_amount)} to pay` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(detail.credit_available ?? 0) > 0 && (
+          <p className="text-muted-foreground">
+            Credit available to use on the next invoice: {formatGHS(detail.credit_available ?? 0)}.
+          </p>
+        )}
+      </section>
+      <section className="space-y-1" data-testid="detail-payments">
+        <h4 className="font-semibold">Payments</h4>
+        {(detail.payments ?? []).length === 0 ? (
+          <p className="text-muted-foreground">No payment has been recorded.</p>
+        ) : (
+          <ul className="divide-y">
+            {(detail.payments ?? []).map((p) => (
+              <li key={p.id} className="flex flex-wrap justify-between gap-2 py-1.5">
+                <span>
+                  {p.invoice_number} · {dateText(p.received_at)} ·{" "}
+                  {p.kind === "reversal"
+                    ? "Reversal"
+                    : ((PAYMENT_METHOD_LABELS as Record<string, string>)[p.method] ?? p.method)}
+                  {p.reference ? ` · ${p.reference}` : ""}
+                </span>
+                <span>
+                  {p.kind === "reversal" ? `− ${formatGHS(p.amount)}` : formatGHS(p.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="space-y-1">
         <h4 className="font-semibold">Orders</h4>

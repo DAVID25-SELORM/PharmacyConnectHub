@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminBillingInvoicesSection } from "@/components/billing/AdminBillingInvoicesSection";
 import { AdminBillingOrganizationsSection } from "@/components/billing/AdminBillingOrganizationsSection";
 import { AdminBillingOverviewSection } from "@/components/billing/AdminBillingOverviewSection";
 import { AdminBillingPlansSection } from "@/components/billing/AdminBillingPlansSection";
@@ -21,14 +22,16 @@ function AdminBillingPage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Platform Billing</h1>
           <p className="text-sm text-muted-foreground">
-            Subscriptions, platform fees and what DrugXOne earns. Read-only: figures come straight
-            from the billing records.
+            Subscriptions, platform fees and what DrugXOne earns. Figures come straight from the
+            billing records; the only things you change here are payments you record and the invoice
+            settings.
           </p>
         </div>
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="mb-4 h-auto max-w-full justify-start overflow-x-auto [&>button]:shrink-0">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
+            <TabsTrigger value="invoices">Invoices</TabsTrigger>
             <TabsTrigger value="plans">Plans</TabsTrigger>
             <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           </TabsList>
@@ -37,6 +40,9 @@ function AdminBillingPage() {
           </TabsContent>
           <TabsContent value="organizations">
             <AdminBillingOrganizationsSection />
+          </TabsContent>
+          <TabsContent value="invoices">
+            <AdminBillingInvoicesSection />
           </TabsContent>
           <TabsContent value="plans">
             <AdminBillingPlansSection />
