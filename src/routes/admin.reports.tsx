@@ -112,6 +112,7 @@ function AdminReportsPage() {
           onApply={apply}
           onReset={reset}
           onExportCsv={() => exportReportPayload(exportRef.current(), "csv")}
+          getExportPayload={() => exportRef.current()}
           onExportXlsx={() => exportReportPayload(exportRef.current(), "xlsx")}
         />
 

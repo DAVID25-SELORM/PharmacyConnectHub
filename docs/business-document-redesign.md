@@ -12,7 +12,7 @@ Order invoices repeated issuer contact blocks, identifiers and dates. Current ca
 Reuse jsPDF/AutoTable, identity RPCs and existing totals helpers. Introduce a transaction-independent BusinessDocumentModel, shared HTML commercial layout and vector A4 PDF renderer. Adapt orders, RFQ exports and external procurement; retain operational pick-list semantics and payment receipt gating. Validate 1/5/20/50/100 lines, snapshots, rounding, long rows and A4 MediaBox. Browser print QA must be reported separately from unit tests.
 
 ## Integrity risks
-Legacy orders do not necessarily contain historical strength/form/pack data or allocated payment amounts. Do not replace those with live catalogue values or derive payments from COD. Never invent invoice numbers, tax, payment confirmation, receipt identities or historical logos. Existing commercial records and migrations remain unchanged. Unrelated work is preserved. No push or deployment is included in this task.
+Legacy orders do not necessarily contain historical strength/form/pack data or allocated payment amounts. Do not replace those with live catalogue values or derive payments from COD. Never invent invoice numbers, tax, payment confirmation, receipt identities or historical logos. Existing commercial records and migrations remain unchanged. Unrelated work is preserved. The user subsequently authorized completion and push.
 
 ## Implemented locally
 - BusinessDocumentModel and shared vector A4 renderer; commercial HTML invoice/order-copy/delivery layout.
@@ -30,10 +30,10 @@ Legacy orders do not necessarily contain historical strength/form/pack data or a
 
 ## Remaining acceptance work
 Chrome automation repeatedly fails to load its request-header policy. Consequently the original browser print defect has NOT been reproduced, and Chrome/Edge print preview remains unverified. This is not a certified permanent A4 fix yet.
-Payment receipt emails keep their existing authorized/paid-only sending flow; no new standalone receipt or credit-note issuance flow has been invented. Broad landscape analytical report exports retain their existing layout. Full receipt/report unification remains outstanding.
+Payment receipt emails keep their existing authorized/paid-only sending flow; no new standalone receipt or credit-note issuance flow has been invented. Receipt HTML and PDF attachments now share the normalized document model. Analytical reports use the A4 renderer, preserve multiple sections and paginate wide tables horizontally with the first column repeated. Report pages open a dedicated PDF preview instead of printing dashboard controls.
 The compact HTML preview and PDF share data but have distinct layout implementations. The actual PDF preview is the authoritative paginated preview. Browser/printer margins and header/footer overrides must still be tested.
 Legacy product/branding history and allocated payment amounts cannot be manufactured. Amount paid/balance display supports supplied authoritative values, but no new payment data RPC has been added.
-Not pushed or deployed. No database migration required for these local changes. Production authenticated transaction testing from the earlier task remains unverified.
+The initial implementation was pushed as 9f86455. No database migration is required for the document changes. Production authenticated transaction testing from the earlier task remains unverified.
 
 ## Confirmed CSS defect
 The compiled Tailwind v4 `.translate-x-[-50%]` rule uses the individual `translate` property. DialogContent applies this and the corresponding Y utility. Existing print rules cleared `transform` but left `translate` active on the modal ancestor, shifting the printable document by half its box. Print ancestors now reset translate, rotate, scale, animations, transitions and inset explicitly. This is confirmed from source and compiled CSS; physical/browser print reproduction remains pending connection recovery.
@@ -42,3 +42,12 @@ Final checks so far: TypeScript passed; focused related document tests 7 files/2
 
 ## Release recheck
 User authorized push. Fresh checks: npx tsc --noEmit passed; npm run build passed; npx vitest run --pool=threads --maxWorkers=2 passed all 89 files / 816 tests in one run. Browser print verification and remaining receipt/report scope above remain open. No migration required.
+
+## Receipt and report completion
+Paid receipt endpoints retain their existing authorization and payment gates. Their existing email now includes an A4 PDF attachment, using the same recorded identity, items and totals as the HTML receipt. Logo conversion runs server-side against the configured storage origin. Tests mock the email provider; no live email or transaction is created.
+
+Report Print / PDF actions prepare the exported dataset in a dedicated PDF viewer. Wide tables retain their fields on additional A4 pages instead of shrinking text. Multi-section reports remain a single download. Download links provide a fallback when an embedded PDF viewer is unavailable.
+
+No standalone credit-note issuance flow was added: the existing system represents credit notes within accounting statements. Actual Chrome/Edge print preview and production authenticated transaction testing remain unverified; the latest browser connection returned "User unavailable".
+
+Completion checks: 90 test files / 819 tests passed in one full regression run; production build passed with existing chunk warnings; receipt API TypeScript check passed. The focused PDF rerun passed 9 tests. The wide report generated four A4 pages with zero out-of-bounds words; its continuation page was visually inspected. Browser verification remains the limitation above.

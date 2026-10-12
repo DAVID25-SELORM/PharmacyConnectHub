@@ -1,5 +1,8 @@
+import type { DocumentBusiness } from "../src/lib/document-branding";
 import type { VercelRequest } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { receiptDocumentModel } from "./_receipt-document.js";
+import { businessDocumentHtml } from "../src/lib/business-document-html";
 
 type ReceiptLineItem = {
   productName: string;
@@ -21,7 +24,7 @@ type ReceiptParties = {
 };
 
 export type OrderReceiptPayload = {
-  issuer?: { name: string; legacy_branding?: boolean; branding?: { logo_path?: string; footer_note?: string } };
+  issuer?: DocumentBusiness & { legacy_branding?: boolean };
   logoUrl?: string;
   orderId: string;
   collectionId?: string;
@@ -115,15 +118,6 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function buildReceiptText(input: SendOrderReceiptEmailInput, loginUrl: string) {
   const itemLines = input.order.items
     .map(
@@ -157,129 +151,8 @@ function buildReceiptText(input: SendOrderReceiptEmailInput, loginUrl: string) {
     .join("\n");
 }
 
-function buildReceiptHtml(input: SendOrderReceiptEmailInput, loginUrl: string) {
-  const itemsHtml = input.order.items
-    .map((item) => {
-      const lineTotal = item.quantity * item.unitPriceGhs;
-      return `
-        <tr>
-          <td style="padding:12px 0;border-top:1px solid #e5e7eb;">${escapeHtml(item.productName)}</td>
-          <td style="padding:12px 0;border-top:1px solid #e5e7eb;text-align:center;">${item.quantity}</td>
-          <td style="padding:12px 0;border-top:1px solid #e5e7eb;text-align:right;">${escapeHtml(formatGhs(item.unitPriceGhs))}</td>
-          <td style="padding:12px 0;border-top:1px solid #e5e7eb;text-align:right;">${escapeHtml(formatGhs(lineTotal))}</td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  const paymentMethodLabel = input.order.paymentMethod === "cod" ? "Cash on delivery" : "Paystack";
-
-  return `
-    <div style="background:#f5faf8;padding:32px 16px;font-family:Segoe UI,Arial,sans-serif;color:#102a43;">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #d9e7df;border-radius:20px;overflow:hidden;">
-        <div style="padding:28px 32px;background:linear-gradient(135deg,#0f766e,#0b4f4b);color:#ffffff;">
-          ${input.order.logoUrl ? `<img src="${escapeHtml(input.order.logoUrl)}" alt="Business logo" style="max-width:160px;max-height:70px;object-fit:contain;background:white;">` : ""}
-          <div style="font-size:22px;font-weight:bold;">${escapeHtml(input.order.issuer?.name || input.order.parties.wholesaler.name)}</div>
-          <h1 style="margin:12px 0 0;font-size:28px;line-height:1.15;">Order receipt</h1>
-          <p style="margin:10px 0 0;font-size:15px;line-height:1.6;opacity:.92;">
-            This receipt was issued after the wholesaler confirmed payment for your delivered order.
-            ${input.order.issuer?.legacy_branding ? "Original branding was not recorded; current business identity is shown." : ""}
-          </p>
-        </div>
-        <div style="padding:28px 32px;">
-          <p style="margin:0 0 20px;font-size:16px;">Hello ${escapeHtml(
-            input.toName?.trim() || input.order.parties.pharmacy.name,
-          )},</p>
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:24px;">
-            <div style="padding:16px;border:1px solid #e5e7eb;border-radius:16px;background:#f8fafc;">
-              <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#486581;">Order</div>
-              <div style="margin-top:8px;font-size:24px;font-weight:700;">${escapeHtml(
-                input.order.orderNumber,
-              )}</div>
-              <div style="margin-top:8px;color:#486581;">Total: ${escapeHtml(
-                formatGhs(input.order.totalGhs),
-              )}</div>
-            </div>
-            <div style="padding:16px;border:1px solid #e5e7eb;border-radius:16px;background:#f8fafc;">
-              <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#486581;">Payment</div>
-              <div style="margin-top:8px;font-size:16px;font-weight:700;">${escapeHtml(
-                paymentMethodLabel,
-              )}</div>
-              <div style="margin-top:8px;color:#486581;">Confirmed: ${escapeHtml(
-                formatDateTime(input.order.paidAt),
-              )}</div>
-            </div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:24px;">
-            <div style="padding:16px;border:1px solid #e5e7eb;border-radius:16px;">
-              <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#486581;">Pharmacy</div>
-              <div style="margin-top:8px;font-size:18px;font-weight:700;">${escapeHtml(
-                input.order.parties.pharmacy.name,
-              )}</div>
-              <div style="margin-top:6px;color:#486581;">${escapeHtml(
-                [input.order.parties.pharmacy.city, input.order.parties.pharmacy.region]
-                  .filter(Boolean)
-                  .join(", ") || "Ghana",
-              )}</div>
-            </div>
-            <div style="padding:16px;border:1px solid #e5e7eb;border-radius:16px;">
-              <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#486581;">Wholesaler</div>
-              <div style="margin-top:8px;font-size:18px;font-weight:700;">${escapeHtml(
-                input.order.parties.wholesaler.name,
-              )}</div>
-              <div style="margin-top:6px;color:#486581;">${escapeHtml(
-                [input.order.parties.wholesaler.city, input.order.parties.wholesaler.region]
-                  .filter(Boolean)
-                  .join(", ") || "Ghana",
-              )}</div>
-            </div>
-          </div>
-
-          <div style="margin-bottom:24px;padding:16px;border-radius:16px;background:#f8fafc;border:1px solid #e5e7eb;">
-            <div style="font-size:13px;color:#486581;">Delivered at</div>
-            <div style="margin-top:6px;font-size:16px;font-weight:600;">${escapeHtml(
-              formatDateTime(input.order.deliveredAt),
-            )}</div>
-          </div>
-
-          <table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px;">
-            <thead>
-              <tr style="text-align:left;color:#486581;">
-                <th style="padding-bottom:10px;">Item</th>
-                <th style="padding-bottom:10px;text-align:center;">Qty</th>
-                <th style="padding-bottom:10px;text-align:right;">Unit price</th>
-                <th style="padding-bottom:10px;text-align:right;">Line total</th>
-              </tr>
-            </thead>
-            <tbody>${itemsHtml}</tbody>
-          </table>
-
-          ${
-            input.order.deliveryFeeGhs
-              ? `<div style="margin-top:16px;display:flex;justify-content:space-between;font-size:14px;color:#486581;"><span>Delivery fee</span><span>${escapeHtml(formatGhs(input.order.deliveryFeeGhs))}</span></div>`
-              : ""
-          }
-          <div style="margin-top:24px;padding-top:18px;border-top:1px solid #e5e7eb;display:flex;justify-content:space-between;gap:12px;align-items:center;">
-            <span style="font-size:14px;color:#486581;">Receipt total</span>
-            <strong style="font-size:22px;">${escapeHtml(formatGhs(input.order.totalGhs))}</strong>
-          </div>
-
-          ${
-            loginUrl
-              ? `<div style="margin-top:28px;">
-                  <a href="${escapeHtml(
-                    loginUrl,
-                  )}" style="display:inline-block;padding:14px 20px;border-radius:999px;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;">
-                    Open Drugxone
-                  </a>
-                </div>`
-              : ""
-          }
-        </div>
-      </div>
-    </div>
-  `;
+export function buildReceiptHtml(input: SendOrderReceiptEmailInput, _loginUrl: string) {
+  return businessDocumentHtml(receiptDocumentModel(input.order), input.order.logoUrl);
 }
 
 export async function sendOrderReceiptEmail(
@@ -301,16 +174,58 @@ export async function sendOrderReceiptEmail(
 
   const siteUrl = getSiteUrl(input.request);
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-    const { data: issuer, error } = await db.rpc("prepare_receipt_document_identity", { p_order_id: input.order.orderId, p_collection_id: input.order.collectionId ?? null });
-    if (error || !issuer) return { ok: false, error: "Receipt identity could not be prepared. Retry sending the receipt." };
-    input = { ...input, order: { ...input.order, issuer, logoUrl: issuer.branding?.logo_path ? db.storage.from("business-document-logos").getPublicUrl(issuer.branding.logo_path).data.publicUrl : undefined } };
+    const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+    const { data: issuer, error } = await db.rpc("prepare_receipt_document_identity", {
+      p_order_id: input.order.orderId,
+      p_collection_id: input.order.collectionId ?? null,
+    });
+    if (error || !issuer)
+      return {
+        ok: false,
+        error: "Receipt identity could not be prepared. Retry sending the receipt.",
+      };
+    input = {
+      ...input,
+      order: {
+        ...input.order,
+        issuer,
+        logoUrl: issuer.branding?.logo_path
+          ? db.storage.from("business-document-logos").getPublicUrl(issuer.branding.logo_path).data
+              .publicUrl
+          : undefined,
+      },
+    };
   }
   const loginUrl = siteUrl ? new URL("/login", `${siteUrl}/`).toString() : "";
 
   let response: Response;
 
   try {
+    const { buildBusinessDocumentPdf } = await import("../src/lib/business-document-pdf");
+    let logo: string | undefined;
+    // The snapshot storage URL is constructed above, never taken from a request field.
+    if (
+      input.order.logoUrl &&
+      process.env.SUPABASE_URL &&
+      new URL(input.order.logoUrl).origin === new URL(process.env.SUPABASE_URL).origin
+    ) {
+      const logoResponse = await fetch(input.order.logoUrl, {
+        signal: AbortSignal.timeout(10000),
+        redirect: "error",
+      });
+      if (!logoResponse.ok) throw new Error("Receipt logo could not be loaded.");
+      const { default: sharp } = await import("sharp");
+      const png = await sharp(Buffer.from(await logoResponse.arrayBuffer()), {
+        limitInputPixels: 16000000,
+      })
+        .resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      logo = `data:image/png;base64,${png.toString("base64")}`;
+    }
+    const pdf = buildBusinessDocumentPdf(receiptDocumentModel(input.order), logo);
     response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -324,6 +239,12 @@ export async function sendOrderReceiptEmail(
         subject: `Receipt for order ${input.order.orderNumber}`,
         html: buildReceiptHtml(input, loginUrl),
         text: buildReceiptText(input, loginUrl),
+        attachments: [
+          {
+            filename: `receipt-${input.order.orderNumber.replace(/[^a-z0-9-]/gi, "-")}.pdf`,
+            content: Buffer.from(pdf.output("arraybuffer")).toString("base64"),
+          },
+        ],
       }),
     });
   } catch (error) {
@@ -331,8 +252,8 @@ export async function sendOrderReceiptEmail(
       ok: false,
       error:
         error instanceof Error
-          ? `Failed to contact the receipt email provider: ${error.message}`
-          : "Failed to contact the receipt email provider.",
+          ? `Failed to prepare or send the receipt: ${error.message}`
+          : "Failed to prepare or send the receipt.",
     };
   }
 

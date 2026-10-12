@@ -12,6 +12,7 @@ export type BusinessDocumentModel = {
   numericColumns?: number[];
   summary?: Array<[string, string]>;
   notes?: string[];
+  sections?: Array<{ title: string; columns: string[]; rows: string[][] }>;
 };
 
 export const documentMoney = (value: number) =>

@@ -71,6 +71,8 @@ export function buildBusinessDocumentPdf(model: BusinessDocumentModel, logo?: st
     margin,
     head: [model.columns],
     body: model.rows,
+    horizontalPageBreak: true,
+    horizontalPageBreakRepeat: 0,
     theme: "striped",
     showHead: "everyPage",
     rowPageBreak: "avoid",
@@ -79,6 +81,29 @@ export function buildBusinessDocumentPdf(model: BusinessDocumentModel, logo?: st
     columnStyles: numeric,
     alternateRowStyles: { fillColor: [247, 249, 249] },
   });
+  for (const section of model.sections ?? []) {
+    pdf.addPage();
+    autoTable(pdf, {
+      startY: 16,
+      margin,
+      theme: "plain",
+      body: [[section.title]],
+      styles: { fontSize: 14, fontStyle: "bold" },
+    });
+    autoTable(pdf, {
+      startY: end() + 4,
+      margin,
+      head: [section.columns],
+      body: section.rows,
+      horizontalPageBreak: true,
+      horizontalPageBreakRepeat: 0,
+      theme: "striped",
+      showHead: "everyPage",
+      rowPageBreak: "avoid",
+      styles: { fontSize: 10, cellPadding: 2.5, overflow: "linebreak" },
+      headStyles: { fillColor: identity.accentColor, textColor: 255 },
+    });
+  }
   if (model.summary?.length)
     autoTable(pdf, {
       startY: end() + 5,

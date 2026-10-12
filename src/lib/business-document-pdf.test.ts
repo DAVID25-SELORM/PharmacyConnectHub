@@ -108,3 +108,37 @@ describe("actual vector A4 PDF output", () => {
       await task.destroy();
     });
 });
+
+it("preserves all fields across wide, multi-section report pages", async () => {
+  const columns = Array.from({ length: 14 }, (_, i) => `Column ${i}`);
+  const pdf = buildBusinessDocumentPdf({
+    title: "Report",
+    reference: "",
+    issuer: { name: "Business" },
+    metadata: [],
+    columns,
+    rows: [columns.map((_, i) => `VALUE-${i}-END`)],
+    sections: [
+      { title: "Second section", columns: ["Name", "Amount"], rows: [["FINAL-RECORD", "25.00"]] },
+    ],
+  });
+  if (process.env.DOCUMENT_QA_OUTPUT) {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    mkdirSync("tmp/pdfs", {recursive:true});
+    writeFileSync("tmp/pdfs/report-wide.pdf", new Uint8Array(pdf.output("arraybuffer")));
+  }
+  const task = getDocument({
+    data: new Uint8Array(pdf.output("arraybuffer")),
+    useSystemFonts: true,
+  });
+  const doc = await task.promise;
+  let text = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    text += (await page.getTextContent()).items.map((x) => ("str" in x ? x.str : "")).join(" ");
+  }
+  for (let i = 0; i < 14; i++) expect(text).toContain(`VALUE-${i}-END`);
+  expect(text).toContain("FINAL-RECORD");
+  expect(doc.numPages).toBeGreaterThan(2);
+  await task.destroy();
+});

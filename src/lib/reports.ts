@@ -128,55 +128,51 @@ export async function downloadXlsx(filename: string, sheets: ReportExportSheet[]
 
 // ---------------------------------------------------------------------------
 // PDF export — one table per sheet, lazy-loaded (jspdf + jspdf-autotable) the same way as the
-// xlsx package above, so neither loads on a page that doesn't export. Landscape by default since
-// these tables are usually wider than they are tall; callers should keep to a handful of columns
-// that still print legibly rather than dumping every field.
+// xlsx package above, so neither loads on a page that doesn't export. Portrait A4 with horizontal pagination for wide tables;
+// all exported fields are preserved.
 // ---------------------------------------------------------------------------
 
-let pdfModulePromise: Promise<{ jsPDF: typeof import("jspdf").default; autoTable: typeof import("jspdf-autotable").autoTable }> | null = null;
-function loadPdf() {
-  pdfModulePromise ??= Promise.all([import("jspdf"), import("jspdf-autotable")]).then(([jspdfMod, autoTableMod]) => ({
-    jsPDF: jspdfMod.default,
-    autoTable: autoTableMod.autoTable,
-  }));
-  return pdfModulePromise;
+/** Shared A4 renderer. All sheets remain in one download, with their original columns. */
+export async function buildReportPdf(
+  title: string,
+  sheets: ReportExportSheet[],
+  businessId?: string,
+) {
+  if (!sheets.length) return;
+  const { buildBusinessDocumentPdf, loadDocumentLogo } = await import("./business-document-pdf");
+  const identity = businessId
+    ? await (await import("./document-identity")).loadDocumentIdentity(businessId)
+    : null;
+  const [first, ...rest] = sheets;
+  const pdf = buildBusinessDocumentPdf(
+    {
+      title,
+      reference: "",
+      issuer: identity,
+      metadata: [
+        ["Generated", new Date().toLocaleString("en-GB")],
+        ...(sheets.length > 1 ? [["Section", first.name] as [string, string]] : []),
+      ],
+      columns: first.headers,
+      rows: first.rows.map((row) => row.map(String)),
+      sections: rest.map((sheet) => ({
+        title: sheet.name,
+        columns: sheet.headers,
+        rows: sheet.rows.map((row) => row.map(String)),
+      })),
+    },
+    await loadDocumentLogo(identity?.branding?.logo_url),
+  );
+  return pdf;
 }
 
-export async function downloadPdf(filename: string, title: string, sheets: ReportExportSheet[], businessId?: string) {
-  const { jsPDF, autoTable } = await loadPdf();
-  const identity = businessId ? await (await import("./document-identity")).loadDocumentIdentity(businessId) : null;
-  const branding = (await import("./document-branding")).resolveDocumentBranding(identity);
-  const doc = new jsPDF({ orientation: "landscape" });
-  let logo: string | null = null;
-  if (branding.logo_url) {
-    const response = await fetch(branding.logo_url);
-    if (!response.ok) throw new Error("Logo could not be loaded. Retry export.");
-    const bitmap = await createImageBitmap(await response.blob());
-    const canvas = document.createElement("canvas"); canvas.width=240; canvas.height=100;
-    const scale=Math.min(240/bitmap.width,100/bitmap.height);
-    canvas.getContext("2d")!.drawImage(bitmap,0,0,bitmap.width*scale,bitmap.height*scale); bitmap.close();
-    logo=canvas.toDataURL("image/png");
-  }
-  sheets.forEach((sheet, index) => {
-    if (index > 0) doc.addPage();
-    doc.setFontSize(14);
-    if (logo) doc.addImage(logo,"PNG",14,8,36,15);
-    if (identity) doc.text(identity.name,logo ? 55 : 14,15);
-    doc.text(sheets.length > 1 ? `${title} — ${sheet.name}` : title, 14, identity ? 31 : 15);
-    doc.setFontSize(9);
-    doc.text(new Date().toLocaleString("en-GB"), 14, identity ? 38 : 21);
-    autoTable(doc, {
-      head: [sheet.headers],
-      body: sheet.rows.map((row) => row.map(String)),
-      startY: identity ? 44 : 26,
-      margin: { bottom: 20 },
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [240, 244, 244], textColor: [20,20,20] },
-    });
-  });
-  const pages=doc.getNumberOfPages();
-  for(let p=1;p<=pages;p++) { doc.setPage(p); doc.setFontSize(8); doc.text(`${identity ? `Issued by ${identity.name} via Drugxone` : "Drugxone"} · ${p} / ${pages}`,14,200); }
-  doc.save(filename);
+export async function downloadPdf(
+  filename: string,
+  title: string,
+  sheets: ReportExportSheet[],
+  businessId?: string,
+) {
+  (await buildReportPdf(title, sheets, businessId))?.save(filename);
 }
 
 /** What a report tab's exportRef hands back: the same data the CSV and XLSX exports both
