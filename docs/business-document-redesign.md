@@ -51,3 +51,8 @@ Report Print / PDF actions prepare the exported dataset in a dedicated PDF viewe
 No standalone credit-note issuance flow was added: the existing system represents credit notes within accounting statements. Actual Chrome/Edge print preview and production authenticated transaction testing remain unverified; the latest browser connection returned "User unavailable".
 
 Completion checks: 90 test files / 819 tests passed in one full regression run; production build passed with existing chunk warnings; receipt API TypeScript check passed. The focused PDF rerun passed 9 tests. The wide report generated four A4 pages with zero out-of-bounds words; its continuation page was visually inspected. Browser verification remains the limitation above.
+
+## User-reported clipped invoice print
+The supplied browser print screenshot shows missing issuer/description content with mainly numeric columns visible. The commercial Print action still invoked window.print on the dashboard's portalled dialog. It now prepares the same actual A4 PDF as Download PDF and opens its viewer for printing. Invoice, pharmacy order copy and delivery note no longer use dashboard DOM printing. The viewer includes an explicit PDF download fallback. Pick/pack retains its existing operational print path.
+
+The PDF pagination tests pass (9 tests including 1/5/20/50/100 lines and wide multi-section reports). This removes modal geometry from the commercial Print action; actual browser print-dialog verification remains pending browser availability.

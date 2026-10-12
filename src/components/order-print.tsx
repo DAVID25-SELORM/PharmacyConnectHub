@@ -169,7 +169,13 @@ export function OrderPrintActions({
     }
   };
   const print = async () => {
-    if (!mode || !ready) return;
+    if (!mode || !ready || exporting) return;
+    // Commercial documents print from their actual A4 PDF, never the portalled
+    // dashboard DOM. Modal sizing and scroll position must not affect paper output.
+    if (mode !== "pick-pack") {
+      await download(true);
+      return;
+    }
     try {
       await Promise.all(
         Array.from(document.querySelectorAll<HTMLImageElement>(".print-document img")).map((img) =>
@@ -217,8 +223,10 @@ export function OrderPrintActions({
                 {modeLabels[mode]} · {order.order_number}
               </DialogTitle>
               <DialogDescription>
-                A4 portrait - Select A4 and 100% scale in Chrome or Edge. Turn off browser headers
-                and footers. Printing does not confirm payment.
+                {mode === "pick-pack"
+                  ? "Select A4 portrait and turn off browser headers and footers."
+                  : "Print opens the A4 PDF. Use its printer button, or download it and print at actual size."}
+                {" "}Printing does not confirm payment.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-wrap justify-end gap-2 print:hidden">
@@ -237,7 +245,7 @@ export function OrderPrintActions({
                   Preview PDF pages
                 </Button>
               )}
-              <Button onClick={print} disabled={!ready}>
+              <Button onClick={print} disabled={!ready || exporting}>
                 <Printer className="mr-2 h-4 w-4" />
                 Print
               </Button>
@@ -262,6 +270,13 @@ export function OrderPrintActions({
                       {pdfPreview.pages} A4 {pdfPreview.pages === 1 ? "page" : "pages"} - Use the
                       PDF viewer to print this exact paginated layout.
                     </p>
+                    <a
+                      href={pdfPreview.url}
+                      download={documentFileName(modeLabels[mode!], order.order_number)}
+                      className="inline-block my-2 underline"
+                    >
+                      Download this PDF to print
+                    </a>
                     <iframe
                       title="A4 PDF preview"
                       src={pdfPreview.url}
@@ -272,7 +287,7 @@ export function OrderPrintActions({
                     </Button>
                   </div>
                 )}
-                <div className={pdfPreview ? "hidden print:block" : "overflow-x-auto"}>
+                <div className={pdfPreview ? "hidden" : "overflow-x-auto"}>
                   <PrintableOrderDocument order={printable} mode={mode} preview />
                 </div>
               </>
