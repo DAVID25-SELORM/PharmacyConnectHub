@@ -2,17 +2,43 @@
 @source "../src";
 @import "tw-animate-css";
 
+/* Physical page geometry is independent of dialog and viewport dimensions. */
+.commercial-document { font: 10.5pt/1.45 Arial, sans-serif; color: #202828; background: white; }
+.document-a4-preview { width: 210mm; min-height: 297mm; max-width: none; padding: 12mm; margin: 12px auto; box-sizing: border-box; box-shadow: 0 2px 12px #0002; }
+.commercial-document__header { display: flex; justify-content: space-between; gap: 8mm; padding-bottom: 5mm; border-bottom: 2px solid var(--document-accent, #0f766e); }
+.commercial-document__header > :first-child { flex: 1; }
+.commercial-document__identity { max-width: 40%; text-align: right; overflow-wrap: anywhere; }
+.commercial-document__identity h1 { font-size: 20pt; font-weight: 700; text-transform: uppercase; margin-bottom: 3mm; }
+.commercial-document__parties { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; margin: 6mm 0; }
+.commercial-document h2 { font-size: 9pt; text-transform: uppercase; color: #526060; margin-bottom: 2mm; }
+.commercial-document dl > div { display: flex; justify-content: space-between; gap: 4mm; margin-bottom: 2mm; }
+.commercial-document dd { text-align: right; margin: 0; }
+.commercial-document table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.commercial-document th { background: #edf2f2; border-bottom: 1px solid #657575; font-weight: 700; text-align: left; }
+.commercial-document th, .commercial-document td { padding: 3mm 2mm; vertical-align: top; overflow-wrap: anywhere; white-space: pre-line; }
+.commercial-document td { border-bottom: 1px solid #dce2e2; }
+.commercial-document th:first-child { width: auto; }
+.commercial-document .document-number { width: 26mm; text-align: right; font-variant-numeric: tabular-nums; }
+.document-summary { width: 88mm; margin: 6mm 0 6mm auto; break-inside: avoid; }
+.document-summary dd { font-weight: 700; }
+.document-summary > div:last-child { border-top: 1px solid #657575; padding-top: 3mm; }
+.document-note, .commercial-document footer { margin-top: 5mm; white-space: pre-line; overflow-wrap: anywhere; }
+.commercial-document footer { border-top: 1px solid #ccd4d4; padding-top: 3mm; font-size: 9pt; }
+
 @media print {
   /* Remove unrelated boxes, not just their paint. Preserve only the ancestor
      chain of the selected documents, including portalled dialog content. */
   body:has(.print-document) *:not(:has(.print-document)):not(.print-document):not(.print-document *) { display: none !important; }
   body:has(.print-document), body:has(.print-document) *:has(.print-document) {
     display: block !important; position: static !important; transform: none !important;
+    translate: none !important; rotate: none !important; scale: none !important;
+    animation: none !important; transition: none !important; inset: auto !important;
     width: auto !important; height: auto !important; min-height: 0 !important;
     max-height: none !important; max-width: none !important; overflow: visible !important;
     margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important;
   }
-  .print-document { display: block !important; position: relative; width: 100%; min-height: 0; padding: 0; color: #000; background: #fff; }
+  .print-document { display: block !important; position: relative; width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; color: #000; background: #fff; }
+  .no-print { display: none !important; }
   .print-document + .print-document { break-before: page; }
   .print-document footer { break-inside: avoid; }
   thead { display: table-header-group; }
@@ -23,7 +49,7 @@
   .business-document__metadata dt { color: #555; text-transform: uppercase; font-size: 7pt; letter-spacing: .05em; }
   .business-document__metadata dd { margin: 2px 0 0; font-weight: 600; }
   .business-document__footer { break-inside: avoid; margin-top: 20px; padding-top: 8px; border-top: 1px solid #777; color: #555; font-size: 8pt; text-align: center; }
-  @page { size: A4; margin: 12mm;
+  @page { size: A4 portrait; margin: 12mm;
     @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial, sans-serif; color: #555; }
   }
 }

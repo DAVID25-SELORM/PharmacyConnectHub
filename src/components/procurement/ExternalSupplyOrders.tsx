@@ -162,21 +162,9 @@ export function ExternalSupplyOrders({
       .single();
     if (error) throw new Error(error.message);
     const order = data as SupplyOrder;
-    let logo: string | undefined;
+    const { loadDocumentLogo } = await import('@/lib/business-document-pdf');
     const path = order.issuer?.branding?.logo_path;
-    if (path) {
-      const url = db.storage.from("business-document-logos").getPublicUrl(path).data.publicUrl;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Logo could not be loaded. Retry download.");
-      const bitmap = await createImageBitmap(await response.blob());
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = 160;
-      const scale = Math.min(320 / bitmap.width, 160 / bitmap.height);
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, bitmap.width * scale, bitmap.height * scale);
-      bitmap.close();
-      logo = canvas.toDataURL("image/png");
-    }
+    const logo = await loadDocumentLogo(path ? db.storage.from('business-document-logos').getPublicUrl(path).data.publicUrl : order.issuer?.branding?.logo_url);
     const { buildSupplyOrderPdf } = await import("@/lib/external-supply-order-pdf");
     buildSupplyOrderPdf(order, logo).save(`${order.reference}.pdf`);
   }

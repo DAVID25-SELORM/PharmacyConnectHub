@@ -32,11 +32,7 @@ export function BusinessIdentityHeader({ business }: { business: DocumentBusines
     <div className="flex min-w-0 items-start gap-3">
       {identity.logo_url && failedLogo !== identity.logo_url ? (
         <img src={identity.logo_url} onError={() => setFailedLogo(identity.logo_url ?? null)} alt="" className="h-14 w-14 shrink-0 object-contain" />
-      ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded border text-lg font-bold" style={{ borderColor: identity.accentColor, color: identity.accentColor }}>
-          {identity.name.slice(0, 1).toUpperCase()}
-        </div>
-      )}
+      ) : null}
       <div className="min-w-0">
         <div className="break-words text-xl font-bold leading-tight">{identity.name}</div>
         {identity.display_name?.trim() && identity.display_name.trim() !== identity.name && (

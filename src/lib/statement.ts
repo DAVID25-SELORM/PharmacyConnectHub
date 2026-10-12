@@ -115,12 +115,12 @@ export function statementPrintHtml(statement: Statement, issuer?: DocumentBusine
   const place = (b: { city: string | null; region: string | null }) =>
     escapeHtml([b.city, b.region].filter(Boolean).join(", "));
   return `<!doctype html><html><head><meta charset="utf-8"><title>Statement - ${escapeHtml(statement.pharmacy.name)}</title>
-<style>body{font-family:Arial,sans-serif;margin:32px;color:#111}header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #0f766e;padding-bottom:8px}h1{font-size:20px;margin:0 0 4px}.doc{font-size:13px;font-weight:700;letter-spacing:.08em}table{border-collapse:collapse;width:100%;margin-top:16px;font-size:13px}
+<style>@page{size:A4 portrait;margin:12mm} @media print{body{margin:0!important}thead{display:table-header-group}tr,.sum{break-inside:avoid}} td,th{overflow-wrap:anywhere}body{font-family:Arial,sans-serif;margin:32px;color:#111}header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #0f766e;padding-bottom:8px}h1{font-size:20px;margin:0 0 4px}.doc{font-size:13px;font-weight:700;letter-spacing:.08em}table{border-collapse:collapse;width:100%;margin-top:16px;font-size:13px}
 th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f3f4f6}.n{text-align:right}.sum{margin-top:16px;font-size:14px}.sum div{display:flex;justify-content:space-between;max-width:360px;padding:2px 0}
 .muted{color:#555;font-size:12px}</style></head><body>
 <header><div>${logo}<h1>${escapeHtml(identity.name)}</h1>${identity.contactLines.map(line=>`<div class="muted">${escapeHtml(line)}</div>`).join("")}</div><div class="doc">STATEMENT OF ACCOUNT</div></header>
 <div class="muted">${escapeHtml(formatReportDate(statement.from))} to ${escapeHtml(formatReportDate(new Date(new Date(statement.to).getTime() - 1).toISOString()))}</div>
-<p><strong>Issued by</strong><br>${escapeHtml(statement.wholesaler.name)}<br><span class="muted">${place(statement.wholesaler)}</span></p>
+
 <p><strong>Debtor / customer</strong><br>${escapeHtml(statement.pharmacy.name)}<br><span class="muted">${place(statement.pharmacy)}</span></p>
 <table><thead><tr><th>Date</th><th>Description</th><th class="n">Charges</th><th class="n">Payments</th><th class="n">Balance</th></tr></thead><tbody>
 <tr><td></td><td><strong>Opening balance</strong></td><td></td><td></td><td class="n">${escapeHtml(formatGHSCell(statement.opening_balance))}</td></tr>${rows}
@@ -129,6 +129,6 @@ th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left}th{background
 <div><span>Total payments</span><span>${escapeHtml(formatGHSCell(statement.total_credits))}</span></div>
 <div><strong>Closing balance</strong><strong>${escapeHtml(formatGHSCell(statement.closing_balance))}</strong></div></div>
 ${statement.truncated ? '<p class="muted">Only the first 2,000 lines are shown. Choose a shorter date range for the full list.</p>' : ""}
-<p class="muted">${escapeHtml(identity.footer_note ?? "")}</p><p class="muted">Issued by ${escapeHtml(identity.name)} via Drugxone. Cancelled and refunded orders are not included.</p>
+<p class="muted">${escapeHtml(identity.footer_note ?? "")}</p><p class="muted">Amounts in GHS. Cancelled and refunded orders are not included.</p>
 </body></html>`;
 }

@@ -126,6 +126,6 @@ describe("external purchase order workflow", () => {
     const output = pdf.output();
     expect(output).toContain("Medicine 89");
     expect(output).toContain("EPO-TEST");
-    expect(output).toContain("9000.00");
+    expect(output).toContain("9,000.00");
   });
 });
