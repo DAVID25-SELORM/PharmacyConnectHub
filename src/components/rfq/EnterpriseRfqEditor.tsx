@@ -1,3 +1,5 @@
+import { ProcurementCatalogue } from "@/components/procurement/ProcurementCatalogue";
+import { medicineLabel } from "@/lib/procurement-catalogue";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -379,6 +381,36 @@ export function EnterpriseRfqEditor({
             </Button>
           </div>
         )}
+        <details>
+          <summary className="cursor-pointer font-semibold">
+            Add from private business or master catalogue
+          </summary>
+          <ProcurementCatalogue
+            businessId={businessId}
+            onAdd={(entry) =>
+              setLines((previous) => [
+                ...previous.filter((l) => JSON.stringify(l) !== JSON.stringify(blank())),
+                {
+                  ...blank(),
+                  productName: medicineLabel(entry.data),
+                  masterProductId: entry.source === "master" ? entry.id : null,
+                  unit:
+                    ({ packs: "pack", boxes: "box", bottles: "bottle" } as Record<string, string>)[
+                      entry.data.unit
+                    ] || "unit",
+                  notes: [
+                    entry.data.notes,
+                    !["packs", "boxes", "bottles"].includes(entry.data.unit)
+                      ? `Each unit means one ${entry.data.unit || "piece"}.`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" "),
+                },
+              ])
+            }
+          />
+        </details>
         <h3 className="font-semibold">Medicines ({lines.length})</h3>
         {lines.slice(linePage * 20, linePage * 20 + 20).map((line, offset) => {
           const index = linePage * 20 + offset;

@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { WholesalerCreditRequests } from "@/components/credit/CreditAccountRequests";
 import { useCallback, useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
@@ -189,9 +190,9 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
 
   const revoke = async (line: CreditLine) => {
     if (
-      !window.confirm(
+      !(await confirmAction(
         `Revoke credit for ${line.pharmacy_name}? They will need another payment method for new orders. Existing invoices remain payable.`,
-      )
+      ))
     )
       return;
     const { error: rpcError } = await rpc("revoke_credit_terms", {
@@ -445,7 +446,7 @@ export function CreditTermsCard({ wholesalerId }: { wholesalerId: string }) {
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => {
+                onClick={async () => {
                   setStatusChange(null);
                   setStatusReason("");
                 }}

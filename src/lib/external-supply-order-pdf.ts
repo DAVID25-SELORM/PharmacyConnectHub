@@ -54,13 +54,13 @@ export function buildSupplyOrderPdf(order: SupplyOrder, logo?: string) {
   autoTable(pdf, {
     ...table,
     startY: end() + 5,
-    head: [["Medicine / pack", "Specification", "Packs", "Unit GHS", "Line GHS"]],
+    head: [["Medicine / pack", "Specification", "Quantity / unit", order.kind === "request" ? "Target GHS" : "Unit GHS", "Line GHS"]],
     body: order.data.lines.map((l) => [
       l.name,
       l.specification,
-      l.quantity,
+      `${l.quantity} ${l.unit || "packs"}`,
       l.unit_price === null ? "Quote requested" : l.unit_price.toFixed(2),
-      l.unit_price === null ? "-" : (l.quantity * l.unit_price).toFixed(2),
+      l.unit_price === null ? "-" : (Math.round(l.unit_price * 100) * l.quantity / 100).toFixed(2),
     ]),
     headStyles: { fillColor: [15, 118, 110] },
   });

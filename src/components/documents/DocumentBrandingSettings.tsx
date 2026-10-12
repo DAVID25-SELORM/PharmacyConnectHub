@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -56,13 +57,15 @@ function BrandingEditor({
   const [previewType, setPreviewType] = useState("Invoice");
   const dirty = JSON.stringify(value) !== JSON.stringify(saved);
   useBlocker({
-    shouldBlockFn: () => dirty && !window.confirm("Discard unsaved branding changes?"),
-    enableBeforeUnload: dirty,
+    shouldBlockFn: async () => dirty && !(await confirmAction("Discard unsaved branding changes?")),
+    enableBeforeUnload: false,
   });
   useEffect(() => {
     const protect = (event: Event) => {
-      if (dirty && !window.confirm("Discard unsaved branding changes before switching business?"))
+      if (dirty) {
         event.preventDefault();
+        toast.info("Save or close your current changes before switching business.");
+      }
     };
     window.addEventListener("drugxone:before-workspace-change", protect);
     return () => window.removeEventListener("drugxone:before-workspace-change", protect);
@@ -180,7 +183,7 @@ function BrandingEditor({
         <h2 className="text-lg font-semibold">Business document branding</h2>
         <p className="text-sm text-muted-foreground">
           Commercial documents retain {businessName} as the verified issuer. These controls change
-          presentation only.
+          presentation only. Save changes before closing or refreshing this browser tab.
         </p>
       </div>
       <fieldset disabled={saving} className="grid gap-3 sm:grid-cols-2">
@@ -235,7 +238,7 @@ function BrandingEditor({
           <Button
             variant="outline"
             disabled={saving}
-            onClick={() => {
+            onClick={async () => {
               patch("logo_path", null);
               setLogoUrl(null);
             }}
@@ -332,7 +335,7 @@ function BrandingEditor({
         <Button
           variant="outline"
           disabled={saving || !dirty}
-          onClick={() => {
+          onClick={async () => {
             setValue(saved);
             setLogoUrl(
               saved.logo_path
@@ -347,7 +350,7 @@ function BrandingEditor({
         <Button
           variant="outline"
           disabled={saving}
-          onClick={() => {
+          onClick={async () => {
             setValue({
               ...saved,
               ...blank,

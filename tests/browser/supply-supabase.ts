@@ -59,6 +59,8 @@ export const supabase = {
         filters[k] = v;
         return q;
       },
+      neq: () => q,
+      limit: () => q,
       order: () => q,
       range: () => q,
       single: () => {
@@ -70,6 +72,7 @@ export const supabase = {
     return q;
   },
   async rpc(name: string, args: Record<string, any>) {
+    if (["search_procurement_catalogue", "procurement_suppliers", "procurement_document_report"].includes(name)) return { data: [], error: null };
     if (name === "transition_external_supply_order") {
       const o = orders.find((o) => o.id === args.p_id)!;
       o.status = args.p_action;

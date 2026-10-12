@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   status: "issued",
   fail: false,
 }));
+vi.mock("./ProcurementTemplates", () => ({ ProcurementTemplates: () => null }));
+vi.mock("./ProcurementCatalogue", () => ({ ProcurementCatalogue: () => null }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: mocks.block }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
@@ -37,7 +39,7 @@ vi.mock("@/integrations/supabase/client", () => ({
               : [],
       });
       const query: Record<string, unknown> = {};
-      for (const method of ["select", "eq", "order", "range"]) query[method] = () => query;
+      for (const method of ["select", "eq", "neq", "order", "range"]) query[method] = () => query;
       query.single = () => {
         single = true;
         return Promise.resolve(result());
@@ -68,11 +70,12 @@ function order() {
     },
   };
 }
+import { ConfirmationHost } from "@/lib/confirm-action";
 import { ExternalSupplyOrders } from "./ExternalSupplyOrders";
 let host: HTMLDivElement, root: Root;
 beforeEach(() => {
   mocks.status = "issued";
-  mocks.rpc.mockReset().mockResolvedValue({ data: "order", error: null });
+  mocks.rpc.mockReset().mockImplementation(async (name: string) => ({ data: name === "procurement_suppliers" ? [] : "order", error: null }));
   mocks.receive.mockReset();
   vi.spyOn(window, "confirm").mockReturnValue(true);
   host = document.createElement("div");
@@ -87,19 +90,22 @@ afterEach(async () => {
 async function render(canRecord = true) {
   await act(async () =>
     root.render(
-      <ExternalSupplyOrders
-        pharmacyId="pharmacy"
-        canRecord={canRecord}
-        onReceive={mocks.receive}
-        onReceipt={() => {}}
-      />,
+      <>
+        {" "}
+        <ConfirmationHost />
+        <ExternalSupplyOrders
+          pharmacyId="pharmacy"
+          canRecord={canRecord}
+          onReceive={mocks.receive}
+          onReceipt={() => {}}
+        />
+      </>,
     ),
   );
 }
 async function click(text: string) {
-  const button = Array.from(document.querySelectorAll("button")).find((b) =>
-    b.textContent?.includes(text),
-  );
+  const buttons = Array.from(document.querySelectorAll("button"));
+  const button = buttons.find((b) => b.textContent?.trim() === text) ?? buttons.find((b) => b.textContent?.includes(text));
   expect(button).toBeTruthy();
   await act(async () => button!.click());
 }
@@ -114,14 +120,16 @@ it("opens outstanding quantities and prepares a partial receipt without writing 
       items: [expect.objectContaining({ quantity: 8 })],
     }),
   );
-  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
 });
 it("requires a separate user confirmation to mark a document shared", async () => {
   await render();
   await click("EPO-1");
-  expect(mocks.rpc).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
   await click("Mark as shared manually");
-  expect(window.confirm).toHaveBeenCalled();
+  expect(window.confirm).not.toHaveBeenCalled();
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
+  await click("Continue");
   expect(mocks.rpc).toHaveBeenCalledWith("transition_external_supply_order", {
     p_id: "order",
     p_version: 2,
@@ -143,7 +151,7 @@ it("preserves the editable draft after a failed save", async () => {
   mocks.status = "draft";
   await render();
   await click("EPO-1");
-  await click("Edit draft");
+  await click("Continue / edit draft");
   mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: "Offline" } });
   await act(async () =>
     document
@@ -155,4 +163,35 @@ it("preserves the editable draft after a failed save", async () => {
     "save_external_supply_order",
     expect.objectContaining({ p_pharmacy_id: "pharmacy", p_id: "order", p_version: 2 }),
   );
+});
+
+it("keeps the document unchanged when an in-app confirmation is dismissed", async () => {
+  await render();
+  await click("EPO-1");
+  await click("Mark as shared manually");
+  await click("Keep working");
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
+  expect(window.confirm).not.toHaveBeenCalled();
+});
+it("removes a draft through the versioned cancellation RPC, preserving its history", async () => {
+  mocks.status = "draft";
+  await render();
+  await click("EPO-1");
+  await click("Remove draft");
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
+  await click("Continue");
+  expect(mocks.rpc).toHaveBeenCalledWith("transition_external_supply_order", {
+    p_id: "order",
+    p_version: 2,
+    p_action: "cancelled",
+  });
+});
+
+it("creates a revised draft without changing the issued document", async () => {
+  await render();
+  await click("EPO-1");
+  await click("Create revised draft");
+  expect(document.querySelector("form")).toBeTruthy();
+  expect((document.querySelector("textarea") as HTMLTextAreaElement).value).toContain("Revised from EPO-1");
+  expect(mocks.rpc.mock.calls.filter(([name]) => name !== "procurement_suppliers")).toHaveLength(0);
 });

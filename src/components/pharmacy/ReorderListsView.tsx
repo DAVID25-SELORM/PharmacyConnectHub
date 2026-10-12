@@ -1,3 +1,4 @@
+import { confirmAction } from "@/lib/confirm-action";
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -171,8 +172,8 @@ function ListCard({
     );
   };
 
-  const remove = () => {
-    if (window.confirm(`Delete the list "${list.name}"? This cannot be undone.`))
+  const remove = async () => {
+    if (await confirmAction(`Delete the list "${list.name}"? This cannot be undone.`))
       void api.deleteList(list.id);
   };
 

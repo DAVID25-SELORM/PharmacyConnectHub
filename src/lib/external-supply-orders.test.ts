@@ -58,6 +58,35 @@ describe("external purchase order workflow", () => {
     expect(receiptFromSupplyOrder(order, receipts).items).toEqual([]);
     expect(supplyStatus({ ...order, status: "cancelled" }, receipts)).toBe("cancelled");
   });
+  it("requires explicit conversion for non-pack receiving and reuses recorded conversions", () => {
+    const boxes = {
+      ...order,
+      data: { ...order.data, lines: [{ ...order.data.lines[0], unit: "boxes" }] },
+    };
+    const first = receiptFromSupplyOrder(boxes, []);
+    expect(first.items[0].quantity).toBe(0);
+    expect(first.items[0].external_packs_per_unit).toBeUndefined();
+    const next = receiptFromSupplyOrder(boxes, [
+      {
+        id: "r",
+        reference: "EXT",
+        review_status: "draft",
+        external_order_allocations: [
+          {
+            line_id: "line",
+            product_name: order.data.lines[0].name,
+            quantity: 2,
+            packs_per_unit: 5,
+            unit: "boxes",
+            inventory_packs: 10,
+          },
+        ],
+      },
+    ]);
+    expect(next.items[0].quantity).toBe(90);
+    expect(next.items[0].external_packs_per_unit).toBe(5);
+    expect(next.items[0].unit_cost_ghs).toBe(0);
+  });
   it("rejects invalid quantities, prices and ambiguous duplicate medicine names", () => {
     expect(validateSupplyDraft(order.data)).toBeNull();
     for (const quantity of [0, -1, 1.5, Infinity])

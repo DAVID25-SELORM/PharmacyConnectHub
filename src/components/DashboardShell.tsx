@@ -243,7 +243,8 @@ export function DashboardHeader({
       return;
     }
 
-    if (!window.dispatchEvent(new Event("drugxone:before-workspace-change", { cancelable: true }))) return;
+    if (!window.dispatchEvent(new Event("drugxone:before-workspace-change", { cancelable: true })))
+      return;
     setActiveBusiness(businessId);
     navigate({ to: "/dashboard" });
   };
@@ -375,9 +376,13 @@ export function DashboardHeader({
                 Credit
               </Link>
             )}
-            {business?.type === "pharmacy" && (
+            {business && (
               <Link
-                to="/pharmacy/procurement"
+                to={
+                  business.type === "wholesaler"
+                    ? "/wholesaler/procurement"
+                    : "/pharmacy/procurement"
+                }
                 className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
               >
                 <Package className="h-4 w-4 inline mr-2" />
@@ -403,7 +408,12 @@ export function DashboardHeader({
                 Accounting
               </Link>
             )}
-            <Link to="/settings" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent">Settings</Link>
+            <Link
+              to="/settings"
+              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+            >
+              Settings
+            </Link>
             {showAuditLink && (
               <Link
                 to={auditRoute}
