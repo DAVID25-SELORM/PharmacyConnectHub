@@ -2,7 +2,7 @@
 
 How DrugXOne earns revenue from the businesses on it: subscriptions for pharmacies and wholesalers, and a small transaction fee on a wholesaler's delivered orders after its free allowances. Everything commercial (prices, trials, free orders, percentages, limits, features) is **configuration in the database**, never code.
 
-Status: **Phase 1 (schema and configuration) is built. Nothing charges anyone**: billing is `disabled`, no business has a subscription, and no engine exists yet.
+Status: **Phases 1 (schema and configuration) and 2 (the engine, in shadow) are built. Nothing charges anyone**: billing is `disabled`, no business has a subscription, and the engine writes nothing while billing is disabled. Real (`active`) billing cannot be switched on yet.
 
 ## 1. Decisions (agreed 2026-10-11)
 
@@ -73,6 +73,23 @@ Phase 1 (this): schema and configuration, mode `disabled`. Phase 2: the engine i
 
 Billing calculation and billing enforcement are separate: a business past due keeps working through a configurable grace period before any restriction.
 
-## 7. Verification
+## 7. Phase 2: what the engine does (built)
 
-`docs/billing/verify-billing-p1.sql` (read-only, 18 checks) confirms the tables, RLS, absence of write grants, the append-only and uniqueness protections, the functions and their privileges, and that billing is off.
+Migrations `20261202100000_platform_billing_engine_schema.sql` and `20261202110000_platform_billing_engine.sql`. Everything below is server-only (no signed-in user can call it) and does nothing while billing is `disabled`.
+
+- **When an order is delivered** a trigger calls `billing_assess_order`; **when a delivered order's effective total changes** (a delivery credit, a back-order shipment) or **a return is resolved** it calls `billing_assess_order_change`. Each call is wrapped so that **any failure is caught, queued (`billing_engine_queue`) and retried, and never blocks the delivery, the value change or the return**.
+- **Per business, one lock** (the subscription row, then the period row) serialises everything that spends a free order or the cap. Proved with real overlapping sessions: five GHS 4,000 orders delivered at once under a GHS 100 cap charge exactly GHS 100.00 (with the locks removed they charge GHS 180); four orders against two launch free orders give exactly two free numbers.
+- **Decision order, as agreed:** exempt, excluded (paused; buyer and seller with the same owner; no billable value), below the plan's minimum order value, launch free order, monthly free order, otherwise chargeable. An order never uses two allowances. Billable value = effective total − delivery fee − returned goods credited or refunded, never below zero.
+- **Fee:** `billing_compute_fee` is the only place the arithmetic lives: percentage, then per-order minimum, then maximum, rounded half-up to 2 decimals once. A zero percentage or a zero-value order has no fee whatever the minimum. The cycle cap is then applied: charged = LEAST(fee, cap − already charged this period). Cross-checked against an independent whole-number (BigInt) implementation over 5,000 cases, including every exact half-pesewa.
+- **Evidence:** an immutable assessment per order (terms snapshot, rule version, free source and number, calculated fee, fee after limits, cap adjustment, charged) and ledger entries (`free_order`, `transaction_fee`, `fee_cap_adjustment`). Real assessments are audited against the business; shadow ones are not (no noise in the activity log).
+- **Adjustments:** a later change in an order's value records the difference as numbered adjustment assessments, priced under the order's own original terms (never today's), landing in the period that contains the change. A drop is a `refund` credit entry; a rise is charged within the cap; an order that was free gets a `free_adjustment` (no money) and consumes no allowance.
+- **Shadow versus real:** shadow rows are a separate world (own periods, assessments, ledger, free-order numbers). Real billing counts only orders delivered on or after `activated_at` (set at activation in Phase 6), so orders delivered during shadow are never billed for real.
+- **Periods and state:** `billing_open_periods` opens each business's rolling periods and posts the subscription charge (waived while the period starts inside the trial or billing is paused), even for a business with no orders; `billing_advance_states` ends a trial (trialing becomes active) and makes cancel-at-period-end take effect; `billing_catch_up` assesses delivered orders the engine has not seen (oldest first, so free orders are used in delivery order); `billing_process_queue` retries failures up to 10 times, then marks them failed and reconciliation reports them.
+- **Scheduled:** `billing_run_scheduled` (periods, states, queue, catch-up) runs every 15 minutes through `pg_cron` when available (it is in production); `admin_billing_run_now(reason)` runs it on demand, audited.
+- **Reconciliation:** `billing_reconcile` / `admin_billing_reconciliation` report delivered orders not assessed, duplicate primaries, period totals that differ from the ledger (fees, credits, subscription), counters that differ from the assessments, assessments whose charge differs from the ledger, free numbers that are not contiguous, over-used grants, fees over the cap, and stuck queue entries.
+
+Known simplifications: only the **seller** (wholesaler) is assessed for orders; a retailer's plan has a subscription but no per-order fee (a retailer fee is a later, explicit change). A fee credit (a drop in order value) does not free up cap space in the same period. An adjustment to an order assessed in an already-invoiced period lands in the current period (invoices arrive in Phase 4).
+
+## 8. Verification
+
+`docs/billing/verify-billing-p1.sql` (18 checks) and `docs/billing/verify-billing-p2.sql` (15 checks) are read-only: tables, RLS, absence of write grants, the append-only and uniqueness protections, the functions and their privileges, the triggers, that billing is off and that nothing has been billed.
