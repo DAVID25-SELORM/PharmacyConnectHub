@@ -20,6 +20,7 @@ export function RfqReasonDialog({
   confirmLabel,
   destructive = false,
   inputType = "textarea",
+  minLength = 1,
   busy,
   onSubmit,
   onClose,
@@ -31,6 +32,8 @@ export function RfqReasonDialog({
   confirmLabel: string;
   destructive?: boolean;
   inputType?: "textarea" | "datetime-local";
+  /** The shortest text accepted, for reasons that are recorded and must say something specific. */
+  minLength?: number;
   busy: boolean;
   onSubmit: (value: string) => Promise<boolean>;
   onClose: () => void;
@@ -55,6 +58,11 @@ export function RfqReasonDialog({
               onChange={(e) => setValue(e.target.value)}
             />
           )}
+          {minLength > 1 && (
+            <span className="block text-xs text-muted-foreground tabular-nums">
+              {value.trim().length} of at least {minLength} characters
+            </span>
+          )}
         </label>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
@@ -63,7 +71,7 @@ export function RfqReasonDialog({
           <Button
             type="button"
             variant={destructive ? "destructive" : "default"}
-            disabled={busy || !value.trim()}
+            disabled={busy || value.trim().length < minLength}
             onClick={async () => {
               if (await onSubmit(value.trim())) onClose();
             }}

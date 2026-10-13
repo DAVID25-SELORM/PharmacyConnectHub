@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatGHS } from "@/lib/format";
 import { formatReportDate, formatReportDateTime } from "@/lib/reports";
 import { QuoteComparison } from "@/components/rfq/QuoteComparison";
+import { PagedList } from "@/components/rfq/PagedList";
 import {
   RFQ_STATUS_LABELS,
   RFQ_STATUS_STYLES,
@@ -66,18 +77,24 @@ export function PharmacyRfqDetail({
   const [confirming, setConfirming] = useState(false);
   const [awardError, setAwardError] = useState<string | null>(null);
   const [awards, setAwards] = useState<RfqAward[]>([]);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = useCallback(async () => {
     if (!rfqId) return;
     setLoading(true);
-    const [{ data: rfqData }, { data: itemsData }, { data: inviteesData }, { data: quotesData }, { data: awardsData }] =
-      await Promise.all([
-        db.from("rfqs").select("*").eq("id", rfqId).maybeSingle(),
-        db.from("rfq_items").select("*").eq("rfq_id", rfqId),
-        db.from("rfq_invitees").select("*").eq("rfq_id", rfqId),
-        db.from("rfq_quotes").select("*").eq("rfq_id", rfqId).order("total_ghs", { ascending: true }),
-        db.from("rfq_awards").select("*").eq("rfq_id", rfqId),
-      ]);
+    const [
+      { data: rfqData },
+      { data: itemsData },
+      { data: inviteesData },
+      { data: quotesData },
+      { data: awardsData },
+    ] = await Promise.all([
+      db.from("rfqs").select("*").eq("id", rfqId).maybeSingle(),
+      db.from("rfq_items").select("*").eq("rfq_id", rfqId),
+      db.from("rfq_invitees").select("*").eq("rfq_id", rfqId),
+      db.from("rfq_quotes").select("*").eq("rfq_id", rfqId).order("total_ghs", { ascending: true }),
+      db.from("rfq_awards").select("*").eq("rfq_id", rfqId),
+    ]);
     setAwards((awardsData as RfqAward[] | null) ?? []);
     setSelection({});
     setConfirming(false);
@@ -89,10 +106,16 @@ export function PharmacyRfqDetail({
     setQuotes(quoteRows);
 
     const wholesalerIds = [
-      ...new Set([...(inviteesData ?? []).map((i: RfqInvitee) => i.wholesaler_id), ...quoteRows.map((q) => q.wholesaler_id)]),
+      ...new Set([
+        ...(inviteesData ?? []).map((i: RfqInvitee) => i.wholesaler_id),
+        ...quoteRows.map((q) => q.wholesaler_id),
+      ]),
     ];
     if (wholesalerIds.length > 0) {
-      const { data: bizData } = await supabase.from("businesses").select("id, name").in("id", wholesalerIds);
+      const { data: bizData } = await supabase
+        .from("businesses")
+        .select("id, name")
+        .in("id", wholesalerIds);
       const map: Record<string, Business> = {};
       for (const b of (bizData as Business[] | null) ?? []) map[b.id] = b;
       setWholesalers(map);
@@ -102,7 +125,10 @@ export function PharmacyRfqDetail({
       const { data: itemRows } = await db
         .from("rfq_quote_items")
         .select("*")
-        .in("rfq_quote_id", quoteRows.map((q) => q.id));
+        .in(
+          "rfq_quote_id",
+          quoteRows.map((q) => q.id),
+        );
       const grouped: Record<string, RfqQuoteItem[]> = {};
       for (const row of (itemRows as RfqQuoteItem[] | null) ?? []) {
         (grouped[row.rfq_quote_id] ??= []).push(row);
@@ -129,21 +155,31 @@ export function PharmacyRfqDetail({
 
   const confirmAward = async () => {
     if (!rfqId) return;
-    const { error: validationError, payload } = validateAwardSelection(selection, allQuoteItems, items);
+    const { error: validationError, payload } = validateAwardSelection(
+      selection,
+      allQuoteItems,
+      items,
+    );
     if (validationError || !payload) {
       setAwardError(validationError);
       setConfirming(false);
       return;
     }
     setBusy(true);
-    const { error } = await rpc("award_rfq_lines", { p_rfq_id: rfqId, p_awards: payload, p_use_credit: useCredit });
+    const { error } = await rpc("award_rfq_lines", {
+      p_rfq_id: rfqId,
+      p_awards: payload,
+      p_use_credit: useCredit,
+    });
     setBusy(false);
     if (error) {
       setAwardError(error.message);
       setConfirming(false);
       return;
     }
-    toast.success(awardTotals.length === 1 ? "Order created" : `${awardTotals.length} orders created`);
+    toast.success(
+      awardTotals.length === 1 ? "Order created" : `${awardTotals.length} orders created`,
+    );
     onChanged();
     void load();
   };
@@ -162,7 +198,9 @@ export function PharmacyRfqDetail({
     void load();
   };
 
-  const respondedWholesalerIds = new Set(quotes.filter((q) => q.status !== "withdrawn").map((q) => q.wholesaler_id));
+  const respondedWholesalerIds = new Set(
+    quotes.filter((q) => q.status !== "withdrawn").map((q) => q.wholesaler_id),
+  );
   const awaitingInvitees = invitees.filter((i) => !respondedWholesalerIds.has(i.wholesaler_id));
 
   return (
@@ -185,7 +223,9 @@ export function PharmacyRfqDetail({
               </div>
               <SheetDescription>
                 {rfq.reference} · Requested {formatReportDate(rfq.created_at)}
-                {rfq.response_deadline ? ` · responses due ${formatReportDate(rfq.response_deadline)}` : ""}
+                {rfq.response_deadline
+                  ? ` · responses due ${formatReportDate(rfq.response_deadline)}`
+                  : ""}
               </SheetDescription>
             </SheetHeader>
 
@@ -193,17 +233,17 @@ export function PharmacyRfqDetail({
 
             <div className="mt-5">
               <h3 className="text-sm font-medium text-muted-foreground">Items requested</h3>
-              <ul className="mt-2 divide-y divide-border rounded-xl border border-border text-sm">
-                {items.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-3 p-3">
-                    <span>{item.product_name}</span>
-                    <span className="text-muted-foreground">
-                      {item.quantity} unit{item.quantity === 1 ? "" : "s"}
-                      {item.notes ? ` · ${item.notes}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-2">
+                <PagedList
+                  label="Search requested items"
+                  rows={items.map((item) => ({
+                    id: item.id,
+                    text: `${item.product_name} ${item.notes ?? ""}`,
+                    left: item.product_name,
+                    right: `${item.quantity} unit${item.quantity === 1 ? "" : "s"}${item.notes ? ` · ${item.notes}` : ""}`,
+                  }))}
+                />
+              </div>
             </div>
 
             <div className="mt-5">
@@ -229,7 +269,9 @@ export function PharmacyRfqDetail({
                     .filter((q) => q.status !== "withdrawn" && q.delivery_notes)
                     .map((q) => (
                       <li key={q.id}>
-                        <span className="font-medium text-foreground">{wholesalers[q.wholesaler_id]?.name ?? "Supplier"}:</span>{" "}
+                        <span className="font-medium text-foreground">
+                          {wholesalers[q.wholesaler_id]?.name ?? "Supplier"}:
+                        </span>{" "}
                         {q.delivery_notes}
                       </li>
                     ))}
@@ -257,19 +299,23 @@ export function PharmacyRfqDetail({
                 {confirming && (
                   <div className="space-y-1 text-sm">
                     <p className="font-medium">
-                      This will create {awardTotals.length} order{awardTotals.length === 1 ? "" : "s"}
+                      This will create {awardTotals.length} order
+                      {awardTotals.length === 1 ? "" : "s"}
                       {awardTotals.length > 1 ? " — one per supplier" : ""}:
                     </p>
                     <ul className="space-y-0.5 text-muted-foreground">
                       {awardTotals.map((t) => (
                         <li key={t.quoteId}>
-                          {wholesalers[t.wholesalerId]?.name ?? "Supplier"}: {formatGHS(t.goods)} goods
-                          {t.delivery > 0 ? ` + ${formatGHS(t.delivery)} delivery` : ""} = {formatGHS(t.total)}
+                          {wholesalers[t.wholesalerId]?.name ?? "Supplier"}: {formatGHS(t.goods)}{" "}
+                          goods
+                          {t.delivery > 0 ? ` + ${formatGHS(t.delivery)} delivery` : ""} ={" "}
+                          {formatGHS(t.total)}
                         </li>
                       ))}
                     </ul>
                     <p className="text-xs text-muted-foreground">
-                      Suppliers with nothing awarded are told only that their quote wasn&apos;t selected. This can&apos;t be undone.
+                      Suppliers with nothing awarded are told only that their quote wasn&apos;t
+                      selected. This can&apos;t be undone.
                     </p>
                   </div>
                 )}
@@ -279,12 +325,21 @@ export function PharmacyRfqDetail({
                       <Button type="button" disabled={busy} onClick={() => void confirmAward()}>
                         {busy ? "Placing orders..." : "Confirm award"}
                       </Button>
-                      <Button type="button" variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => setConfirming(false)}
+                      >
                         Back
                       </Button>
                     </>
                   ) : (
-                    <Button type="button" disabled={busy || awardTotals.length === 0} onClick={reviewAward}>
+                    <Button
+                      type="button"
+                      disabled={busy || awardTotals.length === 0}
+                      onClick={reviewAward}
+                    >
                       Review award
                     </Button>
                   )}
@@ -295,8 +350,9 @@ export function PharmacyRfqDetail({
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Nothing is awarded automatically. Enter the quantity to award to each supplier per item (you can split an
-                  item between suppliers), or use &ldquo;Select whole quote&rdquo;.
+                  Nothing is awarded automatically. Enter the quantity to award to each supplier per
+                  item (you can split an item between suppliers), or use &ldquo;Select whole
+                  quote&rdquo;.
                 </p>
               </div>
             )}
@@ -304,18 +360,17 @@ export function PharmacyRfqDetail({
             {rfq.status === "awarded" && awards.length > 0 && (
               <div className="mt-5">
                 <h3 className="text-sm font-medium text-muted-foreground">Awarded</h3>
-                <ul className="mt-2 divide-y divide-border rounded-xl border border-border text-sm">
-                  {awards.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-3 p-3">
-                      <span>
-                        {items.find((i) => i.id === a.rfq_item_id)?.product_name ?? "Item"} × {a.quantity}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {wholesalers[a.wholesaler_id]?.name ?? "Supplier"} · {formatGHS(a.unit_price_ghs)} each
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-2">
+                  <PagedList
+                    label="Search awarded items"
+                    rows={awards.map((a) => ({
+                      id: a.id,
+                      text: `${items.find((i) => i.id === a.rfq_item_id)?.product_name ?? ""} ${wholesalers[a.wholesaler_id]?.name ?? ""}`,
+                      left: `${items.find((i) => i.id === a.rfq_item_id)?.product_name ?? "Item"} × ${a.quantity}`,
+                      right: `${wholesalers[a.wholesaler_id]?.name ?? "Supplier"} · ${formatGHS(a.unit_price_ghs)} each`,
+                    }))}
+                  />
+                </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   An order was created for each supplier above. Track it under My orders.
                 </p>
@@ -328,13 +383,35 @@ export function PharmacyRfqDetail({
                 variant="outline"
                 className="mt-5"
                 disabled={busy}
-                onClick={() => void cancel()}
+                onClick={() => setConfirmCancel(true)}
               >
                 Cancel this RFQ
               </Button>
             )}
           </>
         )}
+        <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel this RFQ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Suppliers will be told the request is cancelled and can no longer quote. This
+                can&apos;t be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep it open</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  setConfirmCancel(false);
+                  void cancel();
+                }}
+              >
+                Cancel the RFQ
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );
