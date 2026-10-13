@@ -82,6 +82,7 @@ import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { InventoryInsights } from "@/components/wholesaler/InventoryInsights";
+import { ExportProductsButton } from "@/components/wholesaler/ExportProductsButton";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -991,8 +992,9 @@ function ProductsManager({
             />
           </div>
           {canManageProducts ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <BulkUploadDialog businessId={businessId} reload={reload} />
+              <ExportProductsButton businessId={businessId} />
               <AddProductDialog businessId={businessId} reload={reload} />
             </div>
           ) : (
