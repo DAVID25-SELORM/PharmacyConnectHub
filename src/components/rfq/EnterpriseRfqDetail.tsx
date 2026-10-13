@@ -17,6 +17,7 @@ import {
   type Allocation,
 } from "@/lib/enterprise-rfq";
 import { EnterpriseQuoteEditor } from "./EnterpriseQuoteEditor";
+import { RfqItemsTable } from "./RfqItemsTable";
 type Negotiation = {
   id: string;
   wholesaler_id: string;
@@ -281,41 +282,11 @@ export function EnterpriseRfqDetail({
           </>
         )}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr>
-              <th>Medicine / specification</th>
-              <th>Requested</th>
-              {buyer && <th>Remaining</th>}
-              <th>Shelf life</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((i) => (
-              <tr key={i.id} className="border-t">
-                <td className="min-w-48 py-2">
-                  {i.product_name}
-                  <p className="text-xs text-muted-foreground">
-                    {Object.entries(i.specification)
-                      .filter(([, v]) => v)
-                      .map(([k, v]) => `${k}: ${v}`)
-                      .join(" · ")}{" "}
-                    {i.notes}
-                    {i.cold_chain_required && <span> · Cold chain required</span>}
-                    {i.special_handling && <span> · Handling: {i.special_handling}</span>}
-                  </p>
-                </td>
-                <td>
-                  {i.quantity} {i.unit}
-                </td>
-                {buyer && <td>{remainingRequirement(i, allocations, groups)}</td>}
-                <td>{i.minimum_shelf_life_days} days</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <RfqItemsTable
+        items={items}
+        showRemaining={buyer}
+        remaining={(i) => remainingRequirement(i, allocations, groups)}
+      />
       {buyer && (
         <details>
           <summary>Invitation responses ({invites.length})</summary>

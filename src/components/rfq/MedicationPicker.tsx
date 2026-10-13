@@ -11,10 +11,14 @@ export function MedicationPicker({
   value,
   onChange,
   onSelect,
+  className,
+  placeholder = "Search medicines or type a name",
 }: {
   value: string;
   onChange: (value: string) => void;
   onSelect?: (product: MasterProductSuggestion) => void;
+  className?: string;
+  placeholder?: string;
 }) {
   const [suggestions, setSuggestions] = useState<MasterProductSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -23,7 +27,8 @@ export function MedicationPicker({
 
   useEffect(() => {
     const term = toIlikeTerm(debounced);
-    if (term.length < 2 || picked.current === debounced) {
+    // Only search once the field is in use: a long list mounts many pickers at once.
+    if (!open || term.length < 2 || picked.current === debounced) {
       setSuggestions([]);
       return;
     }
@@ -41,7 +46,7 @@ export function MedicationPicker({
     return () => {
       cancelled = true;
     };
-  }, [debounced]);
+  }, [debounced, open]);
 
   const showList = open && suggestions.length > 0;
 
@@ -57,7 +62,8 @@ export function MedicationPicker({
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-        placeholder="Search medicines or type a name"
+        className={className}
+        placeholder={placeholder}
         aria-label="Product name"
         aria-autocomplete="list"
         autoComplete="off"
