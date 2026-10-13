@@ -2,12 +2,10 @@ import { exportRfqDocument } from "@/lib/enterprise-rfq-documents";
 import { RfqAttachments } from "./RfqAttachments";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { formatGHS } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   rfqCall,
   rfqDb,
-  label,
   remainingRequirement,
   type EnterpriseRfq,
   type Requirement,
@@ -16,17 +14,32 @@ import {
   type Allocation,
 } from "@/lib/enterprise-rfq";
 import { EnterpriseQuoteEditor } from "./EnterpriseQuoteEditor";
+import { RfqAwards } from "./RfqAwards";
+import { RfqDetailHeader } from "./RfqDetailHeader";
 import { RfqEvaluation } from "./RfqEvaluation";
+import { RfqInvitations, type Invitation } from "./RfqInvitations";
 import { RfqItemsTable } from "./RfqItemsTable";
+import { RfqManageMenu } from "./RfqManageMenu";
+import { RfqNegotiations, type Negotiation } from "./RfqNegotiations";
 import type { CreditInfo } from "./RfqQuoteOverview";
+import { RfqReasonDialog } from "./RfqReasonDialog";
 import { RfqSubmittedQuote } from "./RfqSubmittedQuote";
-type Negotiation = {
-  id: string;
-  wholesaler_id: string;
-  status: string;
-  proposal: Record<string, string>;
-  response: string | null;
+
+/** An action that is waiting for the person to give a reason, a response or a date. */
+type Pending =
+  | { kind: "decline_invitation" }
+  | { kind: "decline_award"; group: AwardGroup }
+  | { kind: "respond"; negotiation: Negotiation; action: string }
+  | { kind: "extend" }
+  | { kind: "close_remaining" }
+  | { kind: "cancel" };
+
+const RESPONSE_WORDS: Record<string, string> = {
+  accepted: "Accept",
+  countered: "Counter",
+  rejected: "Reject",
 };
+
 export function EnterpriseRfqDetail({
   id,
   businessId,
@@ -51,17 +64,14 @@ export function EnterpriseRfqDetail({
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
-  const [invites, setInvites] = useState<
-    { wholesaler_id: string; response_status: string; viewed_at: string | null }[]
-  >([]);
+  const [invites, setInvites] = useState<Invitation[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadCount, setLoadCount] = useState(0);
   const [quoteEdit, setQuoteEdit] = useState(false);
   const [credit, setCredit] = useState<CreditInfo[]>([]);
-  const [reason, setReason] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -146,127 +156,125 @@ export function EnterpriseRfqDetail({
         p_action: "view",
       }).catch(() => {});
   }, [r, businessId, buyer, canProcess]);
-  const transition = (action: string) =>
-    void act("rfq_transition", {
+  const transition = (action: string, extra: { reason?: string; deadline?: string } = {}) =>
+    act("rfq_transition", {
       p_rfq_id: id,
       p_action: action,
       p_revision: r?.revision,
-      p_reason: reason,
-      p_deadline: deadline ? new Date(deadline).toISOString() : null,
+      p_reason: extra.reason ?? "",
+      p_deadline: extra.deadline ? new Date(extra.deadline).toISOString() : null,
     });
-  if (loading && !r) return <p role="status">Loading RFQ…</p>;
+  const download = (promise: Promise<unknown>) => void promise.catch((e) => setError(e.message));
+
+  if (loading && !r)
+    return (
+      <Card>
+        <CardContent className="p-8 text-sm text-muted-foreground" role="status">
+          Loading request…
+        </CardContent>
+      </Card>
+    );
   if (!r)
     return (
-      <div>
-        <p role="alert">{error || "RFQ unavailable."}</p>
-        <Button onClick={onClose}>Back</Button>
-      </div>
+      <Card>
+        <CardContent className="space-y-3 p-8">
+          <p role="alert" className="text-destructive">
+            {error || "This request is unavailable."}
+          </p>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Back to requests
+          </Button>
+        </CardContent>
+      </Card>
     );
+
+  const supplierActive = !buyer && canProcess && ["open", "partially_awarded"].includes(r.status);
+  const quoteCount = current.length;
+
   return (
-    <section className="space-y-5 rounded-xl border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">{r.title}</h2>
-          <p>
-            {r.reference} · {label(r.status)}
-          </p>
-          <p className="text-sm">
-            Supplier access:{" "}
-            {r.visibility === "open" ? "Open to approved wholesalers" : "Private invitations"}
-          </p>
-          <p className="text-sm">
-            Deadline:{" "}
-            {r.response_deadline ? new Date(r.response_deadline).toLocaleString() : "Not set"}
-          </p>
-        </div>
-        <Button variant="outline" onClick={onClose}>
-          Back to RFQs
-        </Button>
-      </div>
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
-      <p>{r.notes}</p>
-      <p className="text-sm">
-        Delivery: {r.delivery_location || "Pharmacy address"} ·{" "}
-        {r.expected_delivery_date || "Date not specified"} · {r.delivery_instructions} · Payment
-        preference: {label(r.payment_preference)}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {buyer && canProcess && (
+    <div className="space-y-6">
+      <RfqDetailHeader
+        rfq={r}
+        quoteCount={quoteCount}
+        onBack={onClose}
+        actions={
           <>
-            <Button variant="outline" onClick={() => onEdit(r, true)}>
-              Repeat as new draft
-            </Button>
-            {r.status === "draft" && (
+            {buyer && canProcess && (
               <>
-                <Button variant="outline" onClick={() => onEdit(r, false)}>
-                  Edit draft
+                <Button type="button" variant="outline" onClick={() => onEdit(r, true)}>
+                  Repeat as new draft
                 </Button>
+                {r.status === "draft" && (
+                  <>
+                    <Button type="button" variant="outline" onClick={() => onEdit(r, false)}>
+                      Edit draft
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void act("publish_enterprise_rfq", { p_rfq_id: id, p_revision: r.revision })
+                      }
+                    >
+                      {r.visibility === "open" ? "Publish open RFQ" : "Publish private invitations"}
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+            {buyer && canManage && r.status !== "draft" && (
+              <RfqManageMenu
+                status={r.status}
+                busy={busy}
+                onExtend={() => setPending({ kind: "extend" })}
+                onEvaluate={() => void transition("evaluate")}
+                onCloseRemaining={() => setPending({ kind: "close_remaining" })}
+                onComplete={() => void transition("complete")}
+                onCancel={() => setPending({ kind: "cancel" })}
+              />
+            )}
+            {supplierActive && (
+              <>
                 <Button
+                  type="button"
+                  variant="outline"
                   disabled={busy}
                   onClick={() =>
-                    void act("publish_enterprise_rfq", { p_rfq_id: id, p_revision: r.revision })
+                    void act("respond_rfq_invitation", {
+                      p_rfq_id: id,
+                      p_wholesaler_id: businessId,
+                      p_action: "accepted",
+                    })
                   }
                 >
-                  {r.visibility === "open" ? "Publish open RFQ" : "Publish private invitations"}
+                  {r.visibility === "open" ? "Register interest" : "Accept invitation"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => setPending({ kind: "decline_invitation" })}
+                >
+                  {r.visibility === "open" ? "Decline participation…" : "Decline invitation…"}
+                </Button>
+                <Button type="button" onClick={() => setQuoteEdit((v) => !v)}>
+                  {quoteEdit ? "Close quotation editor" : "Prepare / revise quote"}
                 </Button>
               </>
             )}
           </>
-        )}
-        {!buyer && canProcess && ["open", "partially_awarded"].includes(r.status) && (
-          <>
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void act("respond_rfq_invitation", {
-                  p_rfq_id: id,
-                  p_wholesaler_id: businessId,
-                  p_action: "accepted",
-                })
-              }
-            >
-              {r.visibility === "open" ? "Register interest" : "Accept invitation"}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={busy || !reason.trim()}
-              onClick={() =>
-                void act("respond_rfq_invitation", {
-                  p_rfq_id: id,
-                  p_wholesaler_id: businessId,
-                  p_action: "declined",
-                  p_reason: reason,
-                })
-              }
-            >
-              {r.visibility === "open" ? "Decline participation" : "Decline invitation with reason"}
-            </Button>
-            <Button onClick={() => setQuoteEdit((v) => !v)}>
-              {quoteEdit ? "Close editor" : "Prepare / revise quote"}
-            </Button>
-          </>
-        )}
-      </div>
-      <RfqItemsTable
-        items={items}
-        showRemaining={buyer}
-        remaining={(i) => remainingRequirement(i, allocations, groups)}
+        }
       />
-      {buyer && (
-        <details>
-          <summary>Invitation responses ({invites.length})</summary>
-          {invites.map((i) => (
-            <p key={i.wholesaler_id}>
-              {names[i.wholesaler_id] ?? "Supplier"}: {i.response_status} ·{" "}
-              {i.viewed_at ? "Viewed" : "Not yet viewed"}
-            </p>
-          ))}
-        </details>
+
+      {error && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </p>
       )}
+
       {quoteEdit && !buyer && (
         <EnterpriseQuoteEditor
           key={`${id}:${mine?.version ?? 0}`}
@@ -281,6 +289,22 @@ export function EnterpriseRfqDetail({
           }}
         />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Requested medicines</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RfqItemsTable
+            items={items}
+            showRemaining={buyer}
+            remaining={(i) => remainingRequirement(i, allocations, groups)}
+          />
+        </CardContent>
+      </Card>
+
+      {buyer && <RfqInvitations invites={invites} names={names} />}
+
       {buyer ? (
         <RfqEvaluation
           key={loadCount}
@@ -309,7 +333,7 @@ export function EnterpriseRfqDetail({
               p_proposal: { [term]: value },
             })
           }
-          onPdf={(v) => void exportRfqDocument(id, "pdf", v.id).catch((e) => setError(e.message))}
+          onPdf={(v) => download(exportRfqDocument(id, "pdf", v.id))}
         />
       ) : (
         current.map((v) => (
@@ -318,161 +342,157 @@ export function EnterpriseRfqDetail({
             version={v}
             history={versions.filter((old) => old.quote_id === v.quote_id)}
             items={items}
-            onPdf={() => void exportRfqDocument(id, "pdf", v.id).catch((e) => setError(e.message))}
+            onPdf={() => download(exportRfqDocument(id, "pdf", v.id))}
           />
         ))
       )}
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          onClick={() => void exportRfqDocument(id, "pdf").catch((e) => setError(e.message))}
-        >
-          RFQ PDF
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => void exportRfqDocument(id, "xlsx").catch((e) => setError(e.message))}
-        >
-          RFQ Excel
-        </Button>
-      </div>
-      <RfqAttachments rfqId={id} businessId={businessId} canUpload={!buyer && canProcess} />
-      <h3 className="font-semibold">Awards and linked orders</h3>
-      {groups.map((g) => (
-        <div key={g.id} className="space-y-2 rounded border p-3">
-          <p>
-            {names[g.wholesaler_id] ?? "Supplier"} · {label(g.status)} ·{" "}
-            {formatGHS(Number(g.goods_ghs) + Number(g.delivery_ghs))} · {label(g.settlement_method)}
-          </p>
-          {g.last_error && <p role="alert">{g.last_error}</p>}
-          {g.reason && <p>{g.reason}</p>}
-          <Button
-            variant="outline"
-            onClick={() =>
-              void exportRfqDocument(id, "pdf", undefined, g.id).catch((e) => setError(e.message))
-            }
-          >
-            Award PDF
-          </Button>
-          {g.order_id && (
-            <a
-              className="text-primary underline"
-              href={`/${buyer ? "pharmacy" : "wholesaler"}?tab=orders`}
+
+      <RfqAwards
+        groups={groups}
+        allocations={allocations}
+        names={names}
+        buyer={buyer}
+        canConfirm={canProcess}
+        busy={busy}
+        onPdf={(g) => download(exportRfqDocument(id, "pdf", undefined, g.id))}
+        onConfirm={(g) => void act("confirm_rfq_award", { p_group_id: g.id, p_accept: true })}
+        onDecline={(g) => setPending({ kind: "decline_award", group: g })}
+      />
+
+      <RfqNegotiations
+        negotiations={negotiations}
+        names={names}
+        buyer={buyer}
+        canRespond={canProcess}
+        busy={busy}
+        onRespond={(negotiation, action) => setPending({ kind: "respond", negotiation, action })}
+      />
+
+      <RfqAttachments
+        rfqId={id}
+        businessId={businessId}
+        canUpload={!buyer && canProcess}
+        exports={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => download(exportRfqDocument(id, "pdf"))}
             >
-              Open existing order management ({g.order_id.slice(0, 8)})
-            </a>
-          )}
-          {!buyer && canProcess && ["pending", "conversion_failed"].includes(g.status) && (
-            <div className="flex gap-2">
-              <Button
-                disabled={busy}
-                onClick={() => void act("confirm_rfq_award", { p_group_id: g.id, p_accept: true })}
-              >
-                Confirm availability and create order
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy || !reason.trim()}
-                onClick={() =>
-                  void act("confirm_rfq_award", {
-                    p_group_id: g.id,
-                    p_accept: false,
-                    p_reason: reason,
-                  })
-                }
-              >
-                Decline award
-              </Button>
-            </div>
-          )}
-        </div>
-      ))}
-      <h3 className="font-semibold">Negotiations</h3>
-      {negotiations.map((n) => (
-        <div key={n.id} className="rounded border p-3">
-          <p>
-            {names[n.wholesaler_id]} · {n.status}
-          </p>
-          <p>
-            {Object.entries(n.proposal)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join("; ")}
-          </p>
-          <p>{n.response}</p>
-          {!buyer && canProcess && n.status === "requested" && (
-            <div className="flex flex-wrap gap-2">
-              {["accepted", "countered", "rejected"].map((action) => (
-                <Button
-                  key={action}
-                  variant="outline"
-                  disabled={busy || !reason.trim()}
-                  onClick={() =>
-                    void act("rfq_respond_negotiation", {
-                      p_id: n.id,
-                      p_action: action,
-                      p_response: reason,
-                      p_version_id: mine?.id ?? null,
-                    })
-                  }
-                >
-                  {label(action)}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium">Reason</span>
-        <Input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Required to decline, respond to a negotiation, close requirements or cancel"
+              Request PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => download(exportRfqDocument(id, "xlsx"))}
+            >
+              Request Excel
+            </Button>
+          </>
+        }
+      />
+
+      {pending?.kind === "decline_invitation" && (
+        <RfqReasonDialog
+          title={r.visibility === "open" ? "Decline participation" : "Decline this invitation"}
+          description="The buyer sees your reason."
+          label="Reason"
+          placeholder="Why you cannot quote on this request"
+          confirmLabel="Decline"
+          destructive
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(reason) =>
+            act("respond_rfq_invitation", {
+              p_rfq_id: id,
+              p_wholesaler_id: businessId,
+              p_action: "declined",
+              p_reason: reason,
+            })
+          }
         />
-      </label>
-      {buyer && canManage && r.status !== "draft" && (
-        <div className="flex flex-wrap items-end gap-2">
-          <label>
-            New quotation deadline
-            <Input
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-            />
-          </label>
-          <Button
-            variant="outline"
-            disabled={busy || !deadline}
-            onClick={() => transition("extend")}
-          >
-            Extend deadline
-          </Button>
-          <Button
-            variant="outline"
-            disabled={busy || r.status !== "open"}
-            onClick={() => transition("evaluate")}
-          >
-            Begin evaluation
-          </Button>
-          <Button
-            variant="outline"
-            disabled={busy || !reason.trim()}
-            onClick={() => transition("cancel_remaining")}
-          >
-            Close remaining requirements
-          </Button>
-          <Button variant="outline" disabled={busy} onClick={() => transition("complete")}>
-            Complete resolved RFQ
-          </Button>
-          <Button
-            variant="outline"
-            disabled={busy || !reason.trim()}
-            onClick={() => transition("cancel")}
-          >
-            Cancel RFQ
-          </Button>
-        </div>
       )}
-    </section>
+      {pending?.kind === "decline_award" && (
+        <RfqReasonDialog
+          title="Decline this award"
+          description="No order is created. The buyer sees your reason."
+          label="Reason"
+          placeholder="Why you cannot supply this award"
+          confirmLabel="Decline award"
+          destructive
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(reason) =>
+            act("confirm_rfq_award", {
+              p_group_id: pending.group.id,
+              p_accept: false,
+              p_reason: reason,
+            })
+          }
+        />
+      )}
+      {pending?.kind === "respond" && (
+        <RfqReasonDialog
+          title={`${RESPONSE_WORDS[pending.action] ?? "Respond to"} this request`}
+          description="Your reply is sent to the buyer with your decision."
+          label="Your reply"
+          placeholder={
+            pending.action === "countered"
+              ? "What you can offer instead"
+              : "A short note for the buyer"
+          }
+          confirmLabel={RESPONSE_WORDS[pending.action] ?? "Send"}
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(response) =>
+            act("rfq_respond_negotiation", {
+              p_id: pending.negotiation.id,
+              p_action: pending.action,
+              p_response: response,
+              p_version_id: mine?.id ?? null,
+            })
+          }
+        />
+      )}
+      {pending?.kind === "extend" && (
+        <RfqReasonDialog
+          title="Extend the quotation deadline"
+          description="Suppliers can quote until the new date and time."
+          label="New deadline"
+          inputType="datetime-local"
+          confirmLabel="Extend deadline"
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(deadline) => transition("extend", { deadline })}
+        />
+      )}
+      {pending?.kind === "close_remaining" && (
+        <RfqReasonDialog
+          title="Close the remaining requirements"
+          description="Requirements that have not been awarded stop waiting for quotations."
+          label="Reason"
+          placeholder="Why the remaining requirements are being closed"
+          confirmLabel="Close remaining requirements"
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(reason) => transition("cancel_remaining", { reason })}
+        />
+      )}
+      {pending?.kind === "cancel" && (
+        <RfqReasonDialog
+          title="Cancel this request"
+          description="Suppliers are told the request is cancelled."
+          label="Reason"
+          placeholder="Why the request is being cancelled"
+          confirmLabel="Cancel request"
+          destructive
+          busy={busy}
+          onClose={() => setPending(null)}
+          onSubmit={(reason) => transition("cancel", { reason })}
+        />
+      )}
+    </div>
   );
 }

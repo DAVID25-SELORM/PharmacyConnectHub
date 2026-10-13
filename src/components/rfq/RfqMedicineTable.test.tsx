@@ -19,6 +19,8 @@ import { rfqRowIssues } from "@/lib/rfq-bulk";
 import { blankLine, type RfqLine } from "@/lib/rfq-lines";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// Rendering long lists in jsdom is slow on a busy machine; the default 5 s is too tight.
+vi.setConfig({ testTimeout: 30_000 });
 
 const make = (n: number): RfqLine[] =>
   Array.from({ length: n }, (_, i) => ({

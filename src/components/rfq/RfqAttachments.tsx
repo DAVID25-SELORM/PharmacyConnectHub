@@ -1,18 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { FileText, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { rfqCall, rfqDb } from "@/lib/enterprise-rfq";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+type Row = { id: string; filename: string; storage_path: string };
+
+/** Downloads for the request, and the private documents suppliers attach to it. */
 export function RfqAttachments({
   rfqId,
   businessId,
   canUpload,
+  exports,
 }: {
   rfqId: string;
   businessId: string;
   canUpload: boolean;
+  /** Buttons that download the request itself (PDF, Excel). */
+  exports?: ReactNode;
 }) {
-  const [rows, setRows] = useState<{ id: string; filename: string; storage_path: string }[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
@@ -56,39 +64,66 @@ export function RfqAttachments({
     }
   };
   return (
-    <details className="rounded border p-3">
-      <summary>Private supplier documents</summary>
-      <p className="text-xs">
-        Only the supplier and requesting pharmacy can read each document. Uploaded files cannot be
-        overwritten.
-      </p>
-      {canUpload && (
-        <Input
-          disabled={busy}
-          type="file"
-          accept="application/pdf,image/png,image/jpeg"
-          onChange={(e) => {
-            if (e.target.files?.[0]) void upload(e.target.files[0]);
-            e.target.value = "";
-          }}
-        />
-      )}
-      {rows.map((row) => (
-        <Button
-          key={row.id}
-          variant="link"
-          onClick={async () => {
-            const { data, error } = await supabase.storage
-              .from("rfq-evidence")
-              .createSignedUrl(row.storage_path, 60);
-            if (error) setError(error.message);
-            else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-          }}
-        >
-          {row.filename}
-        </Button>
-      ))}
-      {error && <p role="alert">{error}</p>}
-    </details>
+    <Card>
+      <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="text-lg">Documents</CardTitle>
+          <CardDescription>
+            Only the supplier and the requesting pharmacy can read each supplier document. Uploaded
+            files cannot be overwritten.
+          </CardDescription>
+        </div>
+        {exports && <div className="flex flex-wrap gap-2">{exports}</div>}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No supplier documents attached.</p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {rows.map((row) => (
+              <li key={row.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{row.filename}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    const { data, error } = await supabase.storage
+                      .from("rfq-evidence")
+                      .createSignedUrl(row.storage_path, 60);
+                    if (error) setError(error.message);
+                    else window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Open
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {canUpload && (
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm hover:bg-muted/40">
+            <Upload className="h-4 w-4" />
+            {busy ? "Uploading…" : "Attach a document (PDF, JPEG or PNG, up to 10 MB)"}
+            <input
+              disabled={busy}
+              type="file"
+              className="sr-only"
+              accept="application/pdf,image/png,image/jpeg"
+              onChange={(e) => {
+                if (e.target.files?.[0]) void upload(e.target.files[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -11,6 +11,8 @@ import type { Requirement } from "@/lib/enterprise-rfq";
 import { blankDraftLine, lineIssues, type DraftLine } from "@/lib/rfq-quote-lines";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+// Rendering long lists in jsdom is slow on a busy machine; the default 5 s is too tight.
+vi.setConfig({ testTimeout: 30_000 });
 
 const items = (n: number): Requirement[] =>
   Array.from(

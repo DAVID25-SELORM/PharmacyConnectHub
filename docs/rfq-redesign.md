@@ -42,5 +42,18 @@ Unit tests (`rfq-lines.test.ts`, `RfqMedicineTable.test.tsx`), plus a browser ru
 
 **Checked:** unit tests for the evaluation rules (20) and component tests for the comparison and award flow (5), plus a browser run on the local stack with two suppliers quoting the same RFQ: overview, matrix, lowest-price tags, start-from-lowest-prices, review, a real award (two pending award groups created, RFQ moved to partially awarded), over-allocation blocked with a plain message, fully-allocated lines, and the supplier's own view.
 
+## Stage 4: the requests list and the rest of the detail page
+**Why:** the list was a stack of clickable boxes under bare filter inputs; the procurement report printed raw field names; and the bottom half of the detail page was plain text and buttons driven by one shared "Reason" box that served cancel, decline, close, negotiate and reply alike.
+
+- **Requests list** (`RfqListTable.tsx`, `EnterpriseRfqWorkspace.tsx`): a filter bar, then a table of reference, request (with a Legacy badge where it applies), coloured status, quotation count and deadline with how it stands ("Closes in 3 days", "Closed 5 days ago"). Rows open with the mouse or the keyboard. Empty and loading states say what is happening. The pager is the shared one.
+- **Procurement report** (`RfqProcurementReport.tsx`): figures grouped under Requests, Invitations, Quotations and Awards and orders with plain names and units (money, percentages, hours), then tables for suppliers, decline reasons and most requested medicines, and a price-history table for pharmacies that loads on demand.
+- **Detail header** (`RfqDetailHeader.tsx`): back link, title, coloured status, access type, quotation count and the key facts (respond by, delivery needed, deliver to, payment preference, instructions, description), with the actions for this viewer beside it.
+- **Manage request** (`RfqManageMenu.tsx`) groups the buyer's status actions: extend the deadline, begin evaluation, close remaining requirements, mark complete, cancel. Anything that needs a reason or a date asks for it in a dialog first (`RfqReasonDialog.tsx`) instead of reading a shared box at the bottom of the page. Declining an invitation, declining an award and replying to a negotiation work the same way.
+- **Supplier responses** (`RfqInvitations.tsx`), **Awards and linked orders** (`RfqAwards.tsx`: status, lines, total with delivery, settlement, confirm and decline for the supplier, award PDF and the order link) and **Negotiations** (`RfqNegotiations.tsx`: the request in plain terms and the reply) are tables and cards with coloured status badges (`RfqStatusBadge.tsx`).
+- **Documents** (`RfqAttachments.tsx`): downloads of the request (PDF, Excel) and the supplier documents in one place.
+- Nothing about what is saved or how changed: the same calls (`rfq_transition`, `respond_rfq_invitation`, `confirm_rfq_award`, `rfq_respond_negotiation`, the award and publish calls) with the same arguments. The decline, close and cancel reasons are now required before the button can be used, as before, but are asked for in the dialog.
+
+**Checked:** unit tests for the deadline hint, status colours and report figures; component tests for the list, awards, negotiations and the reason dialog; a headless-browser run on the local stack as the buyer and as a supplier (list, report, detail header, Manage menu, awards, documents, the decline dialog).
+
 ## Not yet redesigned
-The RFQ list page and the award confirmation, order links, negotiations and status-action sections at the bottom of the detail page still use the older plain layout.
+The older single-supplier "legacy" RFQ screens (`PharmacyRfqDetail`, `WholesalerRfqDetail`, `CreateRfqDialog`) for RFQs created before the enterprise workflow, and the administrator RFQ operations screen, keep the earlier layout.

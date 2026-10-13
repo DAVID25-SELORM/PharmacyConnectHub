@@ -9,35 +9,42 @@ export function TablePager({
   size,
   onSize,
   onPage,
+  showSize = true,
 }: {
   paged: Paged;
   size: number;
   onSize: (size: number) => void;
   onPage: (page: number) => void;
+  /** A list the server pages at a fixed size has no rows-per-page choice. */
+  showSize?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3 border-t bg-muted/30 px-3 py-2 text-sm">
       <span className="tabular-nums text-muted-foreground">
         {paged.total ? `Showing ${paged.from}–${paged.to} of ${paged.total}` : "Nothing to show"}
       </span>
-      <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-        Rows per page
-        <select
-          aria-label="Rows per page"
-          className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={size}
-          onChange={(e) => {
-            onSize(Number(e.target.value));
-            onPage(0);
-          }}
-        >
-          {RFQ_PAGE_SIZES.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showSize ? (
+        <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          Rows per page
+          <select
+            aria-label="Rows per page"
+            className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={size}
+            onChange={(e) => {
+              onSize(Number(e.target.value));
+              onPage(0);
+            }}
+          >
+            {RFQ_PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <span className="ml-auto" />
+      )}
       <div className="flex items-center gap-1">
         <Button
           type="button"
