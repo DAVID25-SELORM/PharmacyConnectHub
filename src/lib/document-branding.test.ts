@@ -16,9 +16,10 @@ describe("document branding", () => {
       region: "Greater Accra",
       phone: "+233 20 000 0000",
       license_number: "PC-123",
+      branding: { show_license: true },
     });
     expect(identity.name).toBe("Ideal Pharma Ltd");
-    expect(identity.contactLines).toContain("Licence: PC-123");
+    expect(identity.contactLines).not.toContain("Licence: PC-123");
   });
 
   it("rejects unsafe accent colors and honours visibility preferences", () => {

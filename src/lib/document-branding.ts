@@ -51,14 +51,13 @@ export function resolveDocumentBranding(business: DocumentBusiness | null | unde
   const contacts = [
     business?.phone ? `Tel: ${business.phone}` : "",
     branding.show_secondary_contact !== false && business?.public_email ? business.public_email : "",
-    branding.show_license !== false && business?.license_number ? `Licence: ${business.license_number}` : "",
   ].filter(Boolean);
   return {
     ...branding,
     name: business?.name || "Business",
     accentColor: readableAccent(branding.accent_color),
     contactLines: [...address, ...contacts],
-    show_license: branding.show_license !== false,
+    show_license: false,
     show_secondary_contact: branding.show_secondary_contact !== false,
   };
 }

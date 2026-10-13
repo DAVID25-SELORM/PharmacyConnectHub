@@ -72,7 +72,6 @@ export function buildBillingInvoicePdf(inv: InvoiceDetail): jsPDF {
       [{ content: "Billed to", styles: { fontStyle: "bold" as const } }, ""],
       [customer.name ?? inv.business_name, ""],
       ...[
-        customer.license_number ? `Licence ${customer.license_number}` : null,
         [customer.address, customer.city, customer.region].filter(Boolean).join(", ") || null,
         customer.phone,
         customer.email,

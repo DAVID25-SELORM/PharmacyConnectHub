@@ -244,7 +244,7 @@ describe("partyLines", () => {
         phone: "+233241000000",
         license_number: "WH-123",
       }),
-    ).toEqual(["12 Ring Road", "Accra, Greater Accra", "Tel: +233241000000", "Licence: WH-123"]);
+    ).toEqual(["12 Ring Road", "Accra, Greater Accra", "Tel: +233241000000"]);
     expect(partyLines({ name: "Only name", city: "Kumasi", region: "  " })).toEqual(["Kumasi"]);
     expect(partyLines(null)).toEqual([]);
   });

@@ -171,7 +171,6 @@ export function partyLines(party: PartyDetails | null | undefined): string[] {
     party.address ?? "",
     place,
     party.phone ? `Tel: ${party.phone}` : "",
-    party.license_number ? `Licence: ${party.license_number}` : "",
   ]
     .map((line) => line.trim())
     .filter(Boolean);

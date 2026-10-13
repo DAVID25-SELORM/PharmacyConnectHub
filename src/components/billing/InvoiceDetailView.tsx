@@ -65,7 +65,6 @@ export function InvoiceDetailView({
           </div>
           <div className="text-sm">
             {inv.business_name}
-            {inv.customer?.license_number ? ` · Licence ${inv.customer.license_number}` : ""}
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={download} data-testid="invoice-download">

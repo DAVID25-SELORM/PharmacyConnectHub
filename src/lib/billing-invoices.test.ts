@@ -189,6 +189,7 @@ describe("the invoice PDF", () => {
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
     const text = pdf.output();
     expect(text.length).toBeGreaterThan(1000);
+    expect(text).not.toContain("LIC-1");
     expect(invoiceFileName(detail)).toBe("DXB-2026-000007.pdf");
   });
   it("also builds for a pharmacy invoice with no orders and no payments", () => {

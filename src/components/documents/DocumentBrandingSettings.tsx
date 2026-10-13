@@ -25,7 +25,7 @@ const blank: BrandingRow = {
   display_name: null,
   logo_path: null,
   accent_color: "#0f766e",
-  show_license: true,
+  show_license: false,
   show_secondary_contact: true,
   footer_note: null,
   signatory_name: null,
@@ -156,7 +156,7 @@ function BrandingEditor({
         p_display_name: value.display_name,
         p_logo_path: value.logo_path,
         p_accent_color: value.accent_color,
-        p_show_license: value.show_license,
+        p_show_license: false,
         p_show_secondary_contact: value.show_secondary_contact,
         p_footer_note: value.footer_note,
       });
@@ -256,15 +256,6 @@ function BrandingEditor({
         </label>
       </fieldset>
       <div className="flex flex-wrap gap-5 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            disabled={saving}
-            checked={value.show_license}
-            onChange={(e) => patch("show_license", e.target.checked)}
-          />
-          Show licence
-        </label>
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
