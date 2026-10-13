@@ -31,12 +31,19 @@
   body:has(.print-document) *:not(:has(.print-document)):not(.print-document):not(.print-document *) { display: none !important; }
   body:has(.print-document), body:has(.print-document) *:has(.print-document) {
     display: block !important; position: static !important; transform: none !important;
-    translate: none !important; rotate: none !important; scale: none !important;
     animation: none !important; transition: none !important; inset: auto !important;
     width: auto !important; height: auto !important; min-height: 0 !important;
     max-height: none !important; max-width: none !important; overflow: visible !important;
     margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important;
   }
+  /* Dialogs centre themselves with the individual translate property (-50% -50%). The CSS minifier
+     folds translate/rotate/scale resets into one `transform` declaration, which does not clear that
+     offset and shifted the printed document up and left in production. The Tailwind variables are
+     zeroed too, because custom properties are never rewritten, and each reset is its own rule. */
+  body:has(.print-document) :has(.print-document) { --tw-translate-x: 0px !important; --tw-translate-y: 0px !important; --tw-translate-z: 0px !important; }
+  body:has(.print-document) :has(.print-document) { translate: 0 0 !important; }
+  body:has(.print-document) :has(.print-document) { rotate: 0deg !important; }
+  body:has(.print-document) :has(.print-document) { scale: 1 !important; }
   .print-document { display: block !important; position: relative; width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; color: #000; background: #fff; }
   .no-print { display: none !important; }
   .print-document + .print-document { break-before: page; }
