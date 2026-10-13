@@ -17,19 +17,11 @@ import {
   toPayloadItems,
   type RfqLine,
 } from "@/lib/rfq-lines";
+import { RFQ_PAYMENT_OPTIONS, paymentLabel, rfqDateTime } from "@/lib/rfq-format";
 import { RfqAddTools } from "./RfqAddTools";
 import { RfqMedicineTable } from "./RfqMedicineTable";
 import { RfqSupplierPicker } from "./RfqSupplierPicker";
 
-const PAYMENT_OPTIONS: [string, string][] = [
-  ["cod", "Cash on delivery"],
-  ["credit", "Credit"],
-  ["bank_transfer", "Bank transfer"],
-  ["momo", "Mobile money"],
-  ["cheque", "Cheque"],
-  ["other", "Other"],
-];
-const paymentLabel = (value: string) => PAYMENT_OPTIONS.find(([v]) => v === value)?.[1] ?? value;
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
 
@@ -52,11 +44,6 @@ function Field({
     </label>
   );
 }
-
-const when = (iso: string) =>
-  iso
-    ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })
-    : "Not set";
 
 export function EnterpriseRfqEditor({
   businessId,
@@ -252,7 +239,7 @@ export function EnterpriseRfqEditor({
                 value={payment}
                 onChange={(e) => setPayment(e.target.value)}
               >
-                {PAYMENT_OPTIONS.map(([value, text]) => (
+                {RFQ_PAYMENT_OPTIONS.map(([value, text]) => (
                   <option key={value} value={value}>
                     {text}
                   </option>
@@ -378,7 +365,7 @@ export function EnterpriseRfqEditor({
               {(
                 [
                   ["Title", title],
-                  ["Quotation deadline", when(deadline)],
+                  ["Quotation deadline", rfqDateTime(deadline)],
                   ["Expected delivery", delivery || "Not set"],
                   ["Payment preference", paymentLabel(payment)],
                   [

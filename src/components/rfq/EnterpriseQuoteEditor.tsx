@@ -24,6 +24,7 @@ import {
   type Requirement,
 } from "@/lib/enterprise-rfq";
 import { formatGHS } from "@/lib/format";
+import { rfqDate } from "@/lib/rfq-format";
 import {
   blankDraftLine,
   lineIssues,
@@ -50,11 +51,6 @@ const chunks = <T,>(all: T[]) =>
   Array.from({ length: Math.ceil(all.length / CHUNK) }, (_, i) =>
     all.slice(i * CHUNK, (i + 1) * CHUNK),
   );
-
-const dateText = (iso: string | null | undefined) =>
-  iso
-    ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
-    : "Not set";
 
 function Field({
   label,
@@ -339,8 +335,8 @@ export function EnterpriseQuoteEditor({
           {(
             [
               ["Request", `${rfq.reference} · ${rfq.title}`],
-              ["Respond by", dateText(rfq.response_deadline)],
-              ["Delivery needed", dateText(rfq.expected_delivery_date)],
+              ["Respond by", rfqDate(rfq.response_deadline)],
+              ["Delivery needed", rfqDate(rfq.expected_delivery_date)],
               ["Deliver to", rfq.delivery_location || "Not specified"],
               ["Buyer pays by", rfq.payment_preference],
             ] as const
