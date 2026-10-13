@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Requirement } from "@/lib/enterprise-rfq";
+import { TablePager } from "./TablePager";
 import { RFQ_PAGE_SIZES, pageOf } from "@/lib/rfq-lines";
 
 /** Read-only list of an RFQ's requested medicines, searchable and paged so a long request stays readable. */
@@ -145,58 +146,7 @@ export function RfqItemsTable({
           </Table>
         </div>
         {shown.length > RFQ_PAGE_SIZES[0] || size !== RFQ_PAGE_SIZES[0] ? (
-          <div className="flex flex-wrap items-center gap-3 border-t bg-muted/30 px-3 py-2 text-sm">
-            <span className="tabular-nums text-muted-foreground">
-              {paged.total
-                ? `Showing ${paged.from}–${paged.to} of ${paged.total}`
-                : "Nothing to show"}
-            </span>
-            <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              Rows per page
-              <select
-                aria-label="Rows per page"
-                className="h-8 w-20 rounded-md border border-input bg-background px-2 text-sm"
-                value={size}
-                onChange={(e) => {
-                  setSize(Number(e.target.value));
-                  setPage(0);
-                }}
-              >
-                {RFQ_PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Previous page"
-                disabled={paged.page === 0}
-                onClick={() => setPage(paged.page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="px-1 text-xs tabular-nums">
-                Page {paged.page + 1} of {paged.pageCount}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Next page"
-                disabled={paged.page >= paged.pageCount - 1}
-                onClick={() => setPage(paged.page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <TablePager paged={paged} size={size} onSize={setSize} onPage={setPage} />
         ) : null}
       </div>
     </div>

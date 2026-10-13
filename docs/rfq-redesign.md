@@ -16,5 +16,19 @@
 ## Checked
 Unit tests (`rfq-lines.test.ts`, `RfqMedicineTable.test.tsx`), plus a browser run against the local stack: a 479-row import, duplicates combined, bad quantity flagged and fixed, bulk cold chain on all 477 lines, jump to page 20, supplier invite, validation message, review, a real save through `save_enterprise_rfq`, the saved request's list, Edit draft reloading 477 lines, and phone width (no horizontal overflow).
 
+## Stage 2: the supplier's quote editor
+**Why:** one tall card per requested medicine, each with its own product search that ran as soon as it appeared, and no help for a supplier answering hundreds of lines.
+
+- `EnterpriseQuoteEditor.tsx` is now: request summary (reference, respond by, delivery needed, deliver to), 1 Lines, 2 Terms, and a sticky bar with lines quoted, problems, an estimated total, **Save private draft** and **Submit quotation**. Submitting asks for confirmation first, because a submitted version is final.
+- `RfqQuoteTable.tsx`: one row per requested medicine (what is asked, the shelf life, cold chain / full quantity / alternatives flags) with your product, units, price, discount and expiry inline and the rest (alternative, batch, availability date, cold chain, handling, notes) in a Details popover. Search, filter (all / quoted / not quoting / needs attention), 25/50/100 per page, select rows and set discount or expiry, offer the full quantity, confirm cold chain, fill empty prices from catalogue list prices (explicit and never overwriting), or stop quoting.
+- **Match my catalogue** fills lines whose requested medicine has exactly one active product in your catalogue under the same catalogue identity. Several candidates or none are left for you; nothing is inferred beyond that.
+- `QuoteProductCombobox.tsx` searches your catalogue only while it is open (it used to search on every line at once).
+- **Problems are shown before submitting**, mirroring the server's rules (`src/lib/rfq-quote-lines.ts`): whole units, no more than requested and the full quantity when partial supply is not allowed, price above zero, discount below 100, expiry beyond the buyer's shelf life at the delivery date, cold chain confirmed, alternatives only where allowed, and a different catalogue medicine must be marked as an alternative. The database still checks everything again. A stale conversion factor on a normal (non-alternative) line is no longer sent, which used to make the server refuse it.
+- The estimated total uses the server's two-step rounding. In the local check it matched the stored total exactly (62,890.86 for 22 lines).
+- `TablePager.tsx` is the shared pager now used by all three RFQ lists.
+- What is saved and how is unchanged: same payload, same `save_enterprise_quote` function, same draft table.
+
+**Checked:** unit and component tests, and a browser run on the local stack as a supplier: match 22 lines, bulk fill prices / expiry / discount / cold chain, validation messages, the submit confirmation, a real submit (22 lines stored; total equal to the estimate), reopening as a revision (loads the submitted lines, asks for a reason), and phone width.
+
 ## Not yet redesigned
-The RFQ list page, the supplier's quote editor, quote comparison and the award/confirmation screens still use the older plain layout.
+The RFQ list page, quote comparison and the award/confirmation screens still use the older plain layout.

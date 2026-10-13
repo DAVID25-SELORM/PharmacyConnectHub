@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { MedicationPicker } from "./MedicationPicker";
+import { TablePager } from "./TablePager";
 import {
   RFQ_MAX_LINES,
   RFQ_PAGE_SIZES,
@@ -713,71 +714,7 @@ export function RfqMedicineTable({
             </Table>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 border-t bg-muted/30 px-3 py-2 text-sm">
-            <span className="text-muted-foreground tabular-nums">
-              {paged.total
-                ? `Showing ${paged.from}–${paged.to} of ${paged.total}`
-                : "Nothing to show"}
-            </span>
-            <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              Rows per page
-              <select
-                aria-label="Rows per page"
-                className={`${selectBase} h-8 w-20`}
-                value={size}
-                onChange={(e) => {
-                  setSize(Number(e.target.value));
-                  setPage(0);
-                }}
-              >
-                {RFQ_PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Previous page"
-                disabled={paged.page === 0}
-                onClick={() => setPage(paged.page - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="flex items-center gap-1 px-1 text-xs tabular-nums">
-                Page
-                <Input
-                  aria-label="Go to page"
-                  type="number"
-                  min="1"
-                  max={paged.pageCount}
-                  className="h-8 w-14 px-2 text-center"
-                  value={paged.page + 1}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n)) setPage(Math.min(Math.max(1, n), paged.pageCount) - 1);
-                  }}
-                />
-                of {paged.pageCount}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                aria-label="Next page"
-                disabled={paged.page >= paged.pageCount - 1}
-                onClick={() => setPage(paged.page + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <TablePager paged={paged} size={size} onSize={setSize} onPage={setPage} />
         </div>
       )}
       {stats.withIssues > 0 && firstIssueIndex(issues) >= 0 && filter === "all" && !search && (
