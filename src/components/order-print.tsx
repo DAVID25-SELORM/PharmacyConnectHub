@@ -1,3 +1,4 @@
+import { buildBusinessDocumentPdf, loadDocumentLogo } from "@/lib/business-document-pdf";
 import { useEffect, useState } from "react";
 import { rfqCall } from "@/lib/enterprise-rfq";
 import { toast } from "sonner";
@@ -146,8 +147,7 @@ export function OrderPrintActions({
     if (!mode || !ready || exporting || mode === "pick-pack") return;
     setExporting(true);
     try {
-      const { buildBusinessDocumentPdf, loadDocumentLogo } =
-        await import("@/lib/business-document-pdf");
+
       const model = orderDocumentModel(printable, mode);
       const branding = model.issuer?.branding;
       const url = branding?.logo_path

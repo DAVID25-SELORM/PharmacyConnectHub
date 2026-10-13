@@ -1,3 +1,4 @@
+import { buildBusinessDocumentPdf, loadDocumentLogo } from "./business-document-pdf";
 // Shared helpers for the Reports module (Platform, Pharmacy, Wholesaler).
 // Every report is server-side filtered and aggregated; these helpers only shape requests and
 // format results — they never total up raw rows in the browser.
@@ -139,7 +140,7 @@ export async function buildReportPdf(
   businessId?: string,
 ) {
   if (!sheets.length) return;
-  const { buildBusinessDocumentPdf, loadDocumentLogo } = await import("./business-document-pdf");
+
   const identity = businessId
     ? await (await import("./document-identity")).loadDocumentIdentity(businessId)
     : null;

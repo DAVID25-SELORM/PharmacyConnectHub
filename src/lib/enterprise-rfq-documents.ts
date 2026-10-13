@@ -1,3 +1,4 @@
+import { buildBusinessDocumentPdf, loadDocumentLogo } from "./business-document-pdf";
 import {
   rfqCall,
   type EnterpriseRfq,
@@ -122,7 +123,7 @@ export async function exportRfqDocument(
     xlsx.writeFile(book, `${filename}.xlsx`);
     return;
   }
-  const { buildBusinessDocumentPdf, loadDocumentLogo } = await import("./business-document-pdf");
+
   const path = data.issuer?.branding?.logo_path;
   const logo = await loadDocumentLogo(
     path

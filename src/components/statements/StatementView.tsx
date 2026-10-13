@@ -1,3 +1,4 @@
+import { buildBusinessDocumentPdf, loadDocumentLogo } from "@/lib/business-document-pdf";
 import { useCallback, useEffect, useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -79,8 +80,7 @@ export function StatementView({
       const identity = await (
         await import("@/lib/document-identity")
       ).loadDocumentIdentity(statement.wholesaler.id);
-      const { buildBusinessDocumentPdf, loadDocumentLogo } =
-        await import("@/lib/business-document-pdf");
+
       const { documentMoney } = await import("@/lib/business-document-model");
       const pdf = buildBusinessDocumentPdf(
         {

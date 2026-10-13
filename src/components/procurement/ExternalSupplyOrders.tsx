@@ -1,3 +1,4 @@
+import { loadDocumentLogo } from "@/lib/business-document-pdf";
 import { ProcurementDocumentReport } from "./ProcurementDocumentReport";
 import { SupplyEditor } from "./SupplyEditor";
 import { confirmAction } from "@/lib/confirm-action";
@@ -162,7 +163,7 @@ export function ExternalSupplyOrders({
       .single();
     if (error) throw new Error(error.message);
     const order = data as SupplyOrder;
-    const { loadDocumentLogo } = await import('@/lib/business-document-pdf');
+
     const path = order.issuer?.branding?.logo_path;
     const logo = await loadDocumentLogo(path ? db.storage.from('business-document-logos').getPublicUrl(path).data.publicUrl : order.issuer?.branding?.logo_url);
     const { buildSupplyOrderPdf } = await import("@/lib/external-supply-order-pdf");
