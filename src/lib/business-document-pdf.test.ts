@@ -142,3 +142,48 @@ it("preserves all fields across wide, multi-section report pages", async () => {
   expect(doc.numPages).toBeGreaterThan(2);
   await task.destroy();
 });
+
+describe("invoice tables fit the A4 width", () => {
+  const longItems = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      product_name: `Item ${String(i + 1).padStart(3, "0")} - Long pharmaceutical product name for layout verification`,
+      strength: "300 mg",
+      form: "Tablet",
+      pack_size: "100 tablets",
+      quantity: 1,
+      unit_price_ghs: 12.5,
+    }));
+  const pageTexts = async (count: number, mode: "invoice" | "delivery") => {
+    const model = orderDocumentModel(
+      { ...order, total_ghs: count * 12.5, order_items: longItems(count) },
+      mode,
+    );
+    const pdf = buildBusinessDocumentPdf(model);
+    const task = getDocument({ data: new Uint8Array(pdf.output("arraybuffer")), useSystemFonts: true });
+    const doc = await task.promise;
+    const texts: string[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const content = await (await doc.getPage(i)).getTextContent();
+      texts.push(content.items.map((x) => ("str" in x ? x.str : "")).join(" "));
+    }
+    await task.destroy();
+    return texts;
+  };
+  it("keeps Quantity, Unit price and Amount on the same page as a long description", async () => {
+    const texts = await pageTexts(5, "invoice");
+    expect(texts).toHaveLength(1);
+    for (const column of ["Description", "Quantity", "Unit price", "Amount"])
+      expect(texts[0]).toContain(column);
+  });
+  it("never splits the columns of a long invoice across separate pages", async () => {
+    const texts = await pageTexts(30, "invoice");
+    for (const text of texts)
+      if (text.includes("Description"))
+        for (const column of ["Quantity", "Unit price", "Amount"]) expect(text).toContain(column);
+  });
+  it("keeps delivery notes on one set of columns too", async () => {
+    const texts = await pageTexts(5, "delivery");
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toContain("Quantity");
+  });
+});

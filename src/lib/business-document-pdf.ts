@@ -3,6 +3,13 @@ import autoTable from "jspdf-autotable";
 import { resolveDocumentBranding } from "./document-branding";
 import type { BusinessDocumentModel } from "./business-document-model";
 
+/**
+ * Only a table with many columns is split sideways across pages. A narrow table (an invoice,
+ * a delivery note) must wrap long text inside the page width instead: a horizontal split keeps
+ * a long description at its full one-line width and pushes the amounts onto a different page.
+ */
+const WIDE_TABLE_COLUMNS = 6;
+
 /** Vector text, explicit physical paper size, shared margins and pagination. */
 export function buildBusinessDocumentPdf(model: BusinessDocumentModel, logo?: string) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -71,7 +78,7 @@ export function buildBusinessDocumentPdf(model: BusinessDocumentModel, logo?: st
     margin,
     head: [model.columns],
     body: model.rows,
-    horizontalPageBreak: true,
+    horizontalPageBreak: model.columns.length > WIDE_TABLE_COLUMNS,
     horizontalPageBreakRepeat: 0,
     theme: "striped",
     showHead: "everyPage",
@@ -95,7 +102,7 @@ export function buildBusinessDocumentPdf(model: BusinessDocumentModel, logo?: st
       margin,
       head: [section.columns],
       body: section.rows,
-      horizontalPageBreak: true,
+      horizontalPageBreak: section.columns.length > WIDE_TABLE_COLUMNS,
       horizontalPageBreakRepeat: 0,
       theme: "striped",
       showHead: "everyPage",
