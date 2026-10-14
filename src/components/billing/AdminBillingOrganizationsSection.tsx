@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -41,6 +42,7 @@ import {
 } from "@/lib/billing";
 import { INVOICE_STATUS_LABELS, PAYMENT_METHOD_LABELS } from "@/lib/billing-invoices";
 import { BillingControls } from "./BillingControls";
+import { StartSubscriptionDialog } from "./StartSubscriptionDialog";
 
 const PAGE = 20;
 const ALL = "all";
@@ -309,6 +311,8 @@ export function AdminBillingOrganizationsSection() {
   const [data, setData] = useState<{ total: number; rows: OrganizationRow[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<OrganizationRow | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     fetchPlans()
@@ -343,7 +347,7 @@ export function AdminBillingOrganizationsSection() {
     return () => {
       cancelled = true;
     };
-  }, [flavor, type, plan, status, query, page]);
+  }, [flavor, type, plan, status, query, page, refresh]);
 
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE)) : 1;
   const reset =
@@ -400,11 +404,15 @@ export function AdminBillingOrganizationsSection() {
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
-        <Tabs
-          value={flavor}
-          onValueChange={(v) => reset(setFlavor)(v as "real" | "shadow")}
+        <Button
+          size="sm"
           className="ml-auto"
+          onClick={() => setStarting(true)}
+          data-testid="start-subscription"
         >
+          <Plus className="mr-1 h-4 w-4" /> Start a subscription
+        </Button>
+        <Tabs value={flavor} onValueChange={(v) => reset(setFlavor)(v as "real" | "shadow")}>
           <TabsList>
             <TabsTrigger value="real">Real</TabsTrigger>
             <TabsTrigger value="shadow">Shadow (estimated)</TabsTrigger>
@@ -516,6 +524,14 @@ export function AdminBillingOrganizationsSection() {
           </div>
         </SheetContent>
       </Sheet>
+      <StartSubscriptionDialog
+        open={starting}
+        onClose={() => setStarting(false)}
+        onDone={() => {
+          setStarting(false);
+          setRefresh((n) => n + 1);
+        }}
+      />
     </div>
   );
 }

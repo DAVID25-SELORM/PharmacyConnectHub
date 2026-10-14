@@ -579,6 +579,12 @@ export type PlanRow = {
     transaction_fee_max: number | null;
     transaction_fee_cycle_cap: number | null;
     billing_interval_months: number;
+    currency?: string;
+    min_billable_order_amount?: number | null;
+    max_users?: number | null;
+    max_branches?: number | null;
+    entitlements?: Record<string, unknown> | null;
+    metadata?: Record<string, unknown> | null;
   }[];
 };
 
@@ -586,7 +592,7 @@ export async function fetchPlans(): Promise<PlanRow[]> {
   const { data, error } = await db
     .from("billing_plans")
     .select(
-      "id, code, name, business_type, kind, active, publicly_visible, billing_plan_versions(version, status, subscription_amount, free_trial_days, onboarding_free_orders, monthly_free_orders, transaction_fee_percentage, transaction_fee_min, transaction_fee_max, transaction_fee_cycle_cap, billing_interval_months)",
+      "id, code, name, business_type, kind, active, publicly_visible, billing_plan_versions(version, status, subscription_amount, free_trial_days, onboarding_free_orders, monthly_free_orders, transaction_fee_percentage, transaction_fee_min, transaction_fee_max, transaction_fee_cycle_cap, billing_interval_months, currency, min_billable_order_amount, max_users, max_branches, entitlements, metadata)",
     )
     .order("business_type")
     .order("code");

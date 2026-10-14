@@ -1,0 +1,436 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+const rpc = vi.hoisted(() => vi.fn());
+const tables = vi.hoisted(() => ({ data: {} as Record<string, unknown[]> }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("@/integrations/supabase/client", () => {
+  // A query that can be built with any of the usual filters and awaited for its rows.
+  const chain = (rows: unknown[]) => {
+    const q: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "order", "limit", "ilike", "in"]) q[m] = () => q;
+    q.then = (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null });
+    return q;
+  };
+  return { supabase: { from: (t: string) => chain(tables.data[t] ?? []), rpc } };
+});
+
+import { AdminBillingPlansSection } from "./AdminBillingPlansSection";
+import { PlatformModeCard } from "./PlatformModeCard";
+import { StartSubscriptionDialog } from "./StartSubscriptionDialog";
+import { plansFor } from "@/lib/billing-plans";
+import type { PlanRow } from "@/lib/billing";
+import type { RolloutStatus } from "@/lib/billing-rollout";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+vi.setConfig({ testTimeout: 30_000 });
+
+// Radix Select and Dialog expect a few browser APIs that jsdom leaves out.
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.setPointerCapture ??= () => {};
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.scrollIntoView ??= () => {};
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
+let host: HTMLDivElement;
+let root: Root;
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  rpc.mockReset();
+  tables.data = {};
+});
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  document.body.innerHTML = "";
+});
+const render = (node: React.ReactNode) => act(async () => root.render(node));
+const flush = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+// Prefers the open dialog's button over a page button with the same words behind it.
+const buttonIn = (text: string, scope?: ParentNode) => {
+  const roots = scope
+    ? [scope]
+    : [...document.body.querySelectorAll('[role="dialog"]'), document.body];
+  for (const r of roots) {
+    const hit = Array.from(r.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === text,
+    );
+    if (hit) return hit;
+  }
+  throw new Error(`No button "${text}"`);
+};
+const type = async (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement : HTMLInputElement;
+  const setter = Object.getOwnPropertyDescriptor(proto.prototype, "value")!.set!;
+  await act(async () => {
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+const byLabel = (text: string) => {
+  const label = Array.from(document.body.querySelectorAll("label")).find((l) =>
+    l.textContent?.includes(text),
+  )!;
+  return document.getElementById(label.htmlFor) as HTMLInputElement;
+};
+const typeLabel = (text: string, value: string) => type(byLabel(text), value);
+const reasonBox = () => document.body.querySelector<HTMLTextAreaElement>("textarea")!;
+const alertText = () => document.body.querySelector('[role="alert"]')?.textContent ?? "";
+
+const version = (over: Record<string, unknown> = {}) => ({
+  version: 1,
+  status: "published",
+  subscription_amount: 199,
+  free_trial_days: 30,
+  onboarding_free_orders: 20,
+  monthly_free_orders: 5,
+  transaction_fee_percentage: 1.5,
+  transaction_fee_min: 2,
+  transaction_fee_max: 250,
+  transaction_fee_cycle_cap: null,
+  billing_interval_months: 1,
+  currency: "GHS",
+  min_billable_order_amount: null,
+  max_users: null,
+  max_branches: null,
+  entitlements: { reports: true },
+  metadata: { tier: "growth" },
+  ...over,
+});
+const growth = (over: Partial<PlanRow> = {}): PlanRow =>
+  ({
+    id: "plan-1",
+    code: "wholesale-growth",
+    name: "Growth",
+    business_type: "wholesaler",
+    kind: "standard",
+    active: true,
+    publicly_visible: false,
+    billing_plan_versions: [version()],
+    ...over,
+  }) as PlanRow;
+
+// ---------- plans ----------
+
+it("lists the plans with a way to publish a version and to change availability", async () => {
+  tables.data.billing_plans = [growth()];
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  expect(host.querySelectorAll('[data-testid="plan-row"]')).toHaveLength(1);
+  expect(host.textContent).toContain("On, hidden");
+  expect(host.querySelector('[data-testid="new-plan"]')).not.toBeNull();
+});
+
+it("creates a plan only with a valid code and name, and sends exactly what was typed", async () => {
+  tables.data.billing_plans = [];
+  rpc.mockResolvedValue({ data: "new-id", error: null });
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  expect(host.textContent).toContain("No plans yet");
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="new-plan"]')!.click());
+
+  await typeLabel("Code", "Bad Code");
+  await typeLabel("Name businesses see", "Growth");
+  await type(reasonBox(), "Launch pricing for wholesalers");
+  await act(async () => buttonIn("Create plan").click());
+  expect(alertText()).toContain("lower-case");
+  expect(rpc).not.toHaveBeenCalled();
+
+  await typeLabel("Code", "wholesale-growth");
+  await act(async () => buttonIn("Create plan").click());
+  expect(rpc).toHaveBeenCalledWith("admin_billing_create_plan", {
+    p_code: "wholesale-growth",
+    p_business_type: "wholesaler",
+    p_name: "Growth",
+    p_description: null,
+    p_kind: "standard",
+    p_reason: "Launch pricing for wholesalers",
+  });
+});
+
+it("asks for a reason before it sends anything", async () => {
+  tables.data.billing_plans = [growth()];
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="new-plan"]')!.click());
+  await typeLabel("Code", "wholesale-growth");
+  await typeLabel("Name businesses see", "Growth");
+  await act(async () => buttonIn("Create plan").click());
+  expect(alertText()).toContain("reason");
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("publishes a new version from the current one, keeping what the form does not edit", async () => {
+  tables.data.billing_plans = [growth({ billing_plan_versions: [version({ version: 2 })] })];
+  rpc.mockResolvedValue({ data: "v-id", error: null });
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="publish-version"]')!.click(),
+  );
+  // starts from version 2's figures
+  expect(byLabel("Subscription per billing period").value).toBe("199");
+  expect(byLabel("Platform fee").value).toBe("1.5");
+  expect(document.body.textContent).toContain("publish version 3");
+
+  await type(reasonBox(), "Price review for next year");
+  await act(async () => buttonIn("Publish version 3").click());
+  expect(alertText()).toContain("Nothing has changed");
+  expect(rpc).not.toHaveBeenCalled();
+
+  await typeLabel("Subscription per billing period", "249");
+  await act(async () => buttonIn("Publish version 3").click());
+  expect(rpc).toHaveBeenCalledTimes(1);
+  const [fn, args] = rpc.mock.calls[0];
+  expect(fn).toBe("admin_billing_publish_plan_version");
+  expect(args.p_plan_id).toBe("plan-1");
+  expect(args.p_reason).toBe("Price review for next year");
+  expect(args.p_params).toMatchObject({
+    subscription_amount: 249,
+    transaction_fee_percentage: 1.5,
+    currency: "GHS",
+    entitlements: { reports: true },
+    metadata: { tier: "growth" },
+  });
+  // an unset limit stays unset instead of becoming zero
+  expect(args.p_params).not.toHaveProperty("transaction_fee_cycle_cap");
+});
+
+it("refuses an impossible figure before sending it", async () => {
+  tables.data.billing_plans = [growth()];
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="publish-version"]')!.click(),
+  );
+  await typeLabel("Platform fee", "150");
+  await type(reasonBox(), "Price review for next year");
+  await act(async () => buttonIn("Publish version 2").click());
+  expect(alertText()).toContain("between 0 and 100");
+  expect(rpc).not.toHaveBeenCalled();
+});
+
+it("does not offer a per-order fee on a pharmacy plan", async () => {
+  tables.data.billing_plans = [
+    growth({ business_type: "pharmacy", code: "pharmacy-basic", name: "Basic" }),
+  ];
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="publish-version"]')!.click(),
+  );
+  expect(document.body.textContent).toContain("Subscription per billing period");
+  expect(document.body.textContent).not.toContain("Platform fee");
+});
+
+it("changes availability, and will not show a plan that is off", async () => {
+  tables.data.billing_plans = [growth()];
+  rpc.mockResolvedValue({ data: null, error: null });
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="plan-availability"]')!.click(),
+  );
+  const boxes = Array.from(
+    document.body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  );
+  expect(boxes.map((b) => b.checked)).toEqual([true, false]);
+  await type(reasonBox(), "Open it to all wholesalers");
+
+  await act(async () => buttonIn("Save").click());
+  expect(alertText()).toContain("Nothing has changed");
+
+  await act(async () => boxes[1].click());
+  await act(async () => buttonIn("Save").click());
+  expect(rpc).toHaveBeenCalledWith("admin_billing_set_plan_availability", {
+    p_plan_id: "plan-1",
+    p_active: true,
+    p_publicly_visible: true,
+    p_reason: "Open it to all wholesalers",
+  });
+});
+
+it("shows the database's refusal in plain words and keeps the dialog open", async () => {
+  tables.data.billing_plans = [growth()];
+  rpc.mockResolvedValue({ data: null, error: { message: "Publish a version of the plan first." } });
+  await render(<AdminBillingPlansSection />);
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="plan-availability"]')!.click(),
+  );
+  const boxes = Array.from(
+    document.body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  );
+  await act(async () => boxes[1].click());
+  await type(reasonBox(), "Open it to all wholesalers");
+  await act(async () => buttonIn("Save").click());
+  expect(alertText()).toBe("Publish a version of the plan first.");
+});
+
+// ---------- start a subscription ----------
+
+it("lists only plans that are on and published, for the business's own kind", () => {
+  const plans = [
+    growth(),
+    growth({ code: "off", active: false }),
+    growth({ code: "draft", billing_plan_versions: [version({ status: "retired" })] }),
+    growth({ code: "pharm", business_type: "pharmacy" }),
+  ];
+  expect(plansFor(plans, "wholesaler").map((p) => p.code)).toEqual(["wholesale-growth"]);
+  expect(plansFor(plans, "pharmacy").map((p) => p.code)).toEqual(["pharm"]);
+});
+
+it("offers only approved businesses that are not on a plan yet", async () => {
+  tables.data.businesses = [
+    { id: "b1", name: "Alpha Pharmacy", type: "pharmacy" },
+    { id: "b2", name: "Beta Wholesale", type: "wholesaler" },
+  ];
+  tables.data.billing_subscriptions = [{ business_id: "b1" }];
+  tables.data.billing_plans = [growth()];
+  await render(<StartSubscriptionDialog open onClose={() => {}} onDone={() => {}} />);
+  await flush();
+  const list = document.body.querySelector('[data-testid="subscription-candidates"]')!;
+  expect(list.textContent).toContain("Beta Wholesale");
+  expect(list.textContent).not.toContain("Alpha Pharmacy");
+});
+
+it("needs a business, a plan and a reason, then sends a shadow start", async () => {
+  tables.data.businesses = [{ id: "b2", name: "Beta Wholesale", type: "wholesaler" }];
+  tables.data.billing_subscriptions = [];
+  tables.data.billing_plans = [growth()];
+  rpc.mockResolvedValue({ data: { subscription_id: "s1", launch_grant: "granted" }, error: null });
+  const done = vi.fn();
+  await render(<StartSubscriptionDialog open onClose={() => {}} onDone={done} />);
+  await flush();
+
+  await act(async () => buttonIn("Start subscription").click());
+  expect(document.body.querySelector('[data-testid="subscription-error"]')?.textContent).toContain(
+    "Choose the business",
+  );
+
+  await act(async () =>
+    Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        '[data-testid="subscription-candidates"] button',
+      ),
+    )
+      .find((b) => b.textContent?.includes("Beta Wholesale"))!
+      .click(),
+  );
+  await act(async () => buttonIn("Start subscription").click());
+  expect(document.body.querySelector('[data-testid="subscription-error"]')?.textContent).toContain(
+    "Choose the plan",
+  );
+
+  // pick the plan with the keyboard, the way Radix expects
+  const trigger = document.body.querySelector<HTMLButtonElement>("#ss-plan")!;
+  await act(async () => {
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  });
+  const option = Array.from(document.body.querySelectorAll('[role="option"]')).find((o) =>
+    o.textContent?.includes("wholesale-growth"),
+  ) as HTMLElement;
+  expect(option).toBeTruthy();
+  await act(async () => {
+    option.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    option.click();
+  });
+
+  await act(async () => buttonIn("Start subscription").click());
+  expect(document.body.querySelector('[data-testid="subscription-error"]')?.textContent).toContain(
+    "reason",
+  );
+  expect(rpc).not.toHaveBeenCalled();
+
+  await type(reasonBox(), "Pilot wholesaler, shadow first");
+  await act(async () => buttonIn("Start subscription").click());
+  expect(rpc).toHaveBeenCalledWith("admin_billing_start_subscription", {
+    p_business_id: "b2",
+    p_plan_code: "wholesale-growth",
+    p_billing_starts_at: null,
+    p_billing_mode: "shadow",
+    p_reason: "Pilot wholesaler, shadow first",
+  });
+  expect(done).toHaveBeenCalled();
+});
+
+// ---------- platform mode and run now ----------
+
+const status = (mode: "disabled" | "shadow" | "active", over: Partial<RolloutStatus["run"]> = {}) =>
+  ({
+    platform: { mode },
+    run: {
+      last_run_at: "2026-10-14T08:00:00Z",
+      runs: 12,
+      minutes_since: 7,
+      stale: false,
+      last_result: { assessed: 4, invoices_issued: 0 },
+      ...over,
+    },
+  }) as unknown as RolloutStatus;
+
+it("offers shadow from off, and off from shadow or on, but never switches real billing on", async () => {
+  await render(<PlatformModeCard status={status("disabled")} onChanged={() => {}} />);
+  expect(host.querySelector('[data-testid="to-shadow"]')).not.toBeNull();
+  expect(host.querySelector('[data-testid="to-off"]')).toBeNull();
+  expect(host.textContent).toContain("Last run 7 minutes ago");
+  expect(host.textContent).toContain("assessed: 4");
+
+  for (const m of ["shadow", "active"] as const) {
+    await render(<PlatformModeCard status={status(m)} onChanged={() => {}} />);
+    expect(host.querySelector('[data-testid="to-shadow"]')).toBeNull();
+    expect(host.querySelector('[data-testid="to-off"]')).not.toBeNull();
+  }
+});
+
+it("switches to shadow with a reason and reloads", async () => {
+  rpc.mockResolvedValue({ data: "shadow", error: null });
+  const changed = vi.fn();
+  await render(<PlatformModeCard status={status("disabled")} onChanged={changed} />);
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('[data-testid="to-shadow"]')!.click(),
+  );
+  await act(async () => buttonIn("Switch to shadow").click());
+  expect(alertText()).toContain("reason");
+  await type(reasonBox(), "Start the 14 day shadow run");
+  await act(async () => buttonIn("Switch to shadow").click());
+  expect(rpc).toHaveBeenCalledWith("admin_billing_set_mode", {
+    p_mode: "shadow",
+    p_reason: "Start the 14 day shadow run",
+  });
+  expect(changed).toHaveBeenCalled();
+});
+
+it("warns what switching live billing off does, and runs the job on request", async () => {
+  rpc.mockResolvedValue({ data: { assessed: 2 }, error: null });
+  await render(<PlatformModeCard status={status("active")} onChanged={() => {}} />);
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="to-off"]')!.click());
+  expect(document.body.textContent).toContain("catches up on the orders it missed");
+  await act(async () => buttonIn("Cancel").click());
+
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="run-now"]')!.click());
+  await type(reasonBox(), "Check the figures before the meeting");
+  await act(async () => buttonIn("Run now").click());
+  expect(rpc).toHaveBeenCalledWith("admin_billing_run_now", {
+    p_reason: "Check the figures before the meeting",
+  });
+});
+
+it("says plainly when the scheduled run has never run", async () => {
+  await render(
+    <PlatformModeCard
+      status={status("shadow", { last_run_at: null, minutes_since: null, last_result: {} })}
+      onChanged={() => {}}
+    />,
+  );
+  expect(host.textContent).toContain("never run");
+});

@@ -56,6 +56,8 @@ import {
   type RolloutStatus,
 } from "@/lib/billing-rollout";
 
+import { PlatformModeCard } from "./PlatformModeCard";
+
 const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 const stageTone = {
@@ -144,6 +146,7 @@ export function AdminBillingRolloutSection() {
         />
       </div>
 
+      <PlatformModeCard status={status} onChanged={load} />
       {!active && <ActivationCard readiness={readiness} onDone={load} />}
       {active && <PilotTable onChanged={load} />}
       <PolicyCard status={status} onChanged={load} />

@@ -49,8 +49,13 @@ import {
 import { fetchPlans, type BusinessBillingDetail, type PlanRow } from "@/lib/billing";
 import { dateText } from "@/lib/billing-invoices";
 import { extendGrace, fetchRolloutStatus, goLiveBusiness } from "@/lib/billing-rollout";
+import {
+  SUBSCRIPTION_MODE_LABELS,
+  setSubscriptionMode,
+  type SubscriptionModeChoice,
+} from "@/lib/billing-plans";
 
-type Field = {
+export type Field = {
   key: string;
   label: string;
   type: "text" | "date" | "select" | "checkbox";
@@ -59,7 +64,7 @@ type Field = {
   initial?: string;
 };
 
-type Action = {
+export type Action = {
   id: string;
   label: string;
   description: string;
@@ -243,6 +248,41 @@ export function BillingControls({
           return exempt
             ? "The exemption was removed."
             : "The business is now exempt from platform fees.";
+        },
+      });
+    }
+    if (sub.status !== "cancelled") {
+      const current: SubscriptionModeChoice =
+        sub.billing_mode === "shadow" || sub.billing_mode === "disabled"
+          ? sub.billing_mode
+          : "follow";
+      const live = Boolean(sub.activated_at);
+      list.push({
+        id: "mode",
+        label: "Change billing mode",
+        description: `Now: ${SUBSCRIPTION_MODE_LABELS[current].toLowerCase()}.${
+          live
+            ? " Real billing has started for this business, so it cannot go back to shadow; switching it off pauses all assessment."
+            : ""
+        } Following the platform setting does not put a business live once real billing is on: use Put this business live for that.`,
+        fields: [
+          {
+            key: "mode",
+            label: "Mode",
+            type: "select",
+            initial: current,
+            options: (Object.keys(SUBSCRIPTION_MODE_LABELS) as SubscriptionModeChoice[])
+              .filter((m) => !(live && m === "shadow"))
+              .map((m) => ({ value: m, label: SUBSCRIPTION_MODE_LABELS[m] })),
+          },
+        ],
+        submit: "Change mode",
+        run: async (v) => {
+          const next = v.mode as SubscriptionModeChoice;
+          if (!next) throw new Error("Choose the mode.");
+          if (next === current) throw new Error("That is already its mode.");
+          await setSubscriptionMode(businessId, next, v.reason.trim());
+          return `Billing mode: ${SUBSCRIPTION_MODE_LABELS[next].split(":")[0].toLowerCase()}.`;
         },
       });
     }
@@ -527,7 +567,7 @@ export function BillingControls({
   );
 }
 
-function ActionDialog({
+export function ActionDialog({
   action,
   onClose,
   onDone,

@@ -7,9 +7,9 @@ How to take DrugXOne from "billing built and switched off" to "real businesses a
 ## The short version
 
 1. **Check where production stands**, read-only (Step 1).
-2. **Apply the audit-fix migration** if it is not applied yet (Step 2). Do not go any further without it.
+2. **The audit-fix migration** (Step 2). It was applied to production and verified on 14 October 2026, so there is nothing to apply. Step 2 explains how to confirm it.
 3. **Decide the commercial terms** (Step 3). Nobody can do this for you.
-4. **Configure** plans, invoice details and a pilot group (Step 4). There are no screens for this yet, so it is done with prepared SQL (see "A gap you need to know about").
+4. **Configure** plans, invoice details and a pilot group (Step 4), on the Platform Billing screens.
 5. **Run shadow billing for at least 14 days** and check the numbers by hand (Step 5). Nobody is charged.
 6. **Activate the platform with every business held back** (Step 7). Still nobody is charged.
 7. **Put the pilot businesses live, one at a time** (Step 8), and watch them through their **first invoice and first recorded payment** before widening (Steps 9 to 10).
@@ -18,21 +18,20 @@ Real billing never looks backwards: a business is only ever charged for orders d
 
 ---
 
-## A gap you need to know about
+## Where each step is done
 
-The **Go live** tab, the **Organizations** actions, **Invoices**, **Promotions** and **Reconciliation** all have screens. These do **not**:
+Everything in this runbook has a screen, under **Admin, then Billing**. Every action asks for a written reason and writes an audit entry; the database refuses anything that is not allowed and its message is shown as it is.
 
-| Needed for go-live | Screen? | How it is done today |
-|---|---|---|
-| Create a plan, publish its terms, switch it on | No (the Plans tab only shows them) | SQL (Appendix B) |
-| Set the invoice details (who it is from, how to pay) | No | SQL (Appendix B) |
-| Start a business on a plan | No | SQL (Appendix B) |
-| Switch the platform to **shadow** or back to **disabled** | No | SQL (Appendix B) |
-| Run the billing job now | No | SQL (Appendix B) |
+| Needed for go-live | Where |
+|---|---|
+| Create a plan, publish a new version of its terms, switch it on or off | **Plans** tab: *New plan*, *New version*, *Availability* |
+| Set the invoice details (who it is from, how to pay) | **Invoices** tab: invoice settings card |
+| Start a business on a plan | **Organizations** tab: *Start a subscription* |
+| Change one business's mode (follow the platform, shadow, off) | **Organizations**, open the business, *Change billing mode* |
+| Switch the platform to **shadow** or **off**, and run the billing job now | **Go live** tab: *Billing mode and scheduled run* |
+| Switch real billing on, put businesses live | **Go live** tab: the checklist and *Put businesses live* |
 
-The SQL is safe and tested: every one of these operations checks that you are a platform administrator, needs a written reason, and writes to the audit log. But it means running money configuration by hand in the production SQL Editor.
-
-**My recommendation:** before Step 4, I build four small screens for these (Plans: create and publish; Organizations: start subscription; Go live: shadow switch and run now; Invoices: invoice details). It is roughly a day of work, and it removes the biggest chance of a typing mistake. If you would rather not wait, the SQL route works. Tell me which.
+The SQL in Appendix B does the same operations and still works. Use it only if a screen is unavailable.
 
 ---
 
@@ -58,6 +57,8 @@ Also re-run the read-only verification files for Phases 1 to 6 if you have any d
 ---
 
 ## Step 2: Apply the audit-fix migration
+
+> **Status: already applied to production and verified on 14 October 2026.** All four triggers exist, every redefined function carries the new code, and the three money checks (no commission conflict, no real period without a go-live date, no order credited more than it was charged) all returned zero. **Do not apply it again**: a second run fails on `CREATE TRIGGER` and rolls back harmlessly. The rest of this step is kept for the record, and for rebuilding a copy of production.
 
 **Why this is not optional.** An independent review on 13 October found three serious defects in the billing code written in the earlier phases. None has hurt anyone, because billing has never been on. All three would have hurt the first time real billing ran:
 
@@ -109,11 +110,11 @@ Already agreed and built, so you do not need to decide again: no historical orde
 
 ## Step 4: Configure
 
-Use the SQL in Appendix B. In the plan terms, a number left as `__DECIDE__` makes the statement fail on purpose, so a half-filled plan cannot be published. **The text fields (invoice name, address, how to pay, business name) have no such protection**: the database would accept `__DECIDE__` as a value, so read each block before you run it.
+Use the screens named in each item. (If you must use SQL, Appendix B has a block for each; a number left as `__DECIDE__` makes the statement fail on purpose, but the text fields have no such protection, so read each block before you run it.)
 
-1. **Invoice details and timing** (`admin_billing_set_invoice_settings`). Without who the invoice is from and how to pay, activation is blocked.
-2. **Create the plans** (`admin_billing_create_plan`), **publish their terms** (`admin_billing_publish_plan_version`), then **switch them on** (`admin_billing_set_plan_availability`). A plan cannot be switched on before it has a published version. The two seeded example plans stay off.
-3. **Start each pilot business on its plan in shadow** (`admin_billing_start_subscription` with mode `shadow`). Start in shadow **even though the platform is not yet in shadow**: a business started this way can never be billed for real by accident.
+1. **Invoice details and timing:** Invoices tab, invoice settings. Without who the invoice is from and how to pay, activation is blocked.
+2. **Create the plans** (Plans tab, *New plan*), **publish their terms** (*New version*; the first version is the plan's opening terms), then **switch them on** (*Availability*). A plan cannot be switched on before it has a published version. Terms are never edited afterwards: a price change is a new version, and businesses already on the plan keep the version they are on until you move them. The two seeded example plans stay off.
+3. **Start each pilot business on its plan in shadow** (Organizations tab, *Start a subscription*, billing mode *Shadow*). Start in shadow **even though the platform is not yet in shadow**: a business started this way can never be billed for real by accident.
 4. **Check the result on screen:** Platform Billing, then Organizations. Each pilot should show its plan, its billing start, and "Held back (shadow)".
 
 Starting a business grants its launch free orders once per licence number and once per owner. A second business with the same owner or licence will not receive them again.
@@ -124,7 +125,7 @@ Starting a business grants its launch free orders once per licence number and on
 
 Shadow billing runs the entire engine on real deliveries and records what **would** have been charged, in a completely separate set of records. Nothing is billed, nothing is invoiced, and businesses cannot see it.
 
-**Start it:** switch the platform to shadow (Appendix B, `admin_billing_set_mode('shadow', …)`). The billing job runs every 15 minutes by itself.
+**Start it:** switch the platform to shadow (Go live tab, *Billing mode and scheduled run*, *Switch to shadow*). *Run billing now* runs the same job immediately if you want to see a result before the next 15-minute run. The billing job runs every 15 minutes by itself.
 
 **Every working day, for 14 days:**
 
@@ -256,7 +257,7 @@ Only widen once this has worked end to end for at least two pilot businesses.
 
 ## If something goes wrong
 
-**Stop new charges immediately:** switch the platform to **disabled** (Appendix B). The engine then writes nothing new.
+**Stop new charges immediately:** switch the platform to **off** (Go live tab, *Switch billing off*). The engine then writes nothing new.
 
 Be aware of two things:
 
@@ -299,7 +300,9 @@ SELECT
  (SELECT count(*) FROM pg_trigger WHERE tgname IN ('billing_revenue_policy_lock', 'billing_revenue_policy_guard')) AS audit_fix_applied_triggers;
 ```
 
-## Appendix B: Administrator operations in SQL
+## Appendix B: Administrator operations in SQL (fallback)
+
+Every operation here has a screen (see "Where each step is done"). Use this appendix only if a screen is unavailable.
 
 **How to use.** These run in the production SQL Editor. Each block does two things: it makes the database treat you as the platform administrator you are (the functions refuse anyone else), and it calls one operation, which needs a written reason (at least 5 characters) and writes an audit entry. Run **one block at a time**, read the result, then go on.
 
