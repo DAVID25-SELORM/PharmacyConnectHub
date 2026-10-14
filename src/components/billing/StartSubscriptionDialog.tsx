@@ -54,6 +54,7 @@ export function StartSubscriptionDialog({
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +80,7 @@ export function StartSubscriptionDialog({
     if (!open) return;
     let cancelled = false;
     setFound(null);
+    setListError(null);
     fetchUnsubscribedBusinesses(query)
       .then((r) => {
         if (!cancelled) setFound(r);
@@ -86,7 +88,7 @@ export function StartSubscriptionDialog({
       .catch((e) => {
         if (!cancelled) {
           setFound([]);
-          setError(errText(e, "Could not load the businesses."));
+          setListError(errText(e, "Could not load the businesses."));
         }
       });
     return () => {
@@ -176,7 +178,16 @@ export function StartSubscriptionDialog({
                   data-testid="subscription-candidates"
                 >
                   {!found && <Skeleton className="h-16" />}
-                  {found && found.length === 0 && (
+                  {listError && (
+                    <p
+                      className="p-3 text-sm text-destructive"
+                      role="alert"
+                      data-testid="candidates-error"
+                    >
+                      {listError}
+                    </p>
+                  )}
+                  {found && found.length === 0 && !listError && (
                     <p className="p-3 text-sm text-muted-foreground">
                       No approved business without a plan matches.
                     </p>

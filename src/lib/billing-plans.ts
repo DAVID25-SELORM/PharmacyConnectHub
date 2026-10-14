@@ -332,31 +332,27 @@ export function describeRun(result: RunResult | null | undefined): string {
 export type UnsubscribedBusiness = { id: string; name: string; type: "pharmacy" | "wholesaler" };
 
 /**
- * Approved businesses that are not on a plan yet, matching a name search. Administrators can read both tables; the database still refuses a second subscription, so a stale list is harmless.
+ * Approved businesses that are not on a plan yet, matching a name search, at most 50.
+ * The "no subscription" test is made by the database (a left join that keeps only the businesses with nothing on the other side), never by sending a long list of ids back: that request is rejected as too long once a few hundred businesses match.
+ * The database still refuses a second subscription, so a stale list is harmless.
  */
 export async function fetchUnsubscribedBusinesses(search: string): Promise<UnsubscribedBusiness[]> {
   let q = db
     .from("businesses")
-    .select("id, name, type")
+    .select("id, name, type, billing_subscriptions(id)")
     .eq("verification_status", "approved")
+    .is("billing_subscriptions", null)
     .order("name")
-    .limit(200);
+    .limit(50);
   const term = search.trim().replace(/[%,()]/g, " ");
   if (term) q = q.ilike("name", `%${term}%`);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  const businesses = (data ?? []) as UnsubscribedBusiness[];
-  if (businesses.length === 0) return [];
-  const { data: subs, error: subError } = await db
-    .from("billing_subscriptions")
-    .select("business_id")
-    .in(
-      "business_id",
-      businesses.map((b) => b.id),
-    );
-  if (subError) throw new Error(subError.message);
-  const taken = new Set(((subs ?? []) as { business_id: string }[]).map((s) => s.business_id));
-  return businesses.filter((b) => !taken.has(b.id)).slice(0, 50);
+  return ((data ?? []) as UnsubscribedBusiness[]).map((b) => ({
+    id: b.id,
+    name: b.name,
+    type: b.type,
+  }));
 }
 
 /** The newest published version, or failing that the newest of any status. */

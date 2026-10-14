@@ -4,17 +4,30 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const rpc = vi.hoisted(() => vi.fn());
-const tables = vi.hoisted(() => ({ data: {} as Record<string, unknown[]> }));
+const tables = vi.hoisted(() => ({
+  data: {} as Record<string, unknown[]>,
+  fail: {} as Record<string, string>,
+  calls: [] as { table: string; method: string; args: unknown[] }[],
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/integrations/supabase/client", () => {
-  // A query that can be built with any of the usual filters and awaited for its rows.
-  const chain = (rows: unknown[]) => {
+  // A query that can be built with any of the usual filters and awaited for its rows. Every call is recorded.
+  const chain = (table: string, rows: unknown[]) => {
     const q: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "order", "limit", "ilike", "in"]) q[m] = () => q;
-    q.then = (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null });
+    for (const m of ["select", "eq", "is", "not", "order", "limit", "ilike", "in"])
+      q[m] = (...args: unknown[]) => {
+        tables.calls.push({ table, method: m, args });
+        return q;
+      };
+    q.then = (resolve: (v: unknown) => unknown) =>
+      resolve(
+        tables.fail[table]
+          ? { data: null, error: { message: tables.fail[table] } }
+          : { data: rows, error: null },
+      );
     return q;
   };
-  return { supabase: { from: (t: string) => chain(tables.data[t] ?? []), rpc } };
+  return { supabase: { from: (t: string) => chain(t, tables.data[t] ?? []), rpc } };
 });
 
 import { AdminBillingPlansSection } from "./AdminBillingPlansSection";
@@ -46,6 +59,8 @@ beforeEach(() => {
   root = createRoot(host);
   rpc.mockReset();
   tables.data = {};
+  tables.fail = {};
+  tables.calls = [];
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -288,18 +303,38 @@ it("lists only plans that are on and published, for the business's own kind", ()
   expect(plansFor(plans, "pharmacy").map((p) => p.code)).toEqual(["pharm"]);
 });
 
-it("offers only approved businesses that are not on a plan yet", async () => {
+it("asks the database for approved businesses with no subscription, and never sends a list of ids back", async () => {
   tables.data.businesses = [
-    { id: "b1", name: "Alpha Pharmacy", type: "pharmacy" },
-    { id: "b2", name: "Beta Wholesale", type: "wholesaler" },
+    { id: "b2", name: "Beta Wholesale", type: "wholesaler", billing_subscriptions: null },
   ];
-  tables.data.billing_subscriptions = [{ business_id: "b1" }];
   tables.data.billing_plans = [growth()];
   await render(<StartSubscriptionDialog open onClose={() => {}} onDone={() => {}} />);
   await flush();
   const list = document.body.querySelector('[data-testid="subscription-candidates"]')!;
   expect(list.textContent).toContain("Beta Wholesale");
-  expect(list.textContent).not.toContain("Alpha Pharmacy");
+
+  const mine = tables.calls.filter((c) => c.table === "businesses");
+  const has = (method: string, ...args: unknown[]) =>
+    mine.some((c) => c.method === method && JSON.stringify(c.args) === JSON.stringify(args));
+  expect(has("select", "id, name, type, billing_subscriptions(id)")).toBe(true);
+  expect(has("eq", "verification_status", "approved")).toBe(true);
+  expect(has("is", "billing_subscriptions", null)).toBe(true);
+  expect(has("limit", 50)).toBe(true);
+  // the old way: a second request carrying every business id, which is rejected as too long
+  expect(tables.calls.some((c) => c.method === "in")).toBe(false);
+  expect(tables.calls.some((c) => c.table === "billing_subscriptions")).toBe(false);
+});
+
+it("says so, in the list, when the businesses cannot be loaded", async () => {
+  tables.fail.businesses = "Request-URI Too Long";
+  tables.data.billing_plans = [growth()];
+  await render(<StartSubscriptionDialog open onClose={() => {}} onDone={() => {}} />);
+  await flush();
+  const list = document.body.querySelector('[data-testid="subscription-candidates"]')!;
+  expect(list.querySelector('[data-testid="candidates-error"]')?.textContent).toBe(
+    "Request-URI Too Long",
+  );
+  expect(list.textContent).not.toContain("No approved business");
 });
 
 it("needs a business, a plan and a reason, then sends a shadow start", async () => {
