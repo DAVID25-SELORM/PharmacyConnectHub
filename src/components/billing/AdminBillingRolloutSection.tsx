@@ -91,7 +91,7 @@ function Stat({
 }
 
 /** Going live: where the rollout stands, the checklist before real billing is switched on, putting businesses live one by one, and the policies that apply once it is. */
-export function AdminBillingRolloutSection() {
+export function AdminBillingRolloutSection({ onOpenSetup }: { onOpenSetup?: () => void } = {}) {
   const [status, setStatus] = useState<RolloutStatus | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +147,20 @@ export function AdminBillingRolloutSection() {
       </div>
 
       <PlatformModeCard status={status} onChanged={load} />
-      {!active && <ActivationCard readiness={readiness} onDone={load} />}
+      {!active && (
+        <Card className="space-y-2 p-4" data-testid="activation-moved">
+          <h3 className="font-semibold">Switching real billing on</h3>
+          <p className="text-sm text-muted-foreground">
+            This is done from the Setup tab, which checks that pricing, invoices, a 14-day shadow
+            test and every automatic check are complete before it offers the switch.
+          </p>
+          {onOpenSetup && (
+            <Button variant="outline" size="sm" onClick={onOpenSetup} data-testid="open-setup">
+              Open Setup
+            </Button>
+          )}
+        </Card>
+      )}
       {active && <PilotTable onChanged={load} />}
       <PolicyCard status={status} onChanged={load} />
       <NoticesCard status={status} onChanged={load} />
@@ -174,19 +187,35 @@ export function AdminBillingRolloutSection() {
   );
 }
 
-function ActivationCard({ readiness, onDone }: { readiness: Readiness; onDone: () => void }) {
+/**
+ * The switch that turns real billing on. `extraBlockers` are further reasons (from the guided setup) why it must not be offered yet; `lockHoldBack` keeps every business held back in shadow, so none is charged until it is put live by hand; `compact` leaves out the checklist when the page already shows it.
+ */
+export function ActivationCard({
+  readiness,
+  onDone,
+  extraBlockers = [],
+  lockHoldBack = false,
+  compact = false,
+}: {
+  readiness: Readiness;
+  onDone: () => void;
+  extraBlockers?: string[];
+  lockHoldBack?: boolean;
+  compact?: boolean;
+}) {
   const [holdBack, setHoldBack] = useState(true);
   const [phrase, setPhrase] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const stuck = blockers(readiness);
+  const stuck = [...new Set([...blockers(readiness), ...extraBlockers])];
 
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      const r = await activatePlatform(holdBack, phrase, reason.trim());
+      if (stuck.length > 0) throw new Error(`Not ready yet: ${stuck.join("; ")}.`);
+      const r = await activatePlatform(lockHoldBack ? true : holdBack, phrase, reason.trim());
       toast.success(
         `Real billing is on. ${r.held_back} businesses held back in shadow, ${r.live} live.`,
       );
@@ -200,55 +229,72 @@ function ActivationCard({ readiness, onDone }: { readiness: Readiness; onDone: (
 
   return (
     <Card className="space-y-4 p-4" data-testid="activation-card">
-      <div>
-        <h3 className="font-semibold">Before real billing is switched on</h3>
-        <p className="text-xs text-muted-foreground">
-          Items marked "must" stop the switch until they pass. The rest are advice.
-        </p>
-      </div>
-      <ul className="space-y-2 text-sm">
-        {readiness.checks.map((c) => (
-          <li key={c.key} className="flex items-start gap-2" data-testid="readiness-check">
-            {c.ok ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label="ok" />
-            ) : c.blocking ? (
-              <XCircle
-                className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
-                aria-label="not ready"
-              />
-            ) : (
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-label="advice" />
-            )}
-            <div>
-              <span className="font-medium">{c.label}</span>
-              {c.blocking && <span className="ml-2 text-xs text-muted-foreground">must</span>}
-              {c.detail && <div className="text-xs text-muted-foreground">{c.detail}</div>}
-            </div>
-          </li>
-        ))}
-      </ul>
-      <p className="text-sm text-muted-foreground" data-testid="shadow-summary">
-        {shadowSummary(readiness.shadow)}
-        {readiness.shadow.since
-          ? ` Estimated fees and subscriptions: ${formatGHS(readiness.shadow.estimated_revenue)} (not charged).`
-          : ""}
-      </p>
+      {!compact && (
+        <>
+          <div>
+            <h3 className="font-semibold">Before real billing is switched on</h3>
+            <p className="text-xs text-muted-foreground">
+              Items marked "must" stop the switch until they pass. The rest are advice.
+            </p>
+          </div>
+          <ul className="space-y-2 text-sm">
+            {readiness.checks.map((c) => (
+              <li key={c.key} className="flex items-start gap-2" data-testid="readiness-check">
+                {c.ok ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-label="ok" />
+                ) : c.blocking ? (
+                  <XCircle
+                    className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+                    aria-label="not ready"
+                  />
+                ) : (
+                  <CircleAlert
+                    className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+                    aria-label="advice"
+                  />
+                )}
+                <div>
+                  <span className="font-medium">{c.label}</span>
+                  {c.blocking && <span className="ml-2 text-xs text-muted-foreground">must</span>}
+                  {c.detail && <div className="text-xs text-muted-foreground">{c.detail}</div>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-muted-foreground" data-testid="shadow-summary">
+            {shadowSummary(readiness.shadow)}
+            {readiness.shadow.since
+              ? ` Estimated fees and subscriptions: ${formatGHS(readiness.shadow.estimated_revenue)} (not charged).`
+              : ""}
+          </p>
+        </>
+      )}
       <div className="space-y-3 rounded-md border p-3">
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={holdBack}
-            onChange={(e) => setHoldBack(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            <span className="font-medium">Hold every business back in shadow (recommended)</span>
+        {lockHoldBack ? (
+          <p className="text-sm" data-testid="hold-back-locked">
+            <span className="font-medium">Every business starts held back in shadow.</span>
             <span className="block text-xs text-muted-foreground">
-              Real billing is switched on, but nobody is charged until you put businesses live one
-              by one. Without this every subscribed business goes live now.
+              Real billing is switched on, but nobody is charged until you put each pilot business
+              live yourself.
             </span>
-          </span>
-        </label>
+          </p>
+        ) : (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={holdBack}
+              onChange={(e) => setHoldBack(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="font-medium">Hold every business back in shadow (recommended)</span>
+              <span className="block text-xs text-muted-foreground">
+                Real billing is switched on, but nobody is charged until you put businesses live one
+                by one. Without this every subscribed business goes live now.
+              </span>
+            </span>
+          </label>
+        )}
         <div className="grid gap-1">
           <Label htmlFor="act-phrase">Type {ACTIVATION_PHRASE} to confirm</Label>
           <Input
@@ -279,7 +325,14 @@ function ActivationCard({ readiness, onDone }: { readiness: Readiness; onDone: (
         )}
         <Button
           onClick={() => void submit()}
-          disabled={busy || !canActivate({ ready: readiness.ready, phrase, reason })}
+          disabled={
+            busy ||
+            !canActivate({
+              ready: readiness.ready && extraBlockers.length === 0,
+              phrase,
+              reason,
+            })
+          }
           data-testid="activate-billing"
         >
           {busy ? "Switching on…" : "Switch real billing on"}
@@ -289,7 +342,7 @@ function ActivationCard({ readiness, onDone }: { readiness: Readiness; onDone: (
   );
 }
 
-function PilotTable({ onChanged }: { onChanged: () => void }) {
+export function PilotTable({ onChanged }: { onChanged: () => void }) {
   const [rows, setRows] = useState<OrganizationRow[] | null>(null);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");

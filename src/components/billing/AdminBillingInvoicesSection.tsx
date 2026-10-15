@@ -581,7 +581,7 @@ function ReversePaymentDialog({
 }
 
 /** How invoices are issued: payment terms, how long after a period ends, and who they come from and how to pay. */
-function InvoiceSettingsCard() {
+export function InvoiceSettingsCard({ onSaved }: { onSaved?: () => void } = {}) {
   const [settings, setSettings] = useState<InvoiceSettings | null>(null);
   const [terms, setTerms] = useState("14");
   const [delay, setDelay] = useState("24");
@@ -613,6 +613,7 @@ function InvoiceSettingsCard() {
       apply(saved);
       setReason("");
       toast.success("Invoice settings saved. New invoices will use them.");
+      onSaved?.();
     } catch (e) {
       setError(errText(e, "Could not save."));
     } finally {

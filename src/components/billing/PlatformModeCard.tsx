@@ -11,18 +11,12 @@ const MODE_TEXT = {
   active: "On: businesses that have been put live are charged.",
 } as const;
 
-/** The platform billing mode (never to "on": that goes through the checklist) and a manual run of the scheduled billing job. */
-export function PlatformModeCard({
-  status,
-  onChanged,
-}: {
-  status: RolloutStatus;
-  onChanged: () => void;
-}) {
-  const [action, setAction] = useState<Action | null>(null);
-  const mode = status.platform.mode;
-
-  const switchTo = (next: "disabled" | "shadow"): Action => ({
+/** Switching the platform to shadow or off, as a reason dialog. `mode` is where the platform is now, which decides how the consequences are worded. */
+export function platformSwitchAction(
+  mode: "disabled" | "shadow" | "active",
+  next: "disabled" | "shadow",
+): Action {
+  return {
     id: `mode-${next}`,
     label: next === "shadow" ? "Switch to shadow" : "Switch billing off",
     description:
@@ -38,9 +32,12 @@ export function PlatformModeCard({
       await setPlatformMode(next, v.reason.trim());
       return next === "shadow" ? "Billing is in shadow." : "Billing is off.";
     },
-  });
+  };
+}
 
-  const runNow: Action = {
+/** Running the scheduled billing job now, as a reason dialog. */
+export function runNowAction(): Action {
+  return {
     id: "run-now",
     label: "Run billing now",
     description:
@@ -49,6 +46,21 @@ export function PlatformModeCard({
     submit: "Run now",
     run: async (v) => `Billing run finished. ${describeRun(await runBillingNow(v.reason.trim()))}`,
   };
+}
+
+/** The platform billing mode (never to "on": that goes through the checklist) and a manual run of the scheduled billing job. */
+export function PlatformModeCard({
+  status,
+  onChanged,
+}: {
+  status: RolloutStatus;
+  onChanged: () => void;
+}) {
+  const [action, setAction] = useState<Action | null>(null);
+  const mode = status.platform.mode;
+
+  const switchTo = (next: "disabled" | "shadow") => platformSwitchAction(mode, next);
+  const runNow = runNowAction();
 
   return (
     <Card className="space-y-3 p-4" data-testid="platform-mode">

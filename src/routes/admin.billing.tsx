@@ -5,9 +5,11 @@ import { AdminBillingInvoicesSection } from "@/components/billing/AdminBillingIn
 import { AdminBillingOrganizationsSection } from "@/components/billing/AdminBillingOrganizationsSection";
 import { AdminBillingOverviewSection } from "@/components/billing/AdminBillingOverviewSection";
 import { AdminBillingRolloutSection } from "@/components/billing/AdminBillingRolloutSection";
+import { BillingSetup } from "@/components/billing/BillingSetup";
 import { AdminBillingPromotionsSection } from "@/components/billing/AdminBillingPromotionsSection";
 import { AdminBillingPlansSection } from "@/components/billing/AdminBillingPlansSection";
 import { AdminBillingReconciliationSection } from "@/components/billing/AdminBillingReconciliationSection";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/admin/billing")({
@@ -16,6 +18,7 @@ export const Route = createFileRoute("/admin/billing")({
 });
 
 function AdminBillingPage() {
+  const [tab, setTab] = useState("setup");
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader subtitle="Platform Billing" isAdmin={true} />
@@ -24,13 +27,14 @@ function AdminBillingPage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Platform Billing</h1>
           <p className="text-sm text-muted-foreground">
-            Subscriptions, platform fees and what DrugXOne earns. Figures come straight from the
-            billing records. What you change here is a business's billing controls, the payments you
-            record, promotions and the invoice settings; every change needs a reason and is audited.
+            Subscriptions, platform fees and what DrugXOne earns. Start with Setup: it walks through
+            pricing, invoices, the shadow test and the first pilot businesses. Every change needs a
+            reason and is audited.
           </p>
         </div>
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList className="mb-4 h-auto max-w-full justify-start overflow-x-auto [&>button]:shrink-0">
+            <TabsTrigger value="setup">Setup</TabsTrigger>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
@@ -39,6 +43,9 @@ function AdminBillingPage() {
             <TabsTrigger value="rollout">Go live</TabsTrigger>
             <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
           </TabsList>
+          <TabsContent value="setup">
+            <BillingSetup />
+          </TabsContent>
           <TabsContent value="overview">
             <AdminBillingOverviewSection />
           </TabsContent>
@@ -55,7 +62,7 @@ function AdminBillingPage() {
             <AdminBillingPromotionsSection />
           </TabsContent>
           <TabsContent value="rollout">
-            <AdminBillingRolloutSection />
+            <AdminBillingRolloutSection onOpenSetup={() => setTab("setup")} />
           </TabsContent>
           <TabsContent value="reconciliation">
             <AdminBillingReconciliationSection />

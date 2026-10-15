@@ -18,6 +18,8 @@ Real billing never looks backwards: a business is only ever charged for orders d
 
 ---
 
+> **Update, 15 October 2026: the guided Billing Setup tab.** Admin, Billing, **Setup** now walks through everything below in four stages (Configure Billing, Set Up Invoices, Run 14-Day Shadow Test, Activate Pilot Businesses), shows what prevents activation, runs the reconciliation and an independent recalculation of shadow fees automatically, and keeps real billing locked until the shadow test has really run. See `docs/billing/setup-guide.md`. The steps and SQL below still work and explain what each stage does; the hand checks in Step 5 are now done by the page.
+
 ## Where each step is done
 
 Everything in this runbook has a screen, under **Admin, then Billing**. Every action asks for a written reason and writes an audit entry; the database refuses anything that is not allowed and its message is shown as it is.
