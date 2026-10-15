@@ -38,6 +38,7 @@ import { DashboardHeader } from "@/components/DashboardShell";
 import { ActivityDetailSheet } from "@/components/admin/ActivityDetailSheet";
 import { ActivityTable } from "@/components/admin/ActivityTable";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { ExpiryGuardCard } from "@/components/admin/ExpiryGuardCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ActivityRow } from "@/lib/activity-log";
 import { useSession } from "@/hooks/use-session";
@@ -480,6 +481,10 @@ function AdminPanel() {
         </Card>
 
         <ActivityDetailSheet activityId={openActivityId} onClose={() => setOpenActivityId(null)} />
+
+        <div className="mb-8">
+          <ExpiryGuardCard />
+        </div>
 
         <Card className="mb-8 p-6" aria-labelledby="needs-attention-heading">
           <h2
