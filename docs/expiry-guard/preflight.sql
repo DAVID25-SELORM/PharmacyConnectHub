@@ -25,6 +25,8 @@ SELECT 'helper functions exist (has_role, can_act_for_business, write_audit_log)
          AND to_regprocedure('public.can_act_for_business(uuid,text)') IS NOT NULL
          AND to_regprocedure('public.write_audit_log(text,text,text,uuid,text,jsonb,uuid,text,text,uuid)') IS NOT NULL, false
 UNION ALL
-SELECT 'guard tables not already present', 0, to_regclass('public.expiry_guard_policy') IS NULL, to_regclass('public.expiry_guard_policy') IS NOT NULL;
+SELECT 'guard tables not already present', 0, to_regclass('public.expiry_guard_policy') IS NULL, to_regclass('public.expiry_guard_policy') IS NOT NULL
+UNION ALL
+SELECT 'this is pre-flight v2 (line-ending safe)', 0, true, false;
 
 -- If the first query shows already_patched = true for every row, the migration was already applied: do not apply it again.
