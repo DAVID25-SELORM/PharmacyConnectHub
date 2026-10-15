@@ -73,8 +73,9 @@ export function ExpiryGuardCard() {
         initial: current,
         options: (Object.keys(MODE_LABELS) as GuardMode[]).map((m) => ({
           value: m,
-          label: `${MODE_LABELS[m]}: ${MODE_DESCRIPTIONS[m]}`,
+          label: MODE_LABELS[m],
         })),
+        help: "Off: nothing is checked. Observing: records what would be refused and blocks nothing. Enforced: refuses sales that need expired units.",
       },
     ],
     submit: "Change mode",

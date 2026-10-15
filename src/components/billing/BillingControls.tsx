@@ -618,7 +618,7 @@ export function ActionDialog({
         </DialogHeader>
         <div className="grid gap-3">
           {action.fields.map((f) => (
-            <div key={f.key} className="grid gap-1">
+            <div key={f.key} className="grid min-w-0 gap-1">
               {f.type === "checkbox" ? (
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -633,7 +633,7 @@ export function ActionDialog({
                   <Label htmlFor={`act-${f.key}`}>{f.label}</Label>
                   {f.type === "select" ? (
                     <Select value={values[f.key] ?? ""} onValueChange={(v) => set(f.key, v)}>
-                      <SelectTrigger id={`act-${f.key}`}>
+                      <SelectTrigger id={`act-${f.key}`} className="w-full min-w-0 [&>span]:truncate">
                         <SelectValue placeholder="Choose…" />
                       </SelectTrigger>
                       <SelectContent>
