@@ -9,9 +9,7 @@ WITH f(label, sig, fragment) AS (VALUES
           ''minimum_order_quantity'', w.minimum_order_quantity,'),
   ('back-order shipment', 'public.advance_backorder_shipment(uuid,text)'::regprocedure, E'        IF v_stock < v_line.quantity THEN\n          RAISE EXCEPTION ''Not enough stock of % to dispatch this shipment (% in stock, % needed). Receive the goods into stock first.'',\n            v_line.product_name, v_stock, v_line.quantity;\n        END IF;\n')
 ), body AS (
-  SELECT label, replace(pg_get_functiondef(sig), E'
-', '') AS def, replace(fragment, E'
-', '') AS fragment FROM f
+  SELECT label, replace(pg_get_functiondef(sig), E'', '') AS def, replace(fragment, E'', '') AS fragment FROM f
 )
 SELECT label AS check_name,
        (length(def) - length(replace(def, fragment, ''))) / length(fragment) AS matches,
