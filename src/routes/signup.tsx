@@ -281,7 +281,7 @@ function SignupPage() {
                       id="license"
                       value={form.licenseNumber}
                       onChange={(e) => update("licenseNumber", e.target.value)}
-                      placeholder={role === "pharmacy" ? "PCG-12345" : "REG-12345"}
+                      placeholder="e.g. PC/CS/GR/000A"
                       required
                     />
                   </div>

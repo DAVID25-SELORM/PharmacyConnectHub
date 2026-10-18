@@ -218,6 +218,7 @@ function AddBusinessPage() {
                   id="ab-license"
                   value={form.license}
                   onChange={(e) => set("license", e.target.value)}
+                  placeholder="e.g. PC/CS/GR/000A"
                   required
                 />
               </div>
