@@ -113,6 +113,13 @@ SELECT w.id, p.id, 'percentage', 7 FROM zz.b w, zz.b p WHERE w.name='Pending Who
 INSERT INTO public.customer_discounts(wholesaler_id, pharmacy_id, discount_type, discount_percent)
 SELECT w.id, p.id, 'percentage', 8 FROM zz.b w, zz.b p WHERE w.name='Alpha Wholesale' AND p.name='Pending Pharmacy';
 
+-- The test administrator is also the platform owner (Super Admin): billing changes are limited to the owner.
+DO $$ BEGIN
+  IF to_regclass('public.platform_staff') IS NOT NULL THEN
+    INSERT INTO public.platform_staff(user_id, role, status, joined_at) SELECT id, 'owner', 'active', now() FROM zz.u WHERE k='admin'
+    ON CONFLICT (user_id) DO UPDATE SET role = 'owner', status = 'active';
+  END IF;
+END $$;
 SELECT k, id FROM zz.u WHERE k='admin';
 SELECT name, type, verification_status FROM zz.b ORDER BY name;
 SELECT (SELECT count(*) FROM public.user_roles WHERE role='admin') AS admins;

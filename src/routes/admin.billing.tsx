@@ -7,7 +7,7 @@ import { AdminBillingOverviewSection } from "@/components/billing/AdminBillingOv
 import { AdminBillingRolloutSection } from "@/components/billing/AdminBillingRolloutSection";
 import { BillingSetup } from "@/components/billing/BillingSetup";
 import { AdminBillingPromotionsSection } from "@/components/billing/AdminBillingPromotionsSection";
-import { AdminBillingPlansSection } from "@/components/billing/AdminBillingPlansSection";
+import { PricingPlans } from "@/components/billing/PricingPlans";
 import { AdminBillingReconciliationSection } from "@/components/billing/AdminBillingReconciliationSection";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,7 +38,7 @@ function AdminBillingPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="organizations">Organizations</TabsTrigger>
             <TabsTrigger value="invoices">Invoices</TabsTrigger>
-            <TabsTrigger value="plans">Plans</TabsTrigger>
+            <TabsTrigger value="plans">Pricing & Plans</TabsTrigger>
             <TabsTrigger value="promotions">Promotions</TabsTrigger>
             <TabsTrigger value="rollout">Go live</TabsTrigger>
             <TabsTrigger value="reconciliation">Reconciliation</TabsTrigger>
@@ -56,7 +56,7 @@ function AdminBillingPage() {
             <AdminBillingInvoicesSection />
           </TabsContent>
           <TabsContent value="plans">
-            <AdminBillingPlansSection />
+            <PricingPlans onOpenTab={setTab} />
           </TabsContent>
           <TabsContent value="promotions">
             <AdminBillingPromotionsSection />
