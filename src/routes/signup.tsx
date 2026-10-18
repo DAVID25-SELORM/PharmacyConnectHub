@@ -275,7 +275,7 @@ function SignupPage() {
                     <Label htmlFor="license">
                       {role === "pharmacy"
                         ? "Pharmacy Council license #"
-                        : "Business license / registration #"}
+                        : "Pharmacy Council license / business registration #"}
                     </Label>
                     <Input
                       id="license"

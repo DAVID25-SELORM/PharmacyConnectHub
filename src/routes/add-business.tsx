@@ -210,7 +210,9 @@ function AddBusinessPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ab-license">
-                  {isPharmacy ? "Pharmacy Council license #" : "Business license / registration #"}
+                  {isPharmacy
+                    ? "Pharmacy Council license #"
+                    : "Pharmacy Council license / business registration #"}
                 </Label>
                 <Input
                   id="ab-license"
