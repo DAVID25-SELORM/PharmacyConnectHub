@@ -174,7 +174,7 @@ function SignupPage() {
             <h1 className="font-display text-2xl font-bold">Confirm your email</h1>
             <p className="text-sm text-muted-foreground">
               We sent a confirmation link to <strong>{form.ownerEmail}</strong>. Click it to
-              activate your account, then come back to sign in.
+              activate your account, then sign in and complete your business verification.
             </p>
             <Link to="/login" className="text-sm text-primary hover:underline font-medium block">
               Go to sign in
@@ -519,7 +519,7 @@ function SignupPage() {
               </Button>
 
               <p className="text-xs text-muted-foreground text-center">
-                By signing up you agree to our terms and privacy policy.
+                By creating an account you agree to our terms and privacy policy.
               </p>
             </form>
 
