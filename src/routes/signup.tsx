@@ -432,7 +432,9 @@ function SignupPage() {
 
               <section className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-5">
                 <div>
-                  <h2 className="font-display text-lg font-semibold">Owner Details</h2>
+                  <h2 className="font-display text-lg font-semibold">
+                    {role === "wholesaler" ? "Owner/Admin Details" : "Owner Details"}
+                  </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     This is the account that signs in and manages the workspace.
                   </p>
