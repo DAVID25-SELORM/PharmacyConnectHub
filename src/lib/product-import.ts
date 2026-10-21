@@ -7,8 +7,7 @@ type ImportField =
   | "form"
   | "pack_size"
   | "price_ghs"
-  | "stock"
-  | "image_hue";
+  | "stock";
 
 type RawImportRow = Record<string, string>;
 
@@ -30,7 +29,6 @@ export type ImportedProductDraft = {
   price_ghs: number;
   stock: number | null;
   source_row: number;
-  image_hue: number;
 };
 
 export type ProductImportResult = {
@@ -48,7 +46,6 @@ const fieldAliases: Record<ImportField, string[]> = {
   pack_size: ["pack", "pack size", "packsize", "size", "packaging"],
   price_ghs: ["price", "price_ghs", "price ghs", "ghs", "unit price", "selling price"],
   stock: ["stock", "qty", "quantity", "available", "inventory", "units"],
-  image_hue: ["image_hue", "hue", "color", "colour"],
 };
 
 const categoryLookup = new Map(
@@ -352,7 +349,6 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
       brand: mappedRow.brand?.trim() || null,
       category,
       form: mappedRow.form?.trim() || "Tablet",
-      image_hue: Math.round(parseNumericValue(mappedRow.image_hue ?? "", hashHue(name))),
       pack_size: mappedRow.pack_size?.trim() || null,
       price_ghs: price,
       stock,
@@ -372,15 +368,6 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
     sourceLabel,
     warnings,
   };
-}
-
-function hashHue(value: string) {
-  let hash = 0;
-  for (const char of value) {
-    hash = (hash * 31 + char.charCodeAt(0)) % 360;
-  }
-
-  return hash || 200;
 }
 
 async function extractImportRows(file: File): Promise<{ rows: RawImportRow[]; sourceLabel: string }> {

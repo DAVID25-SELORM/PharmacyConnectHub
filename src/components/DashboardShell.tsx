@@ -376,13 +376,9 @@ export function DashboardHeader({
                 Credit
               </Link>
             )}
-            {business && (
+            {business?.type === "pharmacy" && (
               <Link
-                to={
-                  business.type === "wholesaler"
-                    ? "/wholesaler/procurement"
-                    : "/pharmacy/procurement"
-                }
+                to="/pharmacy/procurement"
                 className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
               >
                 <Package className="h-4 w-4 inline mr-2" />

@@ -103,7 +103,6 @@ type Product = {
   pack_size: string | null;
   price_ghs: number;
   stock: number;
-  image_hue: number | null;
   warehouse: string | null;
   zone: string | null;
   rack: string | null;
@@ -530,7 +529,7 @@ function OrdersInbox({
   }, [orders]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
-  const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("oldest");
+  const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("newest");
   const [page, setPage] = useState(1);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkPrint, setBulkPrint] = useState(false);
@@ -1090,7 +1089,6 @@ function AddProductDialog({
     pack_size: "",
     price_ghs: "",
     stock: "",
-    image_hue: "200",
   });
 
   const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -1111,7 +1109,6 @@ function AddProductDialog({
       pack_size: form.pack_size.trim() || null,
       price_ghs: Number(form.price_ghs),
       stock: Number(form.stock || 0),
-      image_hue: Number(form.image_hue || 200),
     });
     setSaving(false);
     if (error) {
@@ -1127,7 +1124,6 @@ function AddProductDialog({
       pack_size: "",
       price_ghs: "",
       stock: "",
-      image_hue: "200",
     });
     setOpen(false);
     void reload();
@@ -1232,17 +1228,6 @@ function AddProductDialog({
                 onChange={(e) => update("stock", e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-hue">Color hue</Label>
-              <Input
-                id="p-hue"
-                type="number"
-                min="0"
-                max="360"
-                value={form.image_hue}
-                onChange={(e) => update("image_hue", e.target.value)}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -1269,7 +1254,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
     pack_size: product.pack_size ?? "",
     price_ghs: product.price_ghs.toString(),
     stock: product.stock.toString(),
-    image_hue: (product.image_hue ?? 200).toString(),
     warehouse: product.warehouse ?? "",
     zone: product.zone ?? "",
     rack: product.rack ?? "",
@@ -1296,7 +1280,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
         pack_size: form.pack_size.trim() || null,
         price_ghs: Number(form.price_ghs),
         stock: Number(form.stock || 0),
-        image_hue: Number(form.image_hue || 200),
         warehouse: form.warehouse.trim() || null,
         zone: form.zone.trim() || null,
         rack: form.rack.trim() || null,
@@ -1411,17 +1394,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
                 min="0"
                 value={form.stock}
                 onChange={(e) => update("stock", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="e-hue">Color hue</Label>
-              <Input
-                id="e-hue"
-                type="number"
-                min="0"
-                max="360"
-                value={form.image_hue}
-                onChange={(e) => update("image_hue", e.target.value)}
               />
             </div>
           </div>
@@ -1539,10 +1511,10 @@ function BulkUploadDialog({
   };
 
   const downloadTemplate = () => {
-    const csvContent = `name,brand,category,form,pack_size,price_ghs,stock,image_hue
-Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500,70
-Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240,195
-Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
+    const csvContent = `name,brand,category,form,pack_size,price_ghs,stock
+Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500
+Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240
+Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470`;
 
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
