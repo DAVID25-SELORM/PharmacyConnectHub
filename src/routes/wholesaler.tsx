@@ -1,4 +1,3 @@
-import { expiredNote } from "@/lib/expiry-guard";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
@@ -54,7 +53,6 @@ import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment } from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { OnlinePaymentsPanel } from "@/components/wholesaler/OnlinePaymentsPanel";
-import { BillingPanel } from "@/components/billing/BillingPanel";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -63,8 +61,6 @@ import {
   type OrderStatus,
 } from "@/components/order-status";
 import { OrderPrintActions, PrintableOrderDocument } from "@/components/order-print";
-import { loadDocumentIdentity } from "@/lib/document-identity";
-import type { DocumentBusiness } from "@/lib/document-branding";
 import { OrderActivityTimeline } from "@/components/orders/OrderActivityTimeline";
 import { SupplyChangePanel } from "@/components/orders/SupplyChangePanel";
 import { DeliveryCheckPanel } from "@/components/orders/DeliveryCheckPanel";
@@ -84,7 +80,6 @@ import { PickPanel } from "@/components/batches/PickPanel";
 import { DeliveryPanel } from "@/components/delivery/DeliveryPanel";
 import { ReturnsPanel } from "@/components/returns/ReturnsPanel";
 import { InventoryInsights } from "@/components/wholesaler/InventoryInsights";
-import { ExportProductsButton } from "@/components/wholesaler/ExportProductsButton";
 
 export const Route = createFileRoute("/wholesaler")({
   head: () => ({
@@ -105,9 +100,6 @@ type Product = {
   pack_size: string | null;
   price_ghs: number;
   stock: number;
-  /** Units in batches past their expiry date; only the product's own staff are told. Absent until the database update is applied. */
-  expired_stock?: number | null;
-  image_hue: number | null;
   warehouse: string | null;
   zone: string | null;
   rack: string | null;
@@ -206,16 +198,6 @@ function WholesalerDashboardContent() {
 
   const loadProducts = useEffectEvent(async () => {
     if (!business) return;
-    // Ask for the expired-units figure too; if the database does not have it yet, fall back to the plain list.
-    const withExpiry = await supabase
-      .from("products")
-      .select("*, expired_stock" as "*")
-      .eq("wholesaler_id", business.id)
-      .order("created_at", { ascending: false });
-    if (!withExpiry.error) {
-      setProducts((withExpiry.data as unknown as Product[]) ?? []);
-      return;
-    }
     const { data } = await supabase
       .from("products")
       .select("*")
@@ -447,7 +429,6 @@ function WholesalerDashboardContent() {
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="credit">Credit</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="online-payments">Online payments</TabsTrigger>}
-            {canRecordCreditPayment && <TabsTrigger value="billing">Billing</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -487,11 +468,6 @@ function WholesalerDashboardContent() {
                 canManage={canManageProducts}
                 canDispute={canDisputeCreditInvoice}
               />
-            </TabsContent>
-          )}
-          {canRecordCreditPayment && (
-            <TabsContent value="billing">
-              <BillingPanel businessId={business.id} />
             </TabsContent>
           )}
           {canRecordCreditPayment && (
@@ -550,11 +526,10 @@ function OrdersInbox({
   }, [orders]);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | OrderStatus>("all");
-  const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("oldest");
+  const [sort, setSort] = useState<"oldest" | "newest" | "highest" | "lowest" | "pharmacy">("newest");
   const [page, setPage] = useState(1);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkPrint, setBulkPrint] = useState(false);
-  const [bulkIssuer, setBulkIssuer] = useState<DocumentBusiness | null>(null);
   const pageSize = 20;
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
@@ -613,10 +588,8 @@ function OrdersInbox({
     if (!bulkPrint) return;
     const cleanup = () => setBulkPrint(false);
     window.addEventListener("afterprint", cleanup, { once: true });
-    let active = true;
-    void Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>(".print-documents img")).map(img => img.decode()))
-      .then(() => { if (active) window.print(); }, () => { if (active) { toast.error("Document logo could not be loaded. Retry printing."); setBulkPrint(false); } });
-    return () => { active = false; window.removeEventListener("afterprint", cleanup); };
+    window.setTimeout(() => window.print(), 0);
+    return () => window.removeEventListener("afterprint", cleanup);
   }, [bulkPrint]);
 
   if (orders.length === 0) {
@@ -652,13 +625,7 @@ function OrdersInbox({
           size="sm"
           variant="outline"
           disabled={selectedOrders.length === 0}
-          onClick={async () => {
-            try {
-              if (!wholesaler?.id) throw new Error("Supplier identity unavailable.");
-              setBulkIssuer(await loadDocumentIdentity(wholesaler.id));
-              setBulkPrint(true);
-            } catch { toast.error("Supplier identity could not be loaded. Retry printing."); }
-          }}
+          onClick={() => setBulkPrint(true)}
         >
           Print selected pick sheets ({selectedOrders.length})
         </Button>
@@ -829,7 +796,7 @@ function OrdersInbox({
             <PrintableOrderDocument
               key={order.id}
               mode="pick-pack"
-              order={forDocument({ ...order, wholesaler: bulkIssuer })}
+              order={forDocument({ ...order, wholesaler })}
             />
           ))}
         </div>
@@ -1012,9 +979,8 @@ function ProductsManager({
             />
           </div>
           {canManageProducts ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2">
               <BulkUploadDialog businessId={businessId} reload={reload} />
-              <ExportProductsButton businessId={businessId} />
               <AddProductDialog businessId={businessId} reload={reload} />
             </div>
           ) : (
@@ -1056,17 +1022,7 @@ function ProductsManager({
                     <td className="px-4 py-3 text-muted-foreground">{p.category ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{p.pack_size ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-medium">{formatGHS(p.price_ghs)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {p.stock}
-                      {expiredNote(p.stock, p.expired_stock) && (
-                        <div
-                          className="text-xs font-normal text-destructive"
-                          data-testid="expired-note"
-                        >
-                          {expiredNote(p.stock, p.expired_stock)}
-                        </div>
-                      )}
-                    </td>
+                    <td className="px-4 py-3 text-right">{p.stock}</td>
                     <td className="px-4 py-3">
                       {p.stock < 100 ? (
                         <Badge
@@ -1120,7 +1076,6 @@ function AddProductDialog({
     pack_size: "",
     price_ghs: "",
     stock: "",
-    image_hue: "200",
   });
 
   const update = (k: keyof typeof form, v: string) => setForm((s) => ({ ...s, [k]: v }));
@@ -1141,7 +1096,6 @@ function AddProductDialog({
       pack_size: form.pack_size.trim() || null,
       price_ghs: Number(form.price_ghs),
       stock: Number(form.stock || 0),
-      image_hue: Number(form.image_hue || 200),
     });
     setSaving(false);
     if (error) {
@@ -1157,7 +1111,6 @@ function AddProductDialog({
       pack_size: "",
       price_ghs: "",
       stock: "",
-      image_hue: "200",
     });
     setOpen(false);
     void reload();
@@ -1262,17 +1215,6 @@ function AddProductDialog({
                 onChange={(e) => update("stock", e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="p-hue">Color hue</Label>
-              <Input
-                id="p-hue"
-                type="number"
-                min="0"
-                max="360"
-                value={form.image_hue}
-                onChange={(e) => update("image_hue", e.target.value)}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -1299,7 +1241,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
     pack_size: product.pack_size ?? "",
     price_ghs: product.price_ghs.toString(),
     stock: product.stock.toString(),
-    image_hue: (product.image_hue ?? 200).toString(),
     warehouse: product.warehouse ?? "",
     zone: product.zone ?? "",
     rack: product.rack ?? "",
@@ -1326,7 +1267,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
         pack_size: form.pack_size.trim() || null,
         price_ghs: Number(form.price_ghs),
         stock: Number(form.stock || 0),
-        image_hue: Number(form.image_hue || 200),
         warehouse: form.warehouse.trim() || null,
         zone: form.zone.trim() || null,
         rack: form.rack.trim() || null,
@@ -1441,17 +1381,6 @@ function EditProductDialog({ product, reload }: { product: Product; reload: () =
                 min="0"
                 value={form.stock}
                 onChange={(e) => update("stock", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="e-hue">Color hue</Label>
-              <Input
-                id="e-hue"
-                type="number"
-                min="0"
-                max="360"
-                value={form.image_hue}
-                onChange={(e) => update("image_hue", e.target.value)}
               />
             </div>
           </div>
@@ -1569,10 +1498,10 @@ function BulkUploadDialog({
   };
 
   const downloadTemplate = () => {
-    const csvContent = `name,brand,category,form,pack_size,price_ghs,stock,image_hue
-Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500,70
-Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240,195
-Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470,10`;
+    const csvContent = `name,brand,category,form,pack_size,price_ghs,stock
+Paracetamol 500mg,GSK,Analgesics & Pain Relief,Tablet,1000s,42.00,500
+Amoxicillin 500mg,Aurobindo,Antibiotics,Capsule,100s,28.50,240
+Ibuprofen 400mg,Reckitt,Analgesics & Pain Relief,Tablet,100s,24.50,470`;
 
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
