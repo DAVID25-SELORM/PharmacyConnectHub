@@ -21,7 +21,7 @@ import {
   Users,
   Warehouse,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import logo from "@/assets/logo.jpg";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,37 @@ function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState<NotificationRow[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
+  const knownIds = useRef<Set<string>>(new Set());
+  const [alertsEnabled, setAlertsEnabled] = useState(false);
+
+  const enableAlerts = async () => {
+    if (typeof Notification === "undefined") return;
+    const permission = await Notification.requestPermission();
+    setAlertsEnabled(permission === "granted");
+  };
+
+  const alertFor = (note: NotificationRow) => {
+    if (typeof window === "undefined") return;
+    try {
+      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextCtor) {
+        const ctx = new AudioContextCtor();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.frequency.value = 880;
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+        oscillator.connect(gain).connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.7);
+      }
+    } catch {
+      // Audio is best effort; browser notification remains available.
+    }
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      new Notification(note.title, { body: note.body, tag: note.id });
+    }
+  };
 
   const load = async () => {
     const {
@@ -69,7 +100,10 @@ function NotificationBell() {
         .eq("user_id", session.user.id)
         .eq("read", false),
     ]);
-    setNotes((data as unknown as NotificationRow[]) ?? []);
+    const nextNotes = (data as unknown as NotificationRow[]) ?? [];
+    setNotes(nextNotes);
+    nextNotes.filter((note) => !note.read && !knownIds.current.has(note.id)).slice(0, 3).forEach(alertFor);
+    knownIds.current = new Set(nextNotes.map((note) => note.id));
     setUnreadTotal(count ?? 0);
   };
 
@@ -134,6 +168,11 @@ function NotificationBell() {
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold">Notifications</span>
+          {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
+            <button onClick={() => void enableAlerts()} className="text-xs text-primary hover:underline">
+              Enable sound
+            </button>
+          )}
           {unreadTotal > 0 && (
             <button
               onClick={markAllRead}
