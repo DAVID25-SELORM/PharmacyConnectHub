@@ -385,10 +385,10 @@ export function DashboardHeader({
                 External purchases
               </Link>
             )}
-            {business?.type === "pharmacy" &&
+            {(business?.type === "pharmacy" || business?.type === "wholesaler") &&
               ["owner", "manager"].includes(business.staff_role) && (
                 <Link
-                  to="/pharmacy/contacts"
+                  to={business.type === "wholesaler" ? "/wholesaler/contacts" : "/pharmacy/contacts"}
                   className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
                 >
                   <Users className="h-4 w-4 inline mr-2" />

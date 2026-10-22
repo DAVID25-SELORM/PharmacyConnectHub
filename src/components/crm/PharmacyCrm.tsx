@@ -119,7 +119,7 @@ async function readAll(entity: CrmEntity, pharmacyId: string) {
 export function PharmacyCrm() {
   const { business, user } = useSession();
   const allowed =
-    business?.type === "pharmacy" &&
+    (business?.type === "pharmacy" || business?.type === "wholesaler") &&
     business.verification_status === "approved" &&
     ["owner", "manager"].includes(business.staff_role);
   const [data, setData] = useState<CrmData>(emptyCrm);
@@ -339,7 +339,7 @@ export function PharmacyCrm() {
     return (
       <>
         <DashboardHeader subtitle="Contacts / CRM" showNav />
-        <p className="p-8">Contacts / CRM is available to verified pharmacy owners and managers.</p>
+        <p className="p-8">Contacts / CRM is available to verified pharmacy and wholesaler owners and managers.</p>
       </>
     );
   return (
@@ -349,7 +349,7 @@ export function PharmacyCrm() {
         <div>
           <h1 className="text-2xl font-bold">{rep ? value(rep, "name") : "Representatives"}</h1>
           <p className="text-sm text-muted-foreground">
-            Private supplier relationships for {business?.name}. Only pharmacy owners and managers
+            Private representative relationships for {business?.name}. Only owners and managers
             have access.
           </p>
         </div>

@@ -40,6 +40,7 @@ import { Route as PharmacyReportsRouteImport } from './routes/pharmacy_.reports'
 import { Route as PharmacyRfqsRouteImport } from './routes/pharmacy_.rfqs'
 import { Route as WholesalerAccountingRouteImport } from './routes/wholesaler_.accounting'
 import { Route as WholesalerAuditRouteImport } from './routes/wholesaler_.audit'
+import { Route as WholesalerContactsRouteImport } from './routes/wholesaler_.contacts'
 import { Route as WholesalerProcurementRouteImport } from './routes/wholesaler_.procurement'
 import { Route as WholesalerReportsRouteImport } from './routes/wholesaler_.reports'
 import { Route as WholesalerRfqsRouteImport } from './routes/wholesaler_.rfqs'
@@ -199,6 +200,11 @@ const WholesalerAuditRoute = WholesalerAuditRouteImport.update({
   path: '/wholesaler/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WholesalerContactsRoute = WholesalerContactsRouteImport.update({
+  id: '/wholesaler_/contacts',
+  path: '/wholesaler/contacts',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WholesalerProcurementRoute = WholesalerProcurementRouteImport.update({
   id: '/wholesaler_/procurement',
   path: '/wholesaler/procurement',
@@ -247,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler/accounting': typeof WholesalerAccountingRoute
   '/wholesaler/audit': typeof WholesalerAuditRoute
+  '/wholesaler/contacts': typeof WholesalerContactsRoute
   '/wholesaler/procurement': typeof WholesalerProcurementRoute
   '/wholesaler/reports': typeof WholesalerReportsRoute
   '/wholesaler/rfqs': typeof WholesalerRfqsRoute
@@ -283,6 +290,7 @@ export interface FileRoutesByTo {
   '/pharmacy/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler/accounting': typeof WholesalerAccountingRoute
   '/wholesaler/audit': typeof WholesalerAuditRoute
+  '/wholesaler/contacts': typeof WholesalerContactsRoute
   '/wholesaler/procurement': typeof WholesalerProcurementRoute
   '/wholesaler/reports': typeof WholesalerReportsRoute
   '/wholesaler/rfqs': typeof WholesalerRfqsRoute
@@ -320,6 +328,7 @@ export interface FileRoutesById {
   '/pharmacy_/rfqs': typeof PharmacyRfqsRoute
   '/wholesaler_/accounting': typeof WholesalerAccountingRoute
   '/wholesaler_/audit': typeof WholesalerAuditRoute
+  '/wholesaler_/contacts': typeof WholesalerContactsRoute
   '/wholesaler_/procurement': typeof WholesalerProcurementRoute
   '/wholesaler_/reports': typeof WholesalerReportsRoute
   '/wholesaler_/rfqs': typeof WholesalerRfqsRoute
@@ -358,6 +367,7 @@ export interface FileRouteTypes {
     | '/pharmacy/rfqs'
     | '/wholesaler/accounting'
     | '/wholesaler/audit'
+    | '/wholesaler/contacts'
     | '/wholesaler/procurement'
     | '/wholesaler/reports'
     | '/wholesaler/rfqs'
@@ -394,6 +404,7 @@ export interface FileRouteTypes {
     | '/pharmacy/rfqs'
     | '/wholesaler/accounting'
     | '/wholesaler/audit'
+    | '/wholesaler/contacts'
     | '/wholesaler/procurement'
     | '/wholesaler/reports'
     | '/wholesaler/rfqs'
@@ -430,6 +441,7 @@ export interface FileRouteTypes {
     | '/pharmacy_/rfqs'
     | '/wholesaler_/accounting'
     | '/wholesaler_/audit'
+    | '/wholesaler_/contacts'
     | '/wholesaler_/procurement'
     | '/wholesaler_/reports'
     | '/wholesaler_/rfqs'
@@ -461,6 +473,7 @@ export interface RootRouteChildren {
   PharmacyRfqsRoute: typeof PharmacyRfqsRoute
   WholesalerAccountingRoute: typeof WholesalerAccountingRoute
   WholesalerAuditRoute: typeof WholesalerAuditRoute
+  WholesalerContactsRoute: typeof WholesalerContactsRoute
   WholesalerProcurementRoute: typeof WholesalerProcurementRoute
   WholesalerReportsRoute: typeof WholesalerReportsRoute
   WholesalerRfqsRoute: typeof WholesalerRfqsRoute
@@ -685,6 +698,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WholesalerAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wholesaler_/contacts': {
+      id: '/wholesaler_/contacts'
+      path: '/wholesaler/contacts'
+      fullPath: '/wholesaler/contacts'
+      preLoaderRoute: typeof WholesalerContactsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/wholesaler_/procurement': {
       id: '/wholesaler_/procurement'
       path: '/wholesaler/procurement'
@@ -755,6 +775,7 @@ const rootRouteChildren: RootRouteChildren = {
   PharmacyRfqsRoute: PharmacyRfqsRoute,
   WholesalerAccountingRoute: WholesalerAccountingRoute,
   WholesalerAuditRoute: WholesalerAuditRoute,
+  WholesalerContactsRoute: WholesalerContactsRoute,
   WholesalerProcurementRoute: WholesalerProcurementRoute,
   WholesalerReportsRoute: WholesalerReportsRoute,
   WholesalerRfqsRoute: WholesalerRfqsRoute,
