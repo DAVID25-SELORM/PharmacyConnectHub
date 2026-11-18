@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { ActivityDetailSheet } from "@/components/admin/ActivityDetailSheet";
+import { ChangeBusinessTypeDialog } from "@/components/admin/ChangeBusinessTypeDialog";
 import { ActivityTable } from "@/components/admin/ActivityTable";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { ExpiryGuardCard } from "@/components/admin/ExpiryGuardCard";
@@ -1046,6 +1047,14 @@ function BusinessCard({
           >
             <Edit className="h-4 w-4" /> Edit
           </Button>
+
+          <ChangeBusinessTypeDialog
+            businessId={biz.id}
+            businessName={biz.name}
+            currentType={biz.type}
+            verificationStatus={biz.verification_status}
+            onChanged={reload}
+          />
 
           {biz.verification_status === "pending" && (
             <>
