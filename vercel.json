@@ -1,5 +1,4 @@
 {
-  "crons": [{ "path": "/api/push/dispatch", "schedule": "*/5 * * * *" }],
   "rewrites": [
     {
       "source": "/((?!api(?:/|$)|assets(?:/|$)).*)",
