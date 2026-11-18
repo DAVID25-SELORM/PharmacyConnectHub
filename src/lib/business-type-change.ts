@@ -84,3 +84,12 @@ export async function changeBusinessType(
   });
   return { error: error?.message ?? null };
 }
+
+/** Marks a pharmacy-type business as a hospital/clinic, or clears it (kind = null). */
+export async function setFacilityKind(businessId: string, kind: "hospital_clinic" | null) {
+  const { error } = await rpc("admin_set_facility_kind", {
+    p_business_id: businessId,
+    p_kind: kind,
+  });
+  return { error: error?.message ?? null };
+}

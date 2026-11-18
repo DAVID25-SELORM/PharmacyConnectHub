@@ -14,6 +14,7 @@ import {
   Pill,
   ShieldCheck,
   ShieldX,
+  Hospital,
   Store,
   Users,
 } from "lucide-react";
@@ -37,6 +38,8 @@ import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { ActivityDetailSheet } from "@/components/admin/ActivityDetailSheet";
 import { ChangeBusinessTypeDialog } from "@/components/admin/ChangeBusinessTypeDialog";
+import { FacilityKindButton } from "@/components/admin/FacilityKindButton";
+import { businessKindLabel, isHospitalOrClinic, type FacilityKind } from "@/lib/business-kind";
 import { ActivityTable } from "@/components/admin/ActivityTable";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { ExpiryGuardCard } from "@/components/admin/ExpiryGuardCard";
@@ -59,6 +62,7 @@ export const Route = createFileRoute("/admin")({
 type Biz = {
   id: string;
   type: "pharmacy" | "wholesaler";
+  facility_kind?: FacilityKind | null;
   name: string;
   license_number: string | null;
   owner_is_superintendent: boolean;
@@ -960,7 +964,8 @@ function BusinessCard({
     void reload();
   };
 
-  const TypeIcon = biz.type === "wholesaler" ? Building2 : Store;
+  const TypeIcon =
+    biz.type === "wholesaler" ? Building2 : isHospitalOrClinic(biz) ? Hospital : Store;
   const ownerContact = {
     fullName: privateContact?.owner_full_name ?? "-",
     phone: privateContact?.owner_phone ? formatGhanaPhone(privateContact.owner_phone) : "-",
@@ -1006,7 +1011,7 @@ function BusinessCard({
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-display text-lg font-bold">{biz.name}</h3>
               <Badge variant="secondary" className="text-[10px] uppercase">
-                {biz.type}
+                {businessKindLabel(biz)}
               </Badge>
             </div>
 
@@ -1048,6 +1053,14 @@ function BusinessCard({
             <Edit className="h-4 w-4" /> Edit
           </Button>
 
+          <FacilityKindButton
+            businessId={biz.id}
+            businessName={biz.name}
+            currentType={biz.type}
+            facilityKind={biz.facility_kind}
+            onChanged={reload}
+          />
+
           <ChangeBusinessTypeDialog
             businessId={biz.id}
             businessName={biz.name}
@@ -1077,7 +1090,9 @@ function BusinessCard({
             </>
           )}
 
-          {biz.type === "pharmacy" && biz.verification_status === "approved" && <CreditRequestEligibility pharmacyId={biz.id} />}
+          {biz.type === "pharmacy" && biz.verification_status === "approved" && (
+            <CreditRequestEligibility pharmacyId={biz.id} />
+          )}
           {biz.verification_status === "approved" && (
             <Button variant="outline" size="sm" onClick={() => setShowRejectDialog(true)}>
               Revoke
@@ -1193,7 +1208,7 @@ function BusinessCard({
                     {biz.verification_status}
                   </Badge>
                 </div>
-                <DetailField label="Business type" value={biz.type} />
+                <DetailField label="Business type" value={businessKindLabel(biz)} />
                 <DetailField label="License number" value={biz.license_number ?? "-"} />
                 <DetailField label="Public phone" value={summaryPhone} />
                 <DetailField label="Public email" value={summaryEmail} />

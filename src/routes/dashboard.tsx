@@ -1,6 +1,16 @@
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Building2, Package, Pill, Receipt, Store, Users, Wallet } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  Hospital,
+  Package,
+  Pill,
+  Receipt,
+  Store,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import { PharmacyOverview } from "@/components/dashboard/PharmacyOverview";
@@ -19,6 +29,7 @@ import { wholesalerDashboardAccess } from "@/lib/dashboard";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { shownTotal } from "@/lib/order-supply";
 import { useSession, type Business } from "@/hooks/use-session";
+import { businessKindLabel, isHospitalOrClinic } from "@/lib/business-kind";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardRoute,
@@ -398,7 +409,12 @@ function WorkspaceDashboardContent() {
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {businesses.map((workspace) => {
-              const Icon = workspace.type === "wholesaler" ? Building2 : Store;
+              const Icon =
+                workspace.type === "wholesaler"
+                  ? Building2
+                  : isHospitalOrClinic(workspace)
+                    ? Hospital
+                    : Store;
 
               return (
                 <Card key={workspace.id} className="p-6">
@@ -470,7 +486,7 @@ function WorkspaceDashboardContent() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader
-        subtitle={business.type === "pharmacy" ? "Pharmacy workspace" : "Wholesaler workspace"}
+        subtitle={`${businessKindLabel(business)} workspace`}
         showNav={true}
         isAdmin={roles.includes("admin")}
       />
@@ -632,7 +648,11 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{order.order_number}</span>
                   <StatusBadge status={order.status} />
-                  <PaymentBadge method={order.payment_method} status={order.payment_status} cancelled={order.status === "cancelled"} />
+                  <PaymentBadge
+                    method={order.payment_method}
+                    status={order.payment_status}
+                    cancelled={order.status === "cancelled"}
+                  />
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   {order.wholesaler?.name ?? "Wholesaler"} · {timeAgo(order.created_at)}
@@ -682,7 +702,11 @@ function RecentWholesalerOrdersCard({ orders }: { orders: WholesalerOrderSummary
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{order.order_number}</span>
                   <StatusBadge status={order.status} />
-                  <PaymentBadge method={order.payment_method} status={order.payment_status} cancelled={order.status === "cancelled"} />
+                  <PaymentBadge
+                    method={order.payment_method}
+                    status={order.payment_status}
+                    cancelled={order.status === "cancelled"}
+                  />
                 </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   {order.pharmacy?.name ?? "Pharmacy"} · {timeAgo(order.created_at)}

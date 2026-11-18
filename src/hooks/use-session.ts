@@ -10,6 +10,8 @@ export type BusinessStaffRole =
 export type Business = {
   id: string;
   type: "pharmacy" | "wholesaler";
+  /** "hospital_clinic" for a hospital or clinic (type stays "pharmacy"); null otherwise. */
+  facility_kind?: "hospital_clinic" | null;
   name: string;
   license_number: string | null;
   owner_is_superintendent: boolean;
@@ -257,14 +259,27 @@ async function resolveSession(
   }
 }
 
+const BUSINESS_COLUMNS =
+  "id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,phone,address,public_email,working_hours,location_description,verification_status,rejection_reason";
+
+// The facility_kind column arrives with a database migration. Until it is applied, ask for the
+// older column list so a deployment that runs ahead of the migration still loads workspaces.
+function isMissingFacilityKindColumn(error: QueryError | null) {
+  return Boolean(error && (error.code === "42703" || error.message?.includes("facility_kind")));
+}
+
 async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQueryResult> {
-  const { data, error, status } = await supabase
-    .from("businesses")
-    .select(
-      "id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,phone,address,public_email,working_hours,location_description,verification_status,rejection_reason",
-    )
-    .eq("owner_id", userId)
-    .order("created_at", { ascending: false });
+  const query = (columns: string) =>
+    supabase
+      .from("businesses")
+      .select(columns)
+      .eq("owner_id", userId)
+      .order("created_at", { ascending: false });
+
+  let { data, error, status } = await query(`${BUSINESS_COLUMNS},facility_kind`);
+  if (isMissingFacilityKindColumn(error)) {
+    ({ data, error, status } = await query(BUSINESS_COLUMNS));
+  }
 
   authDiagnostic("workspace.owner_lookup", error ? { ...error, status } : undefined, {
     count: data?.length ?? 0,
@@ -284,7 +299,7 @@ async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQuer
   }
 
   return {
-    businesses: (data as Omit<Business, "staff_role">[]).map((business) => ({
+    businesses: (data as unknown as Omit<Business, "staff_role">[]).map((business) => ({
       ...business,
       staff_role: "owner",
     })),
@@ -293,13 +308,19 @@ async function loadOwnerBusinessFallback(userId: string): Promise<BusinessesQuer
 }
 
 async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryResult> {
-  const { data, error, status } = await supabase
-    .from("business_staff")
-    .select(
-      "role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(id,type,name,license_number,owner_is_superintendent,superintendent_name,city,region,phone,address,public_email,working_hours,location_description,verification_status,rejection_reason)",
-    )
-    .eq("user_id", userId)
-    .eq("status", "active");
+  const query = (columns: string) =>
+    supabase
+      .from("business_staff")
+      .select(
+        `role, invited_at, joined_at, business:businesses!business_staff_business_id_fkey(${columns})`,
+      )
+      .eq("user_id", userId)
+      .eq("status", "active");
+
+  let { data, error, status } = await query(`${BUSINESS_COLUMNS},facility_kind`);
+  if (isMissingFacilityKindColumn(error)) {
+    ({ data, error, status } = await query(BUSINESS_COLUMNS));
+  }
 
   authDiagnostic("workspace.memberships", error ? { ...error, status } : undefined, {
     count: data?.length ?? 0,
@@ -311,7 +332,7 @@ async function loadBusinessMemberships(userId: string): Promise<BusinessesQueryR
     };
   }
 
-  const businesses = ((data ?? []) as BusinessMembershipRow[])
+  const businesses = ((data ?? []) as unknown as BusinessMembershipRow[])
     .flatMap((membership) =>
       membership.business
         ? [
