@@ -13,11 +13,21 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  OTHER_REASON,
+  TYPE_CHANGE_REASONS,
   businessTypeLabel,
   changeBusinessType,
   describeBlockers,
   fetchTypeChangeBlockers,
   otherBusinessType,
+  resolveTypeChangeReason,
   type BusinessType,
   type TypeChangeBlocker,
 } from "@/lib/business-type-change";
@@ -45,8 +55,10 @@ export function ChangeBusinessTypeDialog({
   const [open, setOpen] = useState(false);
   const [blockers, setBlockers] = useState<TypeChangeBlocker[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
+  const [reasonChoice, setReasonChoice] = useState<string>(TYPE_CHANGE_REASONS[0].value);
+  const [otherReason, setOtherReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const reason = resolveTypeChangeReason(reasonChoice, otherReason);
   const newType = otherBusinessType(currentType);
 
   useEffect(() => {
@@ -57,7 +69,8 @@ export function ChangeBusinessTypeDialog({
     let cancelled = false;
     setBlockers(null);
     setLoadError(null);
-    setReason("");
+    setReasonChoice(TYPE_CHANGE_REASONS[0].value);
+    setOtherReason("");
 
     void fetchTypeChangeBlockers(businessId).then((result) => {
       if (cancelled) {
@@ -73,6 +86,11 @@ export function ChangeBusinessTypeDialog({
   }, [open, businessId]);
 
   const confirm = async () => {
+    if (!reason) {
+      toast.error("Write the reason for this change");
+      return;
+    }
+
     setBusy(true);
     const { error } = await changeBusinessType(businessId, newType, reason);
     setBusy(false);
@@ -143,14 +161,28 @@ export function ChangeBusinessTypeDialog({
                 </p>
               )}
               <div className="space-y-2">
-                <Label htmlFor={`type-change-reason-${businessId}`}>Reason (optional)</Label>
-                <Textarea
-                  id={`type-change-reason-${businessId}`}
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  placeholder="Registered as the wrong type"
-                  maxLength={500}
-                />
+                <Label htmlFor={`type-change-reason-${businessId}`}>Reason</Label>
+                <Select value={reasonChoice} onValueChange={setReasonChoice}>
+                  <SelectTrigger id={`type-change-reason-${businessId}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPE_CHANGE_REASONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {reasonChoice === OTHER_REASON && (
+                  <Textarea
+                    aria-label="Other reason"
+                    value={otherReason}
+                    onChange={(event) => setOtherReason(event.target.value)}
+                    placeholder="Tell us why this business is being switched"
+                    maxLength={500}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -162,7 +194,7 @@ export function ChangeBusinessTypeDialog({
             <Button
               variant="hero"
               onClick={confirm}
-              disabled={busy || loading || Boolean(loadError) || blocked.length > 0}
+              disabled={busy || loading || Boolean(loadError) || blocked.length > 0 || !reason}
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />} Change to{" "}
               {businessTypeLabel(newType)}

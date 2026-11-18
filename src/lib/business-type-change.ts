@@ -27,6 +27,25 @@ export function businessTypeLabel(type: BusinessType) {
   return type === "pharmacy" ? "Pharmacy" : "Wholesaler";
 }
 
+export const OTHER_REASON = "other";
+
+/** Choices shown in the reason dropdown; the label is what gets written to the audit log. */
+export const TYPE_CHANGE_REASONS = [
+  { value: "wrong_type", label: "Signed up as the wrong type" },
+  { value: "documents_match_other", label: "Licence documents belong to the other type" },
+  { value: "owner_request", label: "The business owner asked for it" },
+  { value: "entry_mistake", label: "Entered incorrectly when the account was created" },
+  { value: OTHER_REASON, label: "Other (write it below)" },
+] as const;
+
+/** The reason text to store, or null while "Other" is chosen but nothing is written. */
+export function resolveTypeChangeReason(choice: string, otherText: string): string | null {
+  if (choice === OTHER_REASON) {
+    return otherText.trim() || null;
+  }
+  return TYPE_CHANGE_REASONS.find((reason) => reason.value === choice)?.label ?? null;
+}
+
 /** "pharmacy_saved_carts" -> "pharmacy saved carts"; one entry per table, counts summed. */
 export function describeBlockers(blockers: TypeChangeBlocker[]) {
   const byTable = new Map<string, number>();

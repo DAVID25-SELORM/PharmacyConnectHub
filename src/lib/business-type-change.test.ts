@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { businessTypeLabel, describeBlockers, otherBusinessType } from "@/lib/business-type-change";
+import {
+  OTHER_REASON,
+  TYPE_CHANGE_REASONS,
+  businessTypeLabel,
+  describeBlockers,
+  otherBusinessType,
+  resolveTypeChangeReason,
+} from "@/lib/business-type-change";
+
+describe("resolveTypeChangeReason", () => {
+  it("uses the label of a preset reason and ignores stray text", () => {
+    expect(resolveTypeChangeReason("wrong_type", "ignored")).toBe("Signed up as the wrong type");
+  });
+
+  it("needs written text when Other is chosen", () => {
+    expect(resolveTypeChangeReason(OTHER_REASON, "   ")).toBeNull();
+    expect(resolveTypeChangeReason(OTHER_REASON, "  Duplicate registration ")).toBe(
+      "Duplicate registration",
+    );
+  });
+
+  it("returns null for an unknown choice and keeps Other last in the list", () => {
+    expect(resolveTypeChangeReason("nonsense", "")).toBeNull();
+    expect(TYPE_CHANGE_REASONS[TYPE_CHANGE_REASONS.length - 1].value).toBe(OTHER_REASON);
+  });
+});
 
 describe("business type change helpers", () => {
   it("offers the opposite type", () => {
