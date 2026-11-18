@@ -38,6 +38,7 @@ import { canViewAccounting } from "@/lib/accounting";
 import { enableWebPush } from "@/lib/web-push";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
+import { businessKindLabel } from "@/lib/business-kind";
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   notificationLink,
@@ -75,7 +76,9 @@ function NotificationBell() {
   const alertFor = (note: NotificationRow) => {
     if (typeof window === "undefined") return;
     try {
-      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AudioContextCtor =
+        window.AudioContext ||
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (AudioContextCtor) {
         const ctx = new AudioContextCtor();
         const oscillator = ctx.createOscillator();
@@ -115,7 +118,10 @@ function NotificationBell() {
     ]);
     const nextNotes = (data as unknown as NotificationRow[]) ?? [];
     setNotes(nextNotes);
-    nextNotes.filter((note) => !note.read && !knownIds.current.has(note.id)).slice(0, 3).forEach(alertFor);
+    nextNotes
+      .filter((note) => !note.read && !knownIds.current.has(note.id))
+      .slice(0, 3)
+      .forEach(alertFor);
     knownIds.current = new Set(nextNotes.map((note) => note.id));
     setUnreadTotal(count ?? 0);
   };
@@ -182,7 +188,10 @@ function NotificationBell() {
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold">Notifications</span>
           {typeof Notification !== "undefined" && Notification.permission !== "granted" && (
-            <button onClick={() => void enableAlerts()} className="text-xs text-primary hover:underline">
+            <button
+              onClick={() => void enableAlerts()}
+              className="text-xs text-primary hover:underline"
+            >
               Enable sound
             </button>
           )}
@@ -342,8 +351,7 @@ export function DashboardHeader({
               <SelectContent>
                 {businesses.map((workspace) => (
                   <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.name} · {workspace.type === "wholesaler" ? "Wholesaler" : "Pharmacy"}{" "}
-                    · {workspace.staff_role}
+                    {workspace.name} · {businessKindLabel(workspace)} · {workspace.staff_role}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -440,7 +448,9 @@ export function DashboardHeader({
             {(business?.type === "pharmacy" || business?.type === "wholesaler") &&
               ["owner", "manager"].includes(business.staff_role) && (
                 <Link
-                  to={business.type === "wholesaler" ? "/wholesaler/contacts" : "/pharmacy/contacts"}
+                  to={
+                    business.type === "wholesaler" ? "/wholesaler/contacts" : "/pharmacy/contacts"
+                  }
                   className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
                 >
                   <Users className="h-4 w-4 inline mr-2" />

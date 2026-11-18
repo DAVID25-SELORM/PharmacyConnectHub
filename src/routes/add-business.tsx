@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Building2, Store } from "lucide-react";
+import { Building2, Hospital, Store } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,10 @@ export const Route = createFileRoute("/add-business")({
   head: () => ({
     meta: [
       { title: "Add a business - Drugxone" },
-      { name: "description", content: "Register another pharmacy or wholesaler on your account." },
+      {
+        name: "description",
+        content: "Register another pharmacy, hospital / clinic or wholesaler on your account.",
+      },
     ],
   }),
   component: AddBusinessPage,
@@ -69,7 +72,10 @@ const emptyForm: Form = {
 function AddBusinessPage() {
   const navigate = useNavigate();
   const { loading, user, business, businesses, refresh, setActiveBusiness } = useSession();
-  const [type, setType] = useState<"pharmacy" | "wholesaler">("pharmacy");
+  // A hospital or clinic buys like a pharmacy, so it is added with the pharmacy type.
+  const [kind, setKind] = useState<"pharmacy" | "hospital_clinic" | "wholesaler">("pharmacy");
+  const type = kind === "wholesaler" ? "wholesaler" : "pharmacy";
+  const isFacility = kind === "hospital_clinic";
   const [form, setForm] = useState<Form>(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -126,6 +132,9 @@ function AddBusinessPage() {
         _superintendent_name: needsSuperintendent ? form.superName.trim() : null,
         _superintendent_phone: needsSuperintendent ? normalizeGhanaPhone(form.superPhone) : null,
         _superintendent_email: needsSuperintendent ? form.superEmail.trim().toLowerCase() : null,
+        // Only sent for a hospital or clinic, so other businesses can still be added before the
+        // database update that introduces this argument is applied.
+        ...(isFacility ? { _facility_kind: "hospital_clinic" } : {}),
       });
 
       if (error) {
@@ -160,8 +169,8 @@ function AddBusinessPage() {
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="font-display text-3xl font-bold">Add another business</h1>
         <p className="mt-2 text-muted-foreground">
-          Register a second pharmacy or wholesaler under this login. Each business is verified
-          separately, and you can switch between them from the workspace menu.
+          Register a second pharmacy, hospital / clinic or wholesaler under this login. Each
+          business is verified separately, and you can switch between them from the workspace menu.
         </p>
 
         <Card className="mt-6 p-6">
@@ -173,24 +182,27 @@ function AddBusinessPage() {
               {saveError}
             </p>
           )}
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
-            {(["pharmacy", "wholesaler"] as const).map((option) => (
+          <div className="grid grid-cols-1 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-3">
+            {(
+              [
+                { value: "pharmacy", label: "Pharmacy", icon: Store },
+                { value: "hospital_clinic", label: "Hospital / clinic", icon: Hospital },
+                { value: "wholesaler", label: "Wholesaler", icon: Building2 },
+              ] as const
+            ).map((option) => (
               <button
-                key={option}
+                key={option.value}
                 type="button"
-                onClick={() => setType(option)}
-                className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium capitalize transition-all ${
-                  type === option
+                onClick={() => setKind(option.value)}
+                aria-pressed={kind === option.value}
+                className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                  kind === option.value
                     ? "bg-surface text-foreground shadow-soft"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {option === "pharmacy" ? (
-                  <Store className="h-4 w-4" />
-                ) : (
-                  <Building2 className="h-4 w-4" />
-                )}
-                {option}
+                <option.icon className="h-4 w-4" />
+                {option.label}
               </button>
             ))}
           </div>
@@ -199,7 +211,11 @@ function AddBusinessPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="ab-name">
-                  {isPharmacy ? "Pharmacy name" : "Wholesale company name"}
+                  {isPharmacy
+                    ? isFacility
+                      ? "Hospital / clinic name"
+                      : "Pharmacy name"
+                    : "Wholesale company name"}
                 </Label>
                 <Input
                   id="ab-name"

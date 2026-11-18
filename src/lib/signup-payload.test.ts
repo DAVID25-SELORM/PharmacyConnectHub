@@ -80,3 +80,21 @@ describe("buildSignupPayload", () => {
     });
   });
 });
+
+describe("buildSignupPayload for hospitals and clinics", () => {
+  it("keeps the pharmacy role and marks the business as a hospital or clinic", () => {
+    const payload = buildSignupPayload(baseForm, "pharmacy", "hospital_clinic");
+
+    expect(payload.metadata).toMatchObject({
+      role: "pharmacy",
+      facility_kind: "hospital_clinic",
+    });
+  });
+
+  it("sends no facility kind for a pharmacy, and never for a wholesaler", () => {
+    expect(buildSignupPayload(baseForm, "pharmacy").metadata.facility_kind).toBeNull();
+    expect(
+      buildSignupPayload(baseForm, "wholesaler", "hospital_clinic").metadata.facility_kind,
+    ).toBeNull();
+  });
+});

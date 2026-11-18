@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Building2, CheckCircle, Store } from "lucide-react";
+import { Building2, CheckCircle, Hospital, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,7 +37,11 @@ type TextField = keyof SignupForm;
 
 function SignupPage() {
   const navigate = useNavigate();
-  const [role, setRole] = useState<"pharmacy" | "wholesaler">("pharmacy");
+  // A hospital or clinic buys like a pharmacy, so it signs up with the pharmacy role.
+  const [kind, setKind] = useState<"pharmacy" | "hospital_clinic" | "wholesaler">("pharmacy");
+  const role = kind === "wholesaler" ? "wholesaler" : "pharmacy";
+  const isFacility = kind === "hospital_clinic";
+  const buyerName = isFacility ? "Hospital / clinic" : "Pharmacy";
   const [form, setForm] = useState<SignupForm>({
     ownerFullName: "",
     ownerPhone: "",
@@ -112,7 +116,11 @@ function SignupPage() {
 
     try {
       const redirectUrl = getAppUrl("/dashboard");
-      const signupPayload = buildSignupPayload(parsed.data, role);
+      const signupPayload = buildSignupPayload(
+        parsed.data,
+        role,
+        isFacility ? "hospital_clinic" : null,
+      );
 
       const { data, error } = await supabase.auth.signUp({
         email: signupPayload.email,
@@ -188,36 +196,35 @@ function SignupPage() {
               public, while owner and superintendent contacts stay internal.
             </p>
 
-            <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
-              <button
-                type="button"
-                onClick={() => setRole("pharmacy")}
-                className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                  role === "pharmacy"
-                    ? "bg-surface text-foreground shadow-soft"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Store className="h-4 w-4" /> Pharmacy
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole("wholesaler")}
-                className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                  role === "wholesaler"
-                    ? "bg-surface text-foreground shadow-soft"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Building2 className="h-4 w-4" /> Wholesaler
-              </button>
+            <div className="mt-6 grid grid-cols-1 gap-2 rounded-xl bg-muted p-1 sm:grid-cols-3">
+              {(
+                [
+                  { value: "pharmacy", label: "Pharmacy", icon: Store },
+                  { value: "hospital_clinic", label: "Hospital / clinic", icon: Hospital },
+                  { value: "wholesaler", label: "Wholesaler", icon: Building2 },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setKind(option.value)}
+                  aria-pressed={kind === option.value}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                    kind === option.value
+                      ? "bg-surface text-foreground shadow-soft"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <option.icon className="h-4 w-4" /> {option.label}
+                </button>
+              ))}
             </div>
 
             <form className="mt-6 space-y-6" onSubmit={onSubmit}>
               <section className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-5">
                 <div>
                   <h2 className="font-display text-lg font-semibold">
-                    {role === "pharmacy" ? "Pharmacy Information" : "Business Information"}
+                    {role === "pharmacy" ? `${buyerName} Information` : "Business Information"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     These are the details we use to present and verify your workspace.
@@ -227,21 +234,27 @@ function SignupPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="businessName">
-                      {role === "pharmacy" ? "Pharmacy name" : "Wholesale company name"}
+                      {role === "pharmacy" ? `${buyerName} name` : "Wholesale company name"}
                     </Label>
                     <Input
                       id="businessName"
                       value={form.businessName}
                       onChange={(e) => update("businessName", e.target.value)}
                       placeholder={
-                        role === "pharmacy" ? "e.g. Goodlife Pharmacy" : "e.g. Drugxone Wholesale"
+                        role === "pharmacy"
+                          ? isFacility
+                            ? "e.g. Ridge Community Clinic"
+                            : "e.g. Goodlife Pharmacy"
+                          : "e.g. Drugxone Wholesale"
                       }
                       required
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="businessPhone">
-                      {role === "pharmacy" ? "Pharmacy phone (public)" : "Business phone (public)"}
+                      {role === "pharmacy"
+                        ? `${buyerName} phone (public)`
+                        : "Business phone (public)"}
                     </Label>
                     <Input
                       id="businessPhone"
@@ -259,7 +272,9 @@ function SignupPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="businessEmail">
-                      {role === "pharmacy" ? "Pharmacy email (public)" : "Business email (public)"}
+                      {role === "pharmacy"
+                        ? `${buyerName} email (public)`
+                        : "Business email (public)"}
                     </Label>
                     <Input
                       id="businessEmail"
@@ -274,7 +289,9 @@ function SignupPage() {
                   <div className="space-y-2">
                     <Label htmlFor="license">
                       {role === "pharmacy"
-                        ? "Pharmacy Council license #"
+                        ? isFacility
+                          ? "Pharmacy Council license # (of the pharmacy or dispensary)"
+                          : "Pharmacy Council license #"
                         : "Pharmacy Council license / business registration #"}
                     </Label>
                     <Input

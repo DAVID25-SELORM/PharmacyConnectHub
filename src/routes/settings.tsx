@@ -3,6 +3,7 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { DocumentBrandingSettings } from "@/components/documents/DocumentBrandingSettings";
 import { useSession } from "@/hooks/use-session";
+import { businessKindLabel } from "@/lib/business-kind";
 
 export const Route = createFileRoute("/settings")({
   component: () => (
@@ -23,7 +24,7 @@ function Settings() {
         <header>
           <h1 className="text-2xl font-semibold">Business Settings</h1>
           <p className="text-muted-foreground">
-            {business.name} · {business.type} workspace
+            {business.name} · {businessKindLabel(business).toLowerCase()} workspace
           </p>
         </header>
         <section className="rounded-lg border p-5">

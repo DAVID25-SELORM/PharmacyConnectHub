@@ -1,4 +1,5 @@
 import { normalizeGhanaPhone } from "@/lib/ghana-phone";
+import type { FacilityKind } from "@/lib/business-kind";
 
 export type SignupRole = "pharmacy" | "wholesaler";
 
@@ -24,6 +25,7 @@ export type SignupFormInput = {
 type SignupMetadata = {
   business_name: string;
   city: string;
+  facility_kind: FacilityKind | null;
   full_name: string;
   gps_address: string | null;
   license_number: string;
@@ -48,6 +50,7 @@ type SignupMetadata = {
 export function buildSignupPayload(
   form: SignupFormInput,
   role: SignupRole,
+  facilityKind: FacilityKind | null = null,
 ): {
   email: string;
   metadata: SignupMetadata;
@@ -64,6 +67,7 @@ export function buildSignupPayload(
       full_name: form.ownerFullName.trim(),
       phone: normalizeGhanaPhone(form.ownerPhone),
       role,
+      facility_kind: role === "pharmacy" ? facilityKind : null,
       business_name: form.businessName.trim(),
       license_number: form.licenseNumber.trim(),
       city: form.city.trim(),
