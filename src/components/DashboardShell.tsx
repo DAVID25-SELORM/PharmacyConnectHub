@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { canViewAccounting } from "@/lib/accounting";
+import { enableWebPush } from "@/lib/web-push";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
 import {
@@ -59,11 +60,16 @@ function NotificationBell() {
     if (permission !== "granted") return;
     setAlertsEnabled(true);
     const vapid = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-    if (!vapid || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
-    const registration = await navigator.serviceWorker.register("/sw.js");
-    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(atob(vapid.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)) });
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) await fetch("/api/push/subscribe", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ subscription }) });
+    if (!vapid) return;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return;
+    try {
+      await enableWebPush(vapid, session.user.id);
+    } catch {
+      // Closed-tab alerts are optional; in-page alerts already work.
+    }
   };
 
   const alertFor = (note: NotificationRow) => {

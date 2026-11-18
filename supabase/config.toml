@@ -1,1 +1,5 @@
 project_id = "ywpntuioeqpreouauuir"
+
+# Called by the database scheduler with a shared secret, not by a signed-in user.
+[functions.push-dispatch]
+verify_jwt = false
