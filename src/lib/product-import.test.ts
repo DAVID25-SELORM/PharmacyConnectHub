@@ -122,3 +122,36 @@ describe("pharmacy inventory import: item type and new fields", () => {
     });
   });
 });
+
+describe("pharmacy inventory import: the downloadable template", () => {
+  // Same header and sample rows as the "Download template" button in BulkImportInventoryDialog.
+  const template = `name,item_type,brand,category,form,pack_size,generic_name,strength,manufacturer,barcode,batch_number,expiry_date,stock,unit_cost_ghs,selling_price_ghs,reorder_level,supplier,unit_of_measure,model,serial_number,warranty_info
+Paracetamol 500mg,Medicine,Generic,Analgesics & Pain Relief,Tablet,20s,Paracetamol,500mg,GSK,6009000001,B-2201,2027-06-30,100,4.50,6.50,20,Alpha Wholesale,,,,
+Latex Gloves,Medical Consumable,MedSafe,PPE,,100s,,,,6009000002,,,20,25.00,35.00,5,Beta Supplies,box,,,
+BP Monitor,Medical Equipment,Omron,Diagnostics,,,,,,,,,3,180.00,250.00,1,Gamma Medical,,HEM-7120,SN-88213,2 years
+Facial Tissue,Non-Medical Item,SoftCare,Shop items,,,,,,6009000003,,,40,3.00,5.00,10,,pack,,,`;
+
+  it("imports the template as downloaded, with both brand and manufacturer columns", () => {
+    const result = parsePharmacyInventoryImportText(template);
+    expect(result.invalidRows).toEqual([]);
+    expect(result.items).toHaveLength(4);
+    expect(result.items[0]).toMatchObject({
+      brand: "Generic",
+      manufacturer: "GSK",
+      stock: 100,
+      sellingPriceGhs: 6.5,
+    });
+  });
+
+  it("still rejects two columns that mean the same inventory field", () => {
+    expect(() => parsePharmacyInventoryImportText("name,stock,quantity\nDrug A,1,2")).toThrow(
+      /Duplicate/,
+    );
+  });
+
+  it("keeps treating manufacturer as a brand alias for the wholesaler catalogue", () => {
+    expect(() =>
+      parseProductImportText("name,brand,manufacturer,price_ghs\nDrug A,X,Y,10"),
+    ).toThrow(/Duplicate/);
+  });
+});

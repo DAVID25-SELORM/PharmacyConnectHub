@@ -145,12 +145,18 @@ function alignCells(cells: string[], expectedLength: number) {
   );
 }
 
-function buildRowsFromMatrix(matrix: string[][]) {
+// Which field a header means depends on the importer: the wholesaler catalogue and the pharmacy
+// inventory accept different headers (for example "manufacturer" is a brand alias for a
+// wholesaler but its own column for a pharmacy). The duplicate-header check must use the same
+// meaning the importer will use, or a valid pharmacy file is rejected as having two brand columns.
+type FieldResolver = (header: string) => string | null;
+
+function buildRowsFromMatrix(matrix: string[][], resolveField: FieldResolver = findImportField) {
   const [headerRow, ...bodyRows] = matrix.filter((row) => row.some((cell) => cell.trim()));
   if (!headerRow || headerRow.length < 2) {
     return [];
   }
-  const fields = headerRow.map(findImportField).filter(Boolean);
+  const fields = headerRow.map(resolveField).filter(Boolean);
   if (fields.length !== new Set(fields).size) {
     throw new Error("Duplicate column headers detected. Use one column for each product field.");
   }
@@ -163,7 +169,7 @@ function buildRowsFromMatrix(matrix: string[][]) {
   });
 }
 
-function parseDelimitedText(text: string) {
+function parseDelimitedText(text: string, resolveField: FieldResolver = findImportField) {
   const lines = text
     .replace(/\r\n/g, "\n")
     .split("\n")
@@ -175,13 +181,19 @@ function parseDelimitedText(text: string) {
 
   const delimiter = detectDelimiter(lines[0]);
   if (delimiter) {
-    return buildRowsFromMatrix(lines.map((line) => parseCsvLine(line, delimiter)));
+    return buildRowsFromMatrix(
+      lines.map((line) => parseCsvLine(line, delimiter)),
+      resolveField,
+    );
   }
 
-  return buildRowsFromMatrix(lines.map((line) => line.split(/\s{2,}/).map((cell) => cell.trim())));
+  return buildRowsFromMatrix(
+    lines.map((line) => line.split(/\s{2,}/).map((cell) => cell.trim())),
+    resolveField,
+  );
 }
 
-async function rowsFromWorksheet(buffer: ArrayBuffer) {
+async function rowsFromWorksheet(buffer: ArrayBuffer, resolveField: FieldResolver = findImportField) {
   const XLSX = await loadXlsx();
   const workbook = XLSX.read(buffer, { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
@@ -196,7 +208,10 @@ async function rowsFromWorksheet(buffer: ArrayBuffer) {
     raw: false,
   });
 
-  return buildRowsFromMatrix(matrix.map((row) => row.map((value) => String(value ?? "").trim())));
+  return buildRowsFromMatrix(
+    matrix.map((row) => row.map((value) => String(value ?? "").trim())),
+    resolveField,
+  );
 }
 
 function splitPdfLine(line: string) {
@@ -253,7 +268,7 @@ function groupPdfLines(items: PdfTextItem[]) {
     .filter(Boolean);
 }
 
-async function rowsFromPdf(buffer: ArrayBuffer) {
+async function rowsFromPdf(buffer: ArrayBuffer, resolveField: FieldResolver = findImportField) {
   const { getDocument } = await loadPdfJs();
   const pdf = await getDocument({ data: buffer }).promise;
   const lines: string[] = [];
@@ -285,7 +300,7 @@ async function rowsFromPdf(buffer: ArrayBuffer) {
     .map(splitPdfLine)
     .filter((row) => row.length > 0);
 
-  return buildRowsFromMatrix(matrix);
+  return buildRowsFromMatrix(matrix, resolveField);
 }
 
 function parseNumericValue(value: string, fallback: number) {
@@ -370,19 +385,28 @@ function buildImportedProducts(rawRows: RawImportRow[], sourceLabel: string): Pr
   };
 }
 
-async function extractImportRows(file: File): Promise<{ rows: RawImportRow[]; sourceLabel: string }> {
+async function extractImportRows(
+  file: File,
+  resolveField: FieldResolver = findImportField,
+): Promise<{ rows: RawImportRow[]; sourceLabel: string }> {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
 
   if (extension === "pdf") {
-    return { rows: await rowsFromPdf(await file.arrayBuffer()), sourceLabel: "PDF" };
+    return { rows: await rowsFromPdf(await file.arrayBuffer(), resolveField), sourceLabel: "PDF" };
   }
 
   if (["xls", "xlsx"].includes(extension)) {
-    return { rows: await rowsFromWorksheet(await file.arrayBuffer()), sourceLabel: extension.toUpperCase() };
+    return {
+      rows: await rowsFromWorksheet(await file.arrayBuffer(), resolveField),
+      sourceLabel: extension.toUpperCase(),
+    };
   }
 
   if (["csv", "tsv", "txt"].includes(extension)) {
-    return { rows: parseDelimitedText(await file.text()), sourceLabel: extension.toUpperCase() };
+    return {
+      rows: parseDelimitedText(await file.text(), resolveField),
+      sourceLabel: extension.toUpperCase(),
+    };
   }
 
   throw new Error("Unsupported file type. Use CSV, TSV, TXT, XLSX, XLS, or PDF.");
@@ -584,11 +608,11 @@ function buildImportedInventoryItems(rawRows: RawImportRow[], sourceLabel: strin
 }
 
 export async function parsePharmacyInventoryImportFile(file: File): Promise<InventoryImportResult> {
-  const { rows, sourceLabel } = await extractImportRows(file);
+  const { rows, sourceLabel } = await extractImportRows(file, findInventoryImportField);
   return buildImportedInventoryItems(rows, sourceLabel);
 }
 
 export function parsePharmacyInventoryImportText(text: string): InventoryImportResult {
-  const rows = parseDelimitedText(text);
+  const rows = parseDelimitedText(text, findInventoryImportField);
   return buildImportedInventoryItems(rows, "pasted table");
 }
