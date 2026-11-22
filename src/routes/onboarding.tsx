@@ -13,6 +13,7 @@ import { DashboardHeader } from "@/components/DashboardShell";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImageForUpload, formatFileSize, MAX_UPLOAD_BYTES } from "@/lib/file-upload";
+import { checkUploadFile, hasRiskyName } from "@/lib/upload-safety";
 
 export const Route = createFileRoute("/onboarding")({
   head: () => ({
@@ -218,16 +219,27 @@ function OnboardingPage() {
     try {
       let uploadFile = file;
 
-      if (file.type.startsWith("image/") && file.size > MAX_UPLOAD_BYTES) {
+      // Photos that are too big, or in a format we do not store (HEIC, GIF, BMP...), are
+      // re-drawn as a JPEG, which also drops anything hidden inside the original file.
+      const accepted = await checkUploadFile(file, { maxBytes: Number.MAX_SAFE_INTEGER });
+      if (
+        file.type.startsWith("image/") &&
+        !hasRiskyName(file.name) &&
+        (file.size > MAX_UPLOAD_BYTES || !accepted.ok)
+      ) {
         updateUploadFeedback(docType, {
           fileName: file.name,
-          message: "Large image detected. Compressing before upload...",
+          message: "Preparing the image for upload...",
           tone: "uploading",
         });
         uploadFile = await compressImageForUpload(file);
       } else if (file.size > MAX_UPLOAD_BYTES) {
         throw new Error("This file is larger than 10MB. Please choose a smaller PDF or image.");
       }
+
+      // The real content decides what the file is, not its name or the type the browser reports.
+      const safe = await checkUploadFile(uploadFile);
+      if (!safe.ok) throw new Error(safe.message);
 
       updateUploadFeedback(docType, {
         fileName: uploadFile.name,
@@ -238,7 +250,7 @@ function OnboardingPage() {
       const path = buildUploadPath(user.id, business.id, docType, uploadFile.name);
       const { error: upErr } = await supabase.storage.from("licenses").upload(path, uploadFile, {
         upsert: false,
-        contentType: uploadFile.type || file.type,
+        contentType: safe.mime,
       });
 
       if (upErr) {

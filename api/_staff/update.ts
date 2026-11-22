@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { adminSessionAllowed } from "../_assurance.js";
 import { createClient } from "@supabase/supabase-js";
 
 type StaffRole =
@@ -113,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: adminRoleErr.message });
   }
 
-  const isAdmin = Boolean(adminRole);
+  const isAdmin = Boolean(adminRole) && (await adminSessionAllowed(admin, authHeader.slice(7)));
   if (!business || (business.owner_id !== caller.id && !isAdmin)) {
     return res
       .status(403)

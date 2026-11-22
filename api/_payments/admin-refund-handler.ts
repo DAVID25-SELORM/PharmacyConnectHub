@@ -1,6 +1,7 @@
 // What an administrator does to a refund from the Payments screen: approve it (and send it), retry one that failed, cancel one, confirm one as refunded
 // by hand (after checking the provider's dashboard), or mark one as not sent. The state changes are made by the database, which re-checks that the caller is an
 // administrator; sending is the same code the reconciler uses. Nothing here can send money that was not approved.
+import { tokenAssuranceLevel } from "../_assurance.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { PaymentsConfig, PaymentsConfigResult } from "./config.js";
 import { submitRefund } from "./refund-runner.js";
@@ -34,7 +35,10 @@ export function createAdminRefundHandler(deps: AdminRefundDeps) {
     if (!rpc) return res.status(500).json({ error: "Server misconfigured" });
     const userId = await deps.authenticate(header.slice(7));
     if (!userId) return res.status(401).json({ error: "Invalid token" });
-    const isAdmin = await rpc("payment_user_is_admin", { p_user_id: userId });
+    const isAdmin = await rpc("payment_user_is_admin", {
+      p_user_id: userId,
+      p_aal: tokenAssuranceLevel(header.slice(7)),
+    });
     if (isAdmin.error || isAdmin.data !== true) {
       return res.status(403).json({ error: "Only platform administrators can do this." });
     }

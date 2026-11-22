@@ -49,11 +49,22 @@ export function SiteFooter() {
               <li>Accra, Ghana</li>
               <li>hello@drugxone.com</li>
               <li>0247654381</li>
+              <li>
+                <Link to="/privacy" className="hover:text-foreground">
+                  Privacy Notice
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms" className="hover:text-foreground">
+                  Terms of Use
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
         <div className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Drugxone. All rights reserved. Developed by Daventra Technologies.
+          © {new Date().getFullYear()} Drugxone. All rights reserved. Developed by Daventra
+          Technologies.
         </div>
       </div>
     </footer>

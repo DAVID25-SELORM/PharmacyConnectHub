@@ -1,6 +1,7 @@
 // "Re-verify" on the admin Payments screen: a platform administrator asks the provider again about the payment attempts of one order and the answer
 // is recorded through the same function as everywhere else. It can only ever move an order towards what the provider says; it cannot mark anything
 // paid by itself and it does not move money.
+import { tokenAssuranceLevel } from "../_assurance.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { PaymentsConfig, PaymentsConfigResult } from "./config.js";
 import type { PaymentProvider } from "./types.js";
@@ -30,7 +31,10 @@ export function createAdminReverifyHandler(deps: AdminReverifyDeps) {
     if (!rpc) return res.status(500).json({ error: "Server misconfigured" });
     const userId = await deps.authenticate(header.slice(7));
     if (!userId) return res.status(401).json({ error: "Invalid token" });
-    const isAdmin = await rpc("payment_user_is_admin", { p_user_id: userId });
+    const isAdmin = await rpc("payment_user_is_admin", {
+      p_user_id: userId,
+      p_aal: tokenAssuranceLevel(header.slice(7)),
+    });
     if (isAdmin.error || isAdmin.data !== true) {
       return res.status(403).json({ error: "Only platform administrators can do this." });
     }

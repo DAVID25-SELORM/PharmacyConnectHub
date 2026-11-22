@@ -1,6 +1,9 @@
 import { ConfirmationHost } from "@/lib/confirm-action";
 import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
+import { MfaGuard } from "@/components/auth/MfaGuard";
+import { IdleSessionGuard } from "@/components/auth/IdleSessionGuard";
+import { ConsentBanner } from "@/components/legal/ConsentBanner";
 
 function NotFoundComponent() {
   return (
@@ -32,7 +35,11 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <>
-      <Outlet />
+      <MfaGuard>
+        <Outlet />
+      </MfaGuard>
+      <IdleSessionGuard />
+      <ConsentBanner />
       <ConfirmationHost />
       <Toaster richColors position="top-right" />
     </>

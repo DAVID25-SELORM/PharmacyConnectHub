@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { adminSessionAllowed } from "../_assurance.js";
 import { createClient } from "@supabase/supabase-js";
 
 function firstHeaderValue(value: string | string[] | undefined) {
@@ -73,6 +74,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (authErr || !caller) {
     return res.status(401).json({ error: "Invalid token" });
+  }
+
+  if (!(await adminSessionAllowed(admin, authHeader.slice(7)))) {
+    return res
+      .status(403)
+      .json({ error: "Enter the code from your authenticator app to continue, then try again." });
   }
 
   const { staffId } = req.body ?? {};

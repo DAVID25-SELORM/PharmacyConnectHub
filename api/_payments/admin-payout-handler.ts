@@ -5,6 +5,7 @@
 //   set_active switch a supplier's settlement account off or back on
 //   checks     what the server's own configuration says about being ready (names and yes/no only; never a key's value)
 // Every action requires a platform administrator, re-checked by the database.
+import { tokenAssuranceLevel } from "../_assurance.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { PaymentsConfig, PaymentsConfigResult } from "./config.js";
 import { modeFromSecretKey } from "./paystack.js";
@@ -88,7 +89,10 @@ export function createAdminPayoutHandler(deps: AdminPayoutDeps) {
     if (!rpc) return res.status(500).json({ error: "Server misconfigured" });
     const userId = await deps.authenticate(header.slice(7));
     if (!userId) return res.status(401).json({ error: "Invalid token" });
-    const isAdmin = await rpc("payment_user_is_admin", { p_user_id: userId });
+    const isAdmin = await rpc("payment_user_is_admin", {
+      p_user_id: userId,
+      p_aal: tokenAssuranceLevel(header.slice(7)),
+    });
     if (isAdmin.error || isAdmin.data !== true) {
       return res.status(403).json({ error: "Only platform administrators can do this." });
     }

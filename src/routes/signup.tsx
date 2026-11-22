@@ -4,6 +4,7 @@ import { Building2, CheckCircle, Hospital, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PasswordStrength } from "@/components/auth/PasswordStrength";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -22,6 +23,7 @@ import { formatGhanaPhone } from "@/lib/ghana-phone";
 import { getSignupSchema, type SignupForm } from "@/lib/signup-validation";
 import { buildSignupPayload } from "@/lib/signup-payload";
 import { getAppUrl } from "@/lib/site-url";
+import { consentMetadata } from "@/lib/privacy";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({
@@ -65,6 +67,7 @@ function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const update = (field: TextField, value: SignupForm[TextField]) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -100,6 +103,11 @@ function SignupPage() {
       document.getElementById("confirmPassword")?.focus();
       return;
     }
+    if (!agreed) {
+      toast.error("Please accept the Terms of Use and Privacy Notice to continue.");
+      document.getElementById("agree")?.focus();
+      return;
+    }
 
     const parsed = getSignupSchema(role).safeParse(form);
     if (!parsed.success) {
@@ -127,7 +135,7 @@ function SignupPage() {
         password: form.password,
         options: {
           emailRedirectTo: redirectUrl,
-          data: signupPayload.metadata,
+          data: { ...signupPayload.metadata, ...consentMetadata() },
         },
       });
 
@@ -504,9 +512,13 @@ function SignupPage() {
                       type={showPassword ? "text" : "password"}
                       value={form.password}
                       onChange={(e) => update("password", e.target.value)}
-                      placeholder="At least 8 characters"
+                      placeholder="At least 10 characters"
                       required
                       autoComplete="new-password"
+                    />
+                    <PasswordStrength
+                      password={form.password}
+                      context={{ email: form.ownerEmail, name: form.ownerFullName }}
                     />
                   </div>
                 </div>
@@ -533,13 +545,33 @@ function SignupPage() {
                 </div>
               </section>
 
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="agree"
+                  checked={agreed}
+                  onCheckedChange={(value) => setAgreed(value === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="agree" className="text-sm font-normal leading-snug">
+                  I have read and agree to the{" "}
+                  <Link to="/terms" target="_blank" className="font-medium text-primary underline">
+                    Terms of Use
+                  </Link>{" "}
+                  and the{" "}
+                  <Link
+                    to="/privacy"
+                    target="_blank"
+                    className="font-medium text-primary underline"
+                  >
+                    Privacy Notice
+                  </Link>
+                  .
+                </Label>
+              </div>
+
               <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
                 {loading ? "Creating account..." : "Create account"}
               </Button>
-
-              <p className="text-xs text-muted-foreground text-center">
-                By creating an account you agree to our terms and privacy policy.
-              </p>
             </form>
 
             <p className="mt-6 text-center text-sm text-muted-foreground">

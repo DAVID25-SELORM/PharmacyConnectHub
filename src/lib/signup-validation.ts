@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidGhanaPhone } from "@/lib/ghana-phone";
 import type { SignupRole } from "@/lib/signup-payload";
+import { checkPassword, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 const baseSchema = z.object({
   ownerFullName: z.string().trim().min(2, "Owner name is required").max(100),
@@ -23,7 +24,10 @@ const baseSchema = z.object({
   locationDescription: z.string().trim().max(240),
   workingHours: z.string().trim().max(120),
   ownerEmail: z.string().trim().email("Enter a valid owner email").max(255),
-  password: z.string().min(8, "At least 8 characters").max(100),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `At least ${PASSWORD_MIN_LENGTH} characters`)
+    .max(PASSWORD_MAX_LENGTH, `At most ${PASSWORD_MAX_LENGTH} characters`),
   ownerIsSuperintendent: z.boolean(),
   superintendentName: z.string(),
   superintendentPhone: z.string(),
@@ -34,6 +38,13 @@ export type SignupForm = z.infer<typeof baseSchema>;
 
 export function getSignupSchema(role: SignupRole) {
   return baseSchema.superRefine((form, ctx) => {
+    const passwordCheck = checkPassword(form.password, {
+      email: form.ownerEmail,
+      name: form.ownerFullName,
+    });
+    if (!passwordCheck.ok && form.password.length >= PASSWORD_MIN_LENGTH) {
+      ctx.addIssue({ code: "custom", path: ["password"], message: passwordCheck.issues[0] });
+    }
     // Only validate separate superintendent details when they will be submitted.
     if (role !== "pharmacy" || form.ownerIsSuperintendent) return;
     const details = z

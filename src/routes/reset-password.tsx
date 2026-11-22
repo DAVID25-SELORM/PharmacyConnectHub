@@ -7,6 +7,10 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.jpg";
+import { MfaCodeForm } from "@/components/auth/MfaCodeForm";
+import { PasswordStrength } from "@/components/auth/PasswordStrength";
+import { loadMfaState, verifyMfaCode } from "@/lib/mfa";
+import { checkPassword } from "@/lib/password-policy";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
@@ -57,6 +61,7 @@ function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<ResetLinkStatus>("verifying");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [challengeFactor, setChallengeFactor] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -170,17 +175,36 @@ function ResetPasswordPage() {
       toast.error("Passwords don't match");
       return;
     }
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const check = checkPassword(password, {
+      email: session?.user.email ?? undefined,
+      name: (session?.user.user_metadata?.full_name as string | undefined) ?? undefined,
+    });
+    if (!check.ok) {
+      toast.error(check.issues[0]);
       return;
     }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) {
+      // Someone with an authenticator app must enter a code before changing the password.
+      if (error.code === "insufficient_aal") {
+        const mfa = await loadMfaState({ withFactors: true });
+        if (mfa.factorId) {
+          setChallengeFactor(mfa.factorId);
+          return;
+        }
+      }
       toast.error(error.message);
       return;
     }
+    finishReset();
+  };
+
+  const finishReset = () => {
     toast.success("Password updated. Opening your workspace.");
     try {
       window.localStorage.removeItem("pharmahub.active_business_id");
@@ -242,7 +266,7 @@ function ResetPasswordPage() {
     <div className="min-h-screen bg-gradient-soft flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-            <img src={logo} alt="Drugxone" className="h-10 w-10 rounded-xl object-contain" />
+          <img src={logo} alt="Drugxone" className="h-10 w-10 rounded-xl object-contain" />
           <span className="font-display text-xl font-bold">
             Drug<span className="text-primary">xone</span>
           </span>
@@ -254,35 +278,56 @@ function ResetPasswordPage() {
             Choose a strong password to finish account access.
           </p>
 
-          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="........"
-                required
-                autoComplete="new-password"
+          {challengeFactor ? (
+            <div className="mt-6 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                This account uses two-step verification. Enter the 6-digit code from your
+                authenticator app to finish changing your password.
+              </p>
+              <MfaCodeForm
+                submitLabel="Verify and update password"
+                onSubmit={async (code) => {
+                  const message = await verifyMfaCode(challengeFactor, code);
+                  if (message) return message;
+                  const { error } = await supabase.auth.updateUser({ password });
+                  if (error) return error.message;
+                  finishReset();
+                  return null;
+                }}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm">Confirm password</Label>
-              <Input
-                id="confirm"
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                placeholder="........"
-                required
-                autoComplete="new-password"
-              />
-            </div>
-            <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
-              {loading ? "Updating..." : "Update password"}
-            </Button>
-          </form>
+          ) : (
+            <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="password">New password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 10 characters"
+                  required
+                  autoComplete="new-password"
+                />
+                <PasswordStrength password={password} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm">Confirm password</Label>
+                <Input
+                  id="confirm"
+                  type="password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  placeholder="........"
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
+                {loading ? "Updating..." : "Update password"}
+              </Button>
+            </form>
+          )}
         </Card>
       </div>
     </div>

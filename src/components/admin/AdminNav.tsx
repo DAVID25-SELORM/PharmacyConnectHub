@@ -6,6 +6,7 @@ import {
   CreditCard,
   Landmark,
   LayoutDashboard,
+  Lock,
   ShieldCheck,
 } from "lucide-react";
 
@@ -17,6 +18,7 @@ const ITEMS = [
   { to: "/admin/payments", label: "Payments", icon: CreditCard, exact: false },
   { to: "/admin/billing", label: "Billing", icon: Landmark, exact: false },
   { to: "/admin/staff", label: "Platform Team", icon: ShieldCheck, exact: false },
+  { to: "/admin/privacy", label: "Privacy", icon: Lock, exact: false },
 ] as const;
 
 /** Single admin navigation shared by the dashboard, activity log and platform team pages. */
