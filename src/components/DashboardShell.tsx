@@ -367,6 +367,12 @@ export function DashboardHeader({
             </Button>
           )}
           <Button variant="ghost" size="sm" asChild>
+            <Link to="/security" aria-label="Account security">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Security</span>
+            </Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
             <Link to="/help" aria-label="Help Centre">
               <HelpCircle className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Help</span>

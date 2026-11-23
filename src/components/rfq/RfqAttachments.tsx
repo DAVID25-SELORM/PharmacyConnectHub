@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { FileText, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { rfqCall, rfqDb } from "@/lib/enterprise-rfq";
+import { checkUploadFile } from "@/lib/upload-safety";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -40,15 +41,12 @@ export function RfqAttachments({
     setBusy(true);
     setError("");
     try {
-      if (
-        file.size > 10 * 1024 * 1024 ||
-        !["application/pdf", "image/jpeg", "image/png"].includes(file.type)
-      )
-        throw new Error("Use PDF, JPEG or PNG up to 10 MB.");
+      const safe = await checkUploadFile(file, { allowed: ["pdf", "jpeg", "png"] });
+      if (!safe.ok) throw new Error(safe.message);
       const path = `${rfqId}/${businessId}/${crypto.randomUUID()}`;
       const { error } = await supabase.storage
         .from("rfq-evidence")
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, file, { contentType: safe.mime, upsert: false });
       if (error) throw error;
       await rfqCall("register_rfq_attachment", {
         p_rfq_id: rfqId,

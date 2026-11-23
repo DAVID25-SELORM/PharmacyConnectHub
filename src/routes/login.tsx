@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.jpg";
+import { MfaCodeForm } from "@/components/auth/MfaCodeForm";
+import { loadMfaState, verifyMfaCode } from "@/lib/mfa";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -26,6 +28,8 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** Set once the password was accepted and an authenticator code is still needed. */
+  const [challengeFactor, setChallengeFactor] = useState<string | null>(null);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +59,16 @@ function LoginPage() {
     } finally {
       setLoading(false);
     }
+    // Someone with an authenticator app still owes the 6-digit code for this session.
+    const mfa = await loadMfaState().catch(() => null);
+    if (mfa?.needsChallenge) {
+      setChallengeFactor(mfa.factorId ?? "");
+      return;
+    }
+    finishSignIn();
+  };
+
+  const finishSignIn = () => {
     toast.success("Welcome back!");
     try {
       window.localStorage.removeItem("pharmahub.active_business_id");
@@ -62,6 +76,12 @@ function LoginPage() {
       // Ignore storage failures and continue into the workspace flow.
     }
     navigate({ to: "/dashboard" });
+  };
+
+  const cancelChallenge = async () => {
+    await supabase.auth.signOut({ scope: "local" });
+    setChallengeFactor(null);
+    setPassword("");
   };
 
   return (
@@ -74,83 +94,113 @@ function LoginPage() {
           </span>
         </Link>
 
-        <Card className="p-8 shadow-elegant">
-          <h1 className="font-display text-2xl font-bold">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to continue to your dashboard.
-          </p>
-
-          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-            {loginError && (
-              <div
-                role="alert"
-                className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
-              >
-                <p>{loginError}</p>
-                <Link
-                  to="/forgot-password"
-                  className="mt-2 inline-block font-medium text-primary underline"
-                >
-                  Forgot password / reset password
-                </Link>
-              </div>
+        {challengeFactor !== null ? (
+          <Card className="space-y-4 p-8 shadow-elegant">
+            <h1 className="font-display text-2xl font-bold">Two-step verification</h1>
+            <p className="text-sm text-muted-foreground">
+              Open your authenticator app and enter the 6-digit code for Drugxone.
+            </p>
+            {challengeFactor ? (
+              <MfaCodeForm
+                onSubmit={async (code) => {
+                  const message = await verifyMfaCode(challengeFactor, code);
+                  if (!message) finishSignIn();
+                  return message;
+                }}
+              />
+            ) : (
+              <p role="alert" className="text-sm text-destructive">
+                We could not load your verification settings. Go back and sign in again.
+              </p>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@pharmacy.gh"
-                required
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link
-                  to="/forgot-password"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="********"
-                required
-                autoComplete="current-password"
-              />
-            </div>
             <Button
-              type="button"
               variant="ghost"
               size="sm"
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword(!showPassword)}
+              className="w-full"
+              onClick={() => void cancelChallenge()}
             >
-              {showPassword ? "Hide password" : "Show password"}
+              Use a different account
             </Button>
-            <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
-            </Button>
-          </form>
+          </Card>
+        ) : (
+          <Card className="p-8 shadow-elegant">
+            <h1 className="font-display text-2xl font-bold">Welcome back</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign in to continue to your dashboard.
+            </p>
 
-          <div className="mt-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-center">
-            <p className="text-sm text-muted-foreground">New to Drugxone?</p>
-            <Link
-              to="/signup"
-              className="mt-1 inline-block text-base font-semibold text-primary underline-offset-4 transition-colors hover:underline"
-            >
-              Create an account
-            </Link>
-          </div>
-        </Card>
+            <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+              {loginError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"
+                >
+                  <p>{loginError}</p>
+                  <Link
+                    to="/forgot-password"
+                    className="mt-2 inline-block font-medium text-primary underline"
+                  >
+                    Forgot password / reset password
+                  </Link>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@pharmacy.gh"
+                  required
+                  autoComplete="email"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="********"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "Hide password" : "Show password"}
+              </Button>
+              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={loading}>
+                {loading ? "Signing in..." : "Sign in"}
+              </Button>
+            </form>
+
+            <div className="mt-6 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-center">
+              <p className="text-sm text-muted-foreground">New to Drugxone?</p>
+              <Link
+                to="/signup"
+                className="mt-1 inline-block text-base font-semibold text-primary underline-offset-4 transition-colors hover:underline"
+              >
+                Create an account
+              </Link>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ const form = {
   locationDescription: "",
   workingHours: "",
   ownerEmail: "owner@example.com",
-  password: "test-password",
+  password: "Tamale-River-48",
   ownerIsSuperintendent: false,
   superintendentName: "Test Pharmacist",
   superintendentPhone: "0241234567",
@@ -49,6 +49,16 @@ describe("signup validation", () => {
       }
     },
   );
+
+  it("applies the new password rules", () => {
+    const schema = getSignupSchema("wholesaler");
+    for (const password of ["short1A!", "password123!", "Test-Owner-2024"]) {
+      const result = schema.safeParse({ ...form, password });
+      expect(result.success, password).toBe(false);
+      if (!result.success) expect(result.error.issues[0].path).toEqual(["password"]);
+    }
+    expect(schema.safeParse({ ...form, password: "Tamale-River-48" }).success).toBe(true);
+  });
 
   it("ignores unused superintendent fields", () => {
     const stale = {

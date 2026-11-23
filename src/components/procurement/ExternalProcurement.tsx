@@ -1,4 +1,5 @@
 import { confirmAction } from "@/lib/confirm-action";
+import { checkUploadFile } from "@/lib/upload-safety";
 import { WorkspaceProcurementReport } from "./WorkspaceProcurementReport";
 import { SupplierProfile } from "./SupplierProfile";
 import { ExternalSupplyOrders } from "./ExternalSupplyOrders";
@@ -1749,23 +1750,18 @@ function PurchaseDetail({
                   onClick={() =>
                     act(async () => {
                       if (!file) return;
-                      if (
-                        file.size > 10485760 ||
-                        !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(
-                          file.type,
-                        )
-                      )
-                        throw new Error("Choose a PDF, JPG, PNG or WebP up to 10 MB.");
+                      const safe = await checkUploadFile(file);
+                      if (!safe.ok) throw new Error(safe.message);
                       const { data: purchase, error: readError } = await db
                         .from("external_purchases")
                         .select("pharmacy_id")
                         .eq("id", p.id)
                         .single();
                       if (readError) throw readError;
-                      const storagePath = `${purchase.pharmacy_id}/${p.id}/${crypto.randomUUID()}.${file.name.split(".").pop()}`;
+                      const storagePath = `${purchase.pharmacy_id}/${p.id}/${crypto.randomUUID()}.${safe.extension}`;
                       const { error } = await db.storage
                         .from("external-procurement")
-                        .upload(storagePath, file, { upsert: false });
+                        .upload(storagePath, file, { contentType: safe.mime, upsert: false });
                       if (error) throw error;
                       await externalRpc("external_document_action", {
                         p_purchase_id: p.id,
