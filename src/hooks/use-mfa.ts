@@ -9,12 +9,16 @@ import { loadMfaState, NO_MFA, type MfaState } from "@/lib/mfa";
 export function useMfaState(options: { enabled?: boolean; withFactors?: boolean } = {}) {
   const { enabled = true, withFactors = false } = options;
   const [state, setState] = useState<MfaState>(NO_MFA);
-  const [loading, setLoading] = useState(enabled);
+  // True once the check has run for the page being shown. It is reset while on a page that skips
+  // the check, so moving from a public page (such as the sign-in page) to a private one counts
+  // as "not checked yet" and the guard waits instead of showing the page for a moment first.
+  const [settled, setSettled] = useState(false);
+  const loading = enabled && !settled;
 
   const refresh = useCallback(async () => {
     if (!enabled) {
       setState(NO_MFA);
-      setLoading(false);
+      setSettled(false);
       return;
     }
     try {
@@ -22,7 +26,7 @@ export function useMfaState(options: { enabled?: boolean; withFactors?: boolean 
     } catch {
       setState(NO_MFA);
     } finally {
-      setLoading(false);
+      setSettled(true);
     }
   }, [enabled, withFactors]);
 
