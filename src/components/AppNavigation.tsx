@@ -476,7 +476,7 @@ export function useActiveNavLabel(isPlatformAdmin: boolean) {
   const { business } = useSession();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return useMemo(() => {
-    const kind = navKindFor(pathname, business?.type);
+    const kind = navKindFor(pathname, business?.type, isPlatformAdmin);
     if (!kind || typeof window === "undefined") return null;
     const groups = buildNavGroups({
       kind,
@@ -489,10 +489,10 @@ export function useActiveNavLabel(isPlatformAdmin: boolean) {
 }
 
 /** True when the navigation shows for this page, so the header can drop what the nav now covers. */
-export function useHasAppNavigation(showNav: boolean) {
+export function useHasAppNavigation(showNav: boolean, isPlatformAdmin = false) {
   const { business } = useSession();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const kind = navKindFor(pathname, business?.type);
+  const kind = navKindFor(pathname, business?.type, isPlatformAdmin);
   return kind === "admin" || (showNav && kind !== null);
 }
 
@@ -516,7 +516,7 @@ export function AppNavigation({
     return () => window.removeEventListener("popstate", refresh);
   }, []);
 
-  const kind = navKindFor(pathname, business?.type);
+  const kind = navKindFor(pathname, business?.type, isPlatformAdmin);
   const groups = useMemo(
     () =>
       kind

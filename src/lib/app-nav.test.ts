@@ -222,4 +222,14 @@ describe("addresses and kinds", () => {
     expect(navKindFor("/pharmacy/inventory", "pharmacy")).toBe("pharmacy");
     expect(navKindFor("/dashboard", undefined)).toBeNull();
   });
+
+  it("keeps a menu on the Security page, including for an admin with no business", () => {
+    expect(navKindFor("/security", "pharmacy")).toBe("pharmacy");
+    expect(navKindFor("/security", "wholesaler", true)).toBe("wholesaler");
+    expect(navKindFor("/security", undefined, true)).toBe("admin");
+    expect(navKindFor("/security", undefined, false)).toBeNull();
+    expect(navKindFor("/dashboard", undefined, true)).toBeNull();
+    const groups = buildNavGroups({ kind: "admin", isPlatformAdmin: true });
+    expect(findActiveItem(groups, "/security", "", "admin")?.id).toBe("security");
+  });
 });

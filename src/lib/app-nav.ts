@@ -411,10 +411,16 @@ export function navHref(item: NavItem): string {
 }
 
 /** Which of the three navigation sets to show for the page the person is on. */
-export function navKindFor(pathname: string, businessType: "pharmacy" | "wholesaler" | undefined) {
+export function navKindFor(
+  pathname: string,
+  businessType: "pharmacy" | "wholesaler" | undefined,
+  isPlatformAdmin = false,
+) {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return "admin" as const;
   if (businessType === "wholesaler") return "wholesaler" as const;
   if (businessType === "pharmacy") return "pharmacy" as const;
+  // Security is in the admin menu too, so an admin with no business keeps that menu there.
+  if (isPlatformAdmin && pathname === "/security") return "admin" as const;
   return null;
 }
 

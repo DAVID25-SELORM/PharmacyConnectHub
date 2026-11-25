@@ -252,7 +252,7 @@ export function DashboardHeader({
   const { business, businesses, setActiveBusiness } = useSession();
   // The side rail, bottom bar and More sheet (AppNavigation) now carry the screens, Help, Add
   // business and Sign out. When it shows, this top bar keeps only what is about the page itself.
-  const hasAppNav = useHasAppNavigation(showNav);
+  const hasAppNav = useHasAppNavigation(showNav, isAdmin);
   const activeLabel = useActiveNavLabel(isAdmin);
   // A small, always-visible (including on phones) signal for which kind of account this is - a
   // real user was once confused after being given a wholesaler account when expecting a pharmacy
