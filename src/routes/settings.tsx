@@ -14,12 +14,12 @@ export const Route = createFileRoute("/settings")({
 });
 
 function Settings() {
-  const { business } = useSession();
+  const { business, roles } = useSession();
   if (!business) return null;
   const manage = ["owner", "manager"].includes(business.staff_role);
   return (
     <>
-      <DashboardHeader subtitle="Business settings" />
+      <DashboardHeader subtitle="Business settings" showNav isAdmin={roles.includes("admin")} />
       <main className="container mx-auto max-w-5xl space-y-6 px-4 py-8">
         <header>
           <h1 className="text-2xl font-semibold">Business Settings</h1>
