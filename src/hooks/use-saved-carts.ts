@@ -22,7 +22,7 @@ function friendly(error: DbError, fallback: string) {
   if (!error) return fallback;
   if (error.code === "23505") return "You already have a saved cart with that name.";
   if (error.code === "P0001" && error.message) return error.message;
-  if (error.code === "42501") return "You don't have permission to save carts for this pharmacy.";
+  if (error.code === "42501") return "You don't have permission to save carts for this business.";
   return fallback;
 }
 

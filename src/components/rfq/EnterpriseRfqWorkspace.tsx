@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { useSession, type Business } from "@/hooks/use-session";
+import { businessKindNoun } from "@/lib/business-kind";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -153,6 +154,7 @@ function RfqWorkspace({ business }: { business: Business }) {
           <EnterpriseRfqEditor
             key={`${editing.initial?.id ?? "new"}:${editing.repeat}`}
             businessId={business.id}
+            buyerNoun={businessKindNoun(business)}
             initial={editing.initial}
             repeat={editing.repeat}
             onCancel={() => setEditing(null)}

@@ -30,7 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { enableWebPush } from "@/lib/web-push";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
-import { businessKindLabel, isHospitalOrClinic } from "@/lib/business-kind";
+import { businessKindLabel, isHospitalOrClinic, licenceUploadPrompt } from "@/lib/business-kind";
 import { AppNavigation, useActiveNavLabel, useHasAppNavigation } from "@/components/AppNavigation";
 import {
   NOTIFICATIONS_CHANGED_EVENT,
@@ -446,9 +446,7 @@ export function VerificationBanner({ business }: { business: Business }) {
         <div className="mt-0.5 opacity-90">
           {isRejected
             ? business.rejection_reason || "Please contact support and resubmit your documents."
-            : business.type === "pharmacy"
-              ? "Upload your Pharmacy Council license to start ordering."
-              : "Upload your wholesale license to start receiving orders."}
+            : licenceUploadPrompt(business)}
         </div>
         {!isRejected && (
           <Link

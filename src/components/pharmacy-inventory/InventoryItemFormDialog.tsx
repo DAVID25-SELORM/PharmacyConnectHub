@@ -37,12 +37,15 @@ const rpc = (name: string, args: Record<string, unknown>) => (supabase as any).r
  * dosage form, equipment never asks for an expiry date, and so on. */
 export function InventoryItemFormDialog({
   pharmacyId,
+  ownerNoun = "pharmacy",
   item,
   open,
   onOpenChange,
   onSaved,
 }: {
   pharmacyId: string;
+  /** "pharmacy" or "hospital or clinic", for the wording. */
+  ownerNoun?: string;
   item: PharmacyInventoryItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -169,7 +172,7 @@ export function InventoryItemFormDialog({
           <DialogDescription>
             {isEdit
               ? "Update this item's details. To change its stock count, use Receive / Adjust / Write off instead."
-              : "Track a new item in your pharmacy's stock."}
+              : `Track a new item in your ${ownerNoun}'s stock.`}
           </DialogDescription>
         </DialogHeader>
 

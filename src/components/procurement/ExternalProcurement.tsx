@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSession } from "@/hooks/use-session";
+import { businessKindLabel, businessKindNoun } from "@/lib/business-kind";
 import { downloadPdf, downloadXlsx, downloadCsv, rowsToCsv, formatGHSCell } from "@/lib/reports";
 import {
   CHANNELS,
@@ -569,9 +570,9 @@ export function ExternalProcurement({
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              Private contacts shared with your pharmacy CRM. A contact has no marketplace account
-              or privileges. Select a contact to inspect purchases, spend, source history and
-              evidence.
+              Private contacts shared with your {businessKindNoun(business)} CRM. A contact has no
+              marketplace account or privileges. Select a contact to inspect purchases, spend,
+              source history and evidence.
             </p>
             <Field title="Find name or phone">
               <Input value={filters.q} onChange={(e) => filter("q", e.target.value)} />
@@ -694,7 +695,9 @@ export function ExternalProcurement({
             <Pager offset={offset} count={analytics?.count ?? 0} change={setOffset} />
           </section>
         )}
-        {tab === "workspaces" && <WorkspaceProcurementReport />}
+        {tab === "workspaces" && (
+          <WorkspaceProcurementReport kindLabel={businessKindLabel(business)} />
+        )}
         {tab === "settings" && context?.is_owner && (
           <section className={panel}>
             <a href="/settings" className="text-primary underline">
@@ -703,9 +706,9 @@ export function ExternalProcurement({
             <div className="border-t pt-6">
               <h2 className="text-lg font-semibold">Review policy</h2>
               <p>
-                Assign active pharmacy members who are authorized to perform pharmacist reviews.
-                Assignment records authorization; it does not verify professional credentials.
-                Unknown sources cannot be approved for saleable stock.
+                Assign active {businessKindNoun(business)} members who are authorized to perform
+                pharmacist reviews. Assignment records authorization; it does not verify
+                professional credentials. Unknown sources cannot be approved for saleable stock.
               </p>
               <label className="flex items-center gap-2">
                 <input
@@ -802,7 +805,7 @@ export function ExternalProcurement({
               });
               setContactKind(null);
               reload();
-              toast.success("Contact saved in your pharmacy directory.");
+              toast.success(`Contact saved in your ${businessKindNoun(business)} directory.`);
             })
           }
         />
@@ -1439,7 +1442,7 @@ function ProductLine({
         </Field>
       </div>
       <Choice
-        title="Post to this pharmacy inventory item (confirm the exact medicine / pack)"
+        title="Post to this inventory item (confirm the exact medicine / pack)"
         value={i.inventory_item_id}
         onChange={(v) => update({ ...i, inventory_item_id: v })}
         options={{

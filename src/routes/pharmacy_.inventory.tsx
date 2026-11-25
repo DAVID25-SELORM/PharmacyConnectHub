@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSession } from "@/hooks/use-session";
+import { businessKindNoun } from "@/lib/business-kind";
 import { supabase } from "@/integrations/supabase/client";
 import { EXPIRING_SOON_DAYS, daysUntil } from "@/lib/dashboard";
 import { formatGHS } from "@/lib/format";
@@ -333,6 +334,7 @@ function PharmacyInventoryPage() {
 
       <InventoryItemFormDialog
         pharmacyId={business.id}
+        ownerNoun={businessKindNoun(business)}
         item={formItem === "new" ? null : formItem}
         open={formItem !== null}
         onOpenChange={(open) => !open && setFormItem(null)}
