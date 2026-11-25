@@ -192,6 +192,37 @@
   --ring: oklch(0.7 0.13 190);
 }
 
+/* App navigation (AppNavigation): leave room for the left rail, or for the bottom bar on a phone. */
+@media (min-width: 768px) {
+  html[data-app-nav] body {
+    transition: padding-left 200ms ease;
+  }
+  html[data-app-nav="slim"] body {
+    padding-left: 4.5rem;
+  }
+  html[data-app-nav="wide"] body {
+    padding-left: 16rem;
+  }
+}
+@media (max-width: 767px) {
+  html[data-app-nav] body {
+    padding-bottom: calc(3.75rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
+  }
+  /* The privacy notice sits above the bottom bar, so the bar stays usable before agreeing. */
+  html[data-app-nav] [data-consent-banner] {
+    bottom: calc(4.5rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
+  }
+  /* Sticky save bars sit above the bottom bar instead of under it. */
+  html[data-app-nav] .sticky.bottom-0 {
+    bottom: calc(3.75rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-app-nav] body {
+    transition: none;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
