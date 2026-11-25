@@ -19,7 +19,7 @@ export const Route = createFileRoute("/security")({
  */
 function SecurityPage() {
   const navigate = useNavigate();
-  const { loading, user, roles } = useSession();
+  const { loading, user, roles, business } = useSession();
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/login", replace: true });
@@ -29,7 +29,12 @@ function SecurityPage() {
 
   return (
     <>
-      <DashboardHeader subtitle="Account security" isAdmin={roles.includes("admin")} />
+      {/* The menu only for an approved business: a pending one cannot open most of its links. */}
+      <DashboardHeader
+        subtitle="Account security"
+        showNav={business?.verification_status === "approved"}
+        isAdmin={roles.includes("admin")}
+      />
       <main className="container mx-auto max-w-3xl space-y-6 px-4 py-8">
         <header>
           <h1 className="text-2xl font-semibold">Account security</h1>
