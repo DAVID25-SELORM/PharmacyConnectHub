@@ -54,6 +54,10 @@ import { confirmOrderPayment, sendOrderReceipt } from "@/lib/order-actions";
 import { isAwaitingOnlinePayment } from "@/lib/payments";
 import { OnlinePaymentPanel } from "@/components/orders/OnlinePaymentPanel";
 import { OnlinePaymentsPanel } from "@/components/wholesaler/OnlinePaymentsPanel";
+import { BillingPanel } from "@/components/billing/BillingPanel";
+import { expiredNote } from "@/lib/expiry-guard";
+import { loadDocumentIdentity } from "@/lib/document-identity";
+import type { DocumentBusiness } from "@/lib/document-branding";
 import { DashboardHeader, VerificationBanner } from "@/components/DashboardShell";
 import {
   StatusBadge,
@@ -102,6 +106,8 @@ type Product = {
   pack_size: string | null;
   price_ghs: number;
   stock: number;
+  /** Units in batches past their expiry date; only the product's own staff are told. Absent until the database update is applied. */
+  expired_stock?: number | null;
   warehouse: string | null;
   zone: string | null;
   rack: string | null;
@@ -200,6 +206,16 @@ function WholesalerDashboardContent() {
 
   const loadProducts = useEffectEvent(async () => {
     if (!business) return;
+    // Ask for the expired-units figure too; if the database does not have it yet, fall back to the plain list.
+    const withExpiry = await supabase
+      .from("products")
+      .select("*, expired_stock" as "*")
+      .eq("wholesaler_id", business.id)
+      .order("created_at", { ascending: false });
+    if (!withExpiry.error) {
+      setProducts((withExpiry.data as unknown as Product[]) ?? []);
+      return;
+    }
     const { data } = await supabase
       .from("products")
       .select("*")
@@ -451,6 +467,7 @@ function WholesalerDashboardContent() {
             {canProcessOrders && <TabsTrigger value="customers">Customers</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="credit">Credit</TabsTrigger>}
             {canRecordCreditPayment && <TabsTrigger value="online-payments">Online payments</TabsTrigger>}
+            {canRecordCreditPayment && <TabsTrigger value="billing">Billing</TabsTrigger>}
             {canManageProducts && <TabsTrigger value="discounts">Customer discounts</TabsTrigger>}
           </TabsList>
 
@@ -490,6 +507,11 @@ function WholesalerDashboardContent() {
                 canManage={canManageProducts}
                 canDispute={canDisputeCreditInvoice}
               />
+            </TabsContent>
+          )}
+          {canRecordCreditPayment && (
+            <TabsContent value="billing">
+              <BillingPanel businessId={business.id} />
             </TabsContent>
           )}
           {canRecordCreditPayment && (
@@ -552,6 +574,7 @@ function OrdersInbox({
   const [page, setPage] = useState(1);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [bulkPrint, setBulkPrint] = useState(false);
+  const [bulkIssuer, setBulkIssuer] = useState<DocumentBusiness | null>(null);
   const pageSize = 20;
   const nextStatus: Record<OrderStatus, OrderStatus | null> = {
     pending: "accepted",
@@ -610,8 +633,26 @@ function OrdersInbox({
     if (!bulkPrint) return;
     const cleanup = () => setBulkPrint(false);
     window.addEventListener("afterprint", cleanup, { once: true });
-    window.setTimeout(() => window.print(), 0);
-    return () => window.removeEventListener("afterprint", cleanup);
+    let active = true;
+    // Print only once the supplier logo on every sheet has loaded.
+    void Promise.all(
+      Array.from(document.querySelectorAll<HTMLImageElement>(".print-documents img")).map((img) =>
+        img.decode(),
+      ),
+    ).then(
+      () => {
+        if (active) window.print();
+      },
+      () => {
+        if (!active) return;
+        toast.error("Document logo could not be loaded. Retry printing.");
+        setBulkPrint(false);
+      },
+    );
+    return () => {
+      active = false;
+      window.removeEventListener("afterprint", cleanup);
+    };
   }, [bulkPrint]);
 
   if (orders.length === 0) {
@@ -647,7 +688,15 @@ function OrdersInbox({
           size="sm"
           variant="outline"
           disabled={selectedOrders.length === 0}
-          onClick={() => setBulkPrint(true)}
+          onClick={async () => {
+            try {
+              if (!wholesaler.id) throw new Error("Supplier identity unavailable.");
+              setBulkIssuer(await loadDocumentIdentity(wholesaler.id));
+              setBulkPrint(true);
+            } catch {
+              toast.error("Supplier identity could not be loaded. Retry printing.");
+            }
+          }}
         >
           Print selected pick sheets ({selectedOrders.length})
         </Button>
@@ -812,13 +861,13 @@ function OrdersInbox({
         <span>Showing {pagedOrders.length} of {visibleOrders.length} orders</span>
         <div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</Button><Button type="button" size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((value) => value + 1)}>Next</Button></div>
       </div>
-      {bulkPrint && (
+      {bulkPrint && bulkIssuer && (
         <div className="print-documents">
           {selectedOrders.map((order) => (
             <PrintableOrderDocument
               key={order.id}
               mode="pick-pack"
-              order={forDocument({ ...order, wholesaler })}
+              order={forDocument({ ...order, wholesaler: bulkIssuer })}
             />
           ))}
         </div>
@@ -1045,7 +1094,17 @@ function ProductsManager({
                     <td className="px-4 py-3 text-muted-foreground">{p.category ?? "—"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{p.pack_size ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-medium">{formatGHS(p.price_ghs)}</td>
-                    <td className="px-4 py-3 text-right">{p.stock}</td>
+                    <td className="px-4 py-3 text-right">
+                      {p.stock}
+                      {expiredNote(p.stock, p.expired_stock) && (
+                        <div
+                          className="text-xs font-normal text-destructive"
+                          data-testid="expired-note"
+                        >
+                          {expiredNote(p.stock, p.expired_stock)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {p.stock < 100 ? (
                         <Badge
