@@ -49,7 +49,11 @@ export function ChangePasswordCard() {
     }
     setBusy(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(
+        error.code === "insufficient_aal"
+          ? "First enter a two-step code in the box under Two-step verification above, then change your password."
+          : error.message,
+      );
       return;
     }
     setPassword("");

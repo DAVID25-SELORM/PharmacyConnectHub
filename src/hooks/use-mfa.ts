@@ -6,8 +6,10 @@ import { loadMfaState, NO_MFA, type MfaState } from "@/lib/mfa";
  * Two-step verification state for the signed-in person. `enabled = false` skips the
  * work entirely, for public pages that have nothing to protect.
  */
-export function useMfaState(options: { enabled?: boolean; withFactors?: boolean } = {}) {
-  const { enabled = true, withFactors = false } = options;
+export function useMfaState(
+  options: { enabled?: boolean; withFactors?: boolean; allowRememberedDevice?: boolean } = {},
+) {
+  const { enabled = true, withFactors = false, allowRememberedDevice = false } = options;
   const [state, setState] = useState<MfaState>(NO_MFA);
   // True once the check has run for the page being shown. It is reset while on a page that skips
   // the check, so moving from a public page (such as the sign-in page) to a private one counts
@@ -22,13 +24,13 @@ export function useMfaState(options: { enabled?: boolean; withFactors?: boolean 
       return;
     }
     try {
-      setState(await loadMfaState({ withFactors }));
+      setState(await loadMfaState({ withFactors, allowRememberedDevice }));
     } catch {
       setState(NO_MFA);
     } finally {
       setSettled(true);
     }
-  }, [enabled, withFactors]);
+  }, [enabled, withFactors, allowRememberedDevice]);
 
   useEffect(() => {
     void refresh();

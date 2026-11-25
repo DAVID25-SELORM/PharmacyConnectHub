@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { acceptRememberedDevice } from "@/lib/remembered-device";
 
 /**
  * Two-step verification with an authenticator app (TOTP), using Supabase Auth.
@@ -75,7 +76,9 @@ export function mfaErrorMessage(error: { message?: string; code?: string } | nul
  * Reads the session's assurance level (a local read) and, only when a code is needed or
  * the caller wants the full list for the settings page, the person's authenticator apps.
  */
-export async function loadMfaState(options: { withFactors?: boolean } = {}): Promise<MfaState> {
+export async function loadMfaState(
+  options: { withFactors?: boolean; allowRememberedDevice?: boolean } = {},
+): Promise<MfaState> {
   const aal = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal.error) {
     // Fail open on a read error so a network blip does not lock people out; the database
@@ -96,7 +99,13 @@ export async function loadMfaState(options: { withFactors?: boolean } = {}): Pro
     friendlyName: f.friendly_name ?? "Authenticator app",
     createdAt: f.created_at,
   }));
-  return interpretAssurance(aal.data?.currentLevel, aal.data?.nextLevel, factors);
+  const state = interpretAssurance(aal.data?.currentLevel, aal.data?.nextLevel, factors);
+  // Opening the app on a remembered device needs no code. Callers that need a real code (password reset,
+  // two-step settings) leave this off, because the sign-in service insists on one for those.
+  if (state.needsChallenge && options.allowRememberedDevice && (await acceptRememberedDevice())) {
+    return { ...state, needsChallenge: false };
+  }
+  return state;
 }
 
 /** Checks a code for an enrolled factor. Returns an error message, or null when it worked. */

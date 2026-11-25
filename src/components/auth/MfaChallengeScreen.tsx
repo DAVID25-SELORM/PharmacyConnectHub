@@ -1,8 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { MfaCodeForm } from "@/components/auth/MfaCodeForm";
-import { verifyMfaCode } from "@/lib/mfa";
+import { RememberedMfaCodeForm } from "@/components/auth/RememberedMfaCodeForm";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Full-page step shown when a password was accepted but the authenticator code is still owed. */
@@ -31,13 +30,7 @@ export function MfaChallengeScreen({
           Open your authenticator app and enter the 6-digit code for Drugxone.
         </p>
         {factorId ? (
-          <MfaCodeForm
-            onSubmit={async (code) => {
-              const message = await verifyMfaCode(factorId, code);
-              if (!message) onVerified();
-              return message;
-            }}
-          />
+          <RememberedMfaCodeForm factorId={factorId} onVerified={onVerified} />
         ) : (
           <div role="alert" className="space-y-2 text-sm">
             <p>We could not load your verification settings.</p>

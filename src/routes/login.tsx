@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import logo from "@/assets/logo.jpg";
-import { MfaCodeForm } from "@/components/auth/MfaCodeForm";
-import { loadMfaState, verifyMfaCode } from "@/lib/mfa";
+import { RememberedMfaCodeForm } from "@/components/auth/RememberedMfaCodeForm";
+import { loadMfaState } from "@/lib/mfa";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -59,8 +59,8 @@ function LoginPage() {
     } finally {
       setLoading(false);
     }
-    // Someone with an authenticator app still owes the 6-digit code for this session.
-    const mfa = await loadMfaState().catch(() => null);
+    // Someone with an authenticator app still owes the 6-digit code, unless this device is remembered.
+    const mfa = await loadMfaState({ allowRememberedDevice: true }).catch(() => null);
     if (mfa?.needsChallenge) {
       setChallengeFactor(mfa.factorId ?? "");
       return;
@@ -101,13 +101,7 @@ function LoginPage() {
               Open your authenticator app and enter the 6-digit code for Drugxone.
             </p>
             {challengeFactor ? (
-              <MfaCodeForm
-                onSubmit={async (code) => {
-                  const message = await verifyMfaCode(challengeFactor, code);
-                  if (!message) finishSignIn();
-                  return message;
-                }}
-              />
+              <RememberedMfaCodeForm factorId={challengeFactor} onVerified={finishSignIn} />
             ) : (
               <p role="alert" className="text-sm text-destructive">
                 We could not load your verification settings. Go back and sign in again.
