@@ -5,20 +5,13 @@ import {
   CheckCheck,
   Clock,
   HelpCircle,
-  BarChart3,
-  FileQuestion,
   Home,
-  Landmark,
+  Hospital,
   LayoutDashboard,
   LogOut,
-  Package,
-  PackageSearch,
   Pill,
-  ScrollText,
-  Wallet,
   ShieldAlert,
   ShieldCheck,
-  Users,
   Warehouse,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -34,11 +27,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { canViewAccounting } from "@/lib/accounting";
 import { enableWebPush } from "@/lib/web-push";
 import { toast } from "sonner";
 import { useSession, type Business } from "@/hooks/use-session";
-import { businessKindLabel } from "@/lib/business-kind";
+import { businessKindLabel, isHospitalOrClinic } from "@/lib/business-kind";
+import { AppNavigation, useActiveNavLabel, useHasAppNavigation } from "@/components/AppNavigation";
 import {
   NOTIFICATIONS_CHANGED_EVENT,
   notificationLink,
@@ -257,6 +250,10 @@ export function DashboardHeader({
 }) {
   const navigate = useNavigate();
   const { business, businesses, setActiveBusiness } = useSession();
+  // The side rail, bottom bar and More sheet (AppNavigation) now carry the screens, Help, Add
+  // business and Sign out. When it shows, this top bar keeps only what is about the page itself.
+  const hasAppNav = useHasAppNavigation(showNav);
+  const activeLabel = useActiveNavLabel(isAdmin);
   // A small, always-visible (including on phones) signal for which kind of account this is - a
   // real user was once confused after being given a wholesaler account when expecting a pharmacy
   // one. The existing `subtitle` text can't carry this on its own: it's reused for unrelated page
@@ -269,25 +266,14 @@ export function DashboardHeader({
           Icon: Warehouse,
           className: "border-violet-200 bg-violet-100 text-violet-800",
         }
-      : { label: "Pharmacy", Icon: Pill, className: "border-blue-200 bg-blue-100 text-blue-800" }
+      : isHospitalOrClinic(business)
+        ? {
+            label: businessKindLabel(business),
+            Icon: Hospital,
+            className: "border-emerald-200 bg-emerald-100 text-emerald-800",
+          }
+        : { label: "Pharmacy", Icon: Pill, className: "border-blue-200 bg-blue-100 text-blue-800" }
     : null;
-  const workspaceRoute = business?.type === "wholesaler" ? "/wholesaler" : "/pharmacy";
-  const reportsRoute =
-    business?.type === "wholesaler" ? "/wholesaler/reports" : "/pharmacy/reports";
-  const rfqsRoute = business?.type === "wholesaler" ? "/wholesaler/rfqs" : "/pharmacy/rfqs";
-  const auditRoute = business?.type === "wholesaler" ? "/wholesaler/audit" : "/pharmacy/audit";
-  const accountingRoute =
-    business?.type === "wholesaler" ? "/wholesaler/accounting" : "/pharmacy/accounting";
-  // Same roles the database allows for the accounting registers (see can_view_accounting).
-  const showAccountingLink = business
-    ? canViewAccounting(business.type, business.staff_role)
-    : false;
-  const showInventoryLink = business?.type === "pharmacy";
-  const showAuditLink =
-    business?.staff_role === "owner" ||
-    business?.staff_role === "manager" ||
-    business?.staff_role === "accountant";
-  const workspaceLabel = business?.type === "wholesaler" ? "Workspace" : "Browse";
   // The switcher stays available without the full nav so a user stuck on a pending
   // workspace's onboarding page can still switch to an approved one.
   const canSwitchWorkspaces = businesses.length > 1 && business;
@@ -311,195 +297,128 @@ export function DashboardHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-2 py-2 px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-3 lg:gap-6">
-          <div className="flex min-w-0 items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate({ to: "/dashboard" })}
-              aria-label="Go to dashboard"
-            >
-              <Home className="h-4 w-4" />
-            </Button>
-            <Link to="/" className="flex min-w-0 items-center gap-2">
-              <img src={logo} alt="Drugxone" className="h-9 w-9 rounded-xl object-contain" />
-              <div className="hidden min-w-0 sm:block">
-                <div className="truncate font-display text-base font-bold leading-none">
-                  Drug<span className="text-primary">xone</span>
-                </div>
-                <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
-              </div>
-            </Link>
-            {accountBadge && (
-              <Badge
-                variant="outline"
-                className={`shrink-0 gap-1 whitespace-nowrap ${accountBadge.className}`}
+    <>
+      <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-2 py-2 px-4 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-3 lg:gap-6">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate({ to: "/dashboard" })}
+                aria-label="Go to dashboard"
+                className={hasAppNav ? "md:hidden" : undefined}
               >
-                <accountBadge.Icon className="h-3 w-3" aria-hidden="true" />
-                {accountBadge.label}
-              </Badge>
+                <Home className="h-4 w-4" />
+              </Button>
+              <Link
+                to="/"
+                className={`flex min-w-0 items-center gap-2 ${hasAppNav ? "md:hidden" : ""}`}
+              >
+                <img src={logo} alt="Drugxone" className="h-9 w-9 rounded-xl object-contain" />
+                <div className="hidden min-w-0 sm:block">
+                  <div className="truncate font-display text-base font-bold leading-none">
+                    Drug<span className="text-primary">xone</span>
+                  </div>
+                  <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
+                </div>
+              </Link>
+              {hasAppNav && (
+                <div className="hidden min-w-0 md:block" data-testid="header-crumb">
+                  <div className="truncate text-[11px] text-muted-foreground">
+                    {business?.name ?? "Platform admin"}
+                  </div>
+                  <div className="truncate font-display text-base font-bold leading-tight">
+                    {activeLabel ?? subtitle}
+                  </div>
+                </div>
+              )}
+              {accountBadge && (
+                <Badge
+                  variant="outline"
+                  className={`shrink-0 gap-1 whitespace-nowrap ${accountBadge.className}`}
+                >
+                  <accountBadge.Icon className="h-3 w-3" aria-hidden="true" />
+                  {accountBadge.label}
+                </Badge>
+              )}
+            </div>
+
+            {canSwitchWorkspaces && (
+              <Select value={business.id} onValueChange={onWorkspaceChange}>
+                <SelectTrigger className="w-[180px] sm:w-[240px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {businesses.map((workspace) => (
+                    <SelectItem key={workspace.id} value={workspace.id}>
+                      {workspace.name} · {businessKindLabel(workspace)} · {workspace.staff_role}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 
-          {canSwitchWorkspaces && (
-            <Select value={business.id} onValueChange={onWorkspaceChange}>
-              <SelectTrigger className="w-[180px] sm:w-[240px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {businesses.map((workspace) => (
-                  <SelectItem key={workspace.id} value={workspace.id}>
-                    {workspace.name} · {businessKindLabel(workspace)} · {workspace.staff_role}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            {rightSlot}
+            {business && !hasAppNav && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/add-business">Add business</Link>
+              </Button>
+            )}
+            {!hasAppNav && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/security" aria-label="Account security">
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Security</span>
+                </Link>
+              </Button>
+            )}
+            {!hasAppNav && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/help" aria-label="Help Centre">
+                  <HelpCircle className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Help</span>
+                </Link>
+              </Button>
+            )}
+            <NotificationBell />
+            {!hasAppNav && (
+              <Button variant="ghost" size="sm" onClick={onSignOut} aria-label="Sign out">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            )}
+          </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-          {rightSlot}
-          {business && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/add-business">Add business</Link>
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/security" aria-label="Account security">
-              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Security</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/help" aria-label="Help Centre">
-              <HelpCircle className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Help</span>
-            </Link>
-          </Button>
-          <NotificationBell />
-          <Button variant="ghost" size="sm" onClick={onSignOut} aria-label="Sign out">
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign out</span>
-          </Button>
-        </div>
-      </div>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {showNav && (
-          <nav className="flex items-center gap-1 overflow-x-auto whitespace-nowrap py-1 [&>a]:shrink-0">
-            <Link
-              to="/dashboard"
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-            >
-              <LayoutDashboard className="h-4 w-4 inline mr-2" />
-              Dashboard
-            </Link>
-            <Link
-              to={workspaceRoute}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-            >
-              <Package className="h-4 w-4 inline mr-2" />
-              {workspaceLabel}
-            </Link>
-            <Link
-              to="/staff"
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-            >
-              <Users className="h-4 w-4 inline mr-2" />
-              Team
-            </Link>
-            <Link
-              to={reportsRoute}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-            >
-              <BarChart3 className="h-4 w-4 inline mr-2" />
-              Reports
-            </Link>
-            <Link
-              to={rfqsRoute}
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-            >
-              <FileQuestion className="h-4 w-4 inline mr-2" />
-              RFQs
-            </Link>
-            {showInventoryLink && (
+        {showNav && !hasAppNav && (
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {/* Only reached with no business to build the workspace navigation from. */}
+            <nav className="flex items-center gap-1 overflow-x-auto whitespace-nowrap py-1 [&>a]:shrink-0">
               <Link
-                to="/pharmacy/inventory"
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
+                to="/dashboard"
+                className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
-                <PackageSearch className="h-4 w-4 inline mr-2" />
-                Inventory
+                <LayoutDashboard className="mr-2 inline h-4 w-4" />
+                Dashboard
               </Link>
-            )}
-            {showInventoryLink && showAccountingLink && (
-              <Link
-                to="/pharmacy"
-                search={{ tab: "credit" }}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <Wallet className="h-4 w-4 inline mr-2" />
-                Credit
-              </Link>
-            )}
-            {business?.type === "pharmacy" && (
-              <Link
-                to="/pharmacy/procurement"
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
-              >
-                <Package className="h-4 w-4 inline mr-2" />
-                External purchases
-              </Link>
-            )}
-            {(business?.type === "pharmacy" || business?.type === "wholesaler") &&
-              ["owner", "manager"].includes(business.staff_role) && (
+              {isAdmin && (
                 <Link
-                  to={
-                    business.type === "wholesaler" ? "/wholesaler/contacts" : "/pharmacy/contacts"
-                  }
-                  className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
+                  to="/admin"
+                  className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
-                  <Users className="h-4 w-4 inline mr-2" />
-                  Contacts / CRM
+                  <ShieldCheck className="mr-2 inline h-4 w-4" />
+                  Admin
                 </Link>
               )}
-            {showAccountingLink && (
-              <Link
-                to={accountingRoute}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <Landmark className="h-4 w-4 inline mr-2" />
-                Accounting
-              </Link>
-            )}
-            <Link
-              to="/settings"
-              className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent"
-            >
-              Settings
-            </Link>
-            {showAuditLink && (
-              <Link
-                to={auditRoute}
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <ScrollText className="h-4 w-4 inline mr-2" />
-                Audit log
-              </Link>
-            )}
-            {isAdmin && (
-              <Link
-                to="/admin"
-                className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-accent"
-              >
-                <ShieldCheck className="h-4 w-4 inline mr-2" />
-                Admin
-              </Link>
-            )}
-          </nav>
+            </nav>
+          </div>
         )}
-      </div>
-    </header>
+      </header>
+      {/* Outside the header: its blur would otherwise become the frame for the fixed rail and bar. */}
+      {hasAppNav && <AppNavigation isPlatformAdmin={isAdmin} onSignOut={onSignOut} />}
+    </>
   );
 }
 

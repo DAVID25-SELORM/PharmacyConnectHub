@@ -52,6 +52,7 @@ export function ConsentBanner() {
   return (
     <div
       role="region"
+      data-consent-banner
       aria-label="Privacy Notice and Terms of Use"
       className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-xl border bg-background p-4 shadow-lg sm:bottom-4"
     >

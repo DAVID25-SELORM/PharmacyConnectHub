@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { validWorkspaceTab } from "@/lib/app-nav";
 import {
   Select,
   SelectContent,
@@ -302,6 +303,22 @@ function WholesalerDashboardContent() {
       });
   }, [expiryBusinessId]);
 
+  // The open tab follows the address (?tab=), which the side navigation and the phone More sheet change.
+  const [activeTab, setActiveTab] = useState(() =>
+    validWorkspaceTab(
+      "wholesaler",
+      typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("tab"),
+    ),
+  );
+  useEffect(() => {
+    const restore = () =>
+      setActiveTab(
+        validWorkspaceTab("wholesaler", new URLSearchParams(window.location.search).get("tab")),
+      );
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+
   // Only the very first load shows the loading screen. A background session refresh (the browser re-announcing the
   // sign-in when you come back to the tab) must not unmount the page: open dialogs and half-typed forms would be lost.
   if (!business) {
@@ -415,13 +432,17 @@ function WholesalerDashboardContent() {
         </div>
 
         <Tabs
-          defaultValue={(() => {
-            const tab = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-            return tab && ["orders", "products", "insights", "batches", "returns", "customers", "discounts", "credit"].includes(tab) ? tab : "orders";
-          })()}
+          value={activeTab}
+          onValueChange={(value) => {
+            setActiveTab(value);
+            const url = new URL(window.location.href);
+            url.searchParams.set("tab", value);
+            window.history.pushState(window.history.state, "", url);
+          }}
           className="w-full"
         >
-          <TabsList className="mb-6 max-w-full justify-start overflow-x-auto">
+          {/* The side navigation and the phone More sheet now switch between these screens. */}
+          <TabsList className="hidden">
             <TabsTrigger value="orders">Incoming orders ({orders.length})</TabsTrigger>
             <TabsTrigger value="products">My products ({products.length})</TabsTrigger>
             {canManageProducts && <TabsTrigger value="insights">Stock insights</TabsTrigger>}

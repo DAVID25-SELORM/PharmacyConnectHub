@@ -1003,7 +1003,8 @@ function PharmacyDashboardContent() {
           }}
           className="w-full"
         >
-          <TabsList className="mb-6 h-auto min-h-9 max-w-full justify-start overflow-x-auto [&>button]:shrink-0">
+          {/* The side navigation and the phone More sheet now switch between these screens. */}
+          <TabsList className="hidden">
             <TabsTrigger value="catalog">
               Catalog ({approvedWholesalers.length} wholesaler
               {approvedWholesalers.length === 1 ? "" : "s"})
