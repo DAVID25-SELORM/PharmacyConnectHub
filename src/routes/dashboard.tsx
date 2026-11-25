@@ -29,7 +29,7 @@ import { wholesalerDashboardAccess } from "@/lib/dashboard";
 import { formatGHS, timeAgo } from "@/lib/format";
 import { shownTotal } from "@/lib/order-supply";
 import { useSession, type Business } from "@/hooks/use-session";
-import { businessKindLabel, isHospitalOrClinic } from "@/lib/business-kind";
+import { businessKindLabel, businessKindNoun, isHospitalOrClinic } from "@/lib/business-kind";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardRoute,
@@ -496,7 +496,7 @@ function WorkspaceDashboardContent() {
             <h1 className="font-display text-3xl font-bold">{business.name}</h1>
             <p className="mt-1 text-muted-foreground">
               {business.type === "pharmacy"
-                ? "Overview of your pharmacy workspace, orders, and marketplace access."
+                ? `Overview of your ${businessKindNoun(business)} workspace, orders, and marketplace access.`
                 : "Overview of your wholesaler workspace, fulfilment, and catalog health."}
             </p>
           </div>
@@ -623,7 +623,7 @@ function RecentPharmacyOrdersCard({ orders }: { orders: PharmacyOrderSummary[] }
         <div>
           <div className="font-semibold">Recent Orders</div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your latest pharmacy orders and where they stand.
+            Your latest orders and where they stand.
           </p>
         </div>
         <Button asChild variant="outline" size="sm">

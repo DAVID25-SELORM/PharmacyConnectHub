@@ -4,7 +4,7 @@ import { formatGHSCell, downloadXlsx } from "@/lib/reports";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 type Workspace = { id: string; name: string; summary: Record<string, number> };
-export function WorkspaceProcurementReport() {
+export function WorkspaceProcurementReport({ kindLabel = "Pharmacy" }: { kindLabel?: string }) {
   const [rows, setRows] = useState<Workspace[]>([]),
     [selected, setSelected] = useState("");
   const [from, setFrom] = useState(""),
@@ -28,10 +28,10 @@ export function WorkspaceProcurementReport() {
   const filtered = rows.filter((r) => !selected || r.id === selected);
   return (
     <section className="space-y-4 rounded-xl border p-4">
-      <h2 className="text-lg font-semibold">Pharmacy workspace report</h2>
+      <h2 className="text-lg font-semibold">{kindLabel} workspace report</h2>
       <p>
-        Each pharmacy business is a separate workspace. Only workspaces you are authorized to access
-        appear here.
+        Each business is a separate workspace. Only workspaces you are authorized to access appear
+        here.
       </p>
       <div className="grid gap-3 sm:grid-cols-3">
         <label>

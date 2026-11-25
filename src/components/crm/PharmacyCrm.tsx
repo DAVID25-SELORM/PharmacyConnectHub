@@ -11,6 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useSession } from "@/hooks/use-session";
+import { businessKindLabel } from "@/lib/business-kind";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadPdf, downloadXlsx } from "@/lib/reports";
 import {
@@ -261,7 +262,7 @@ export function PharmacyCrm() {
       if (pdf)
         await downloadPdf(
           "representatives.pdf",
-          "Pharmacy representatives - private",
+          `${businessKindLabel(business)} representatives - private`,
           [
             {
               name: "Contact details",
@@ -879,7 +880,7 @@ function CrmEditor({
             }
           </DialogTitle>
           <DialogDescription>
-            Private to your pharmacy. Changes are recorded in activity history.
+            Private to your business. Changes are recorded in activity history.
           </DialogDescription>
         </DialogHeader>
         <form

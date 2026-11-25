@@ -47,12 +47,15 @@ function Field({
 
 export function EnterpriseRfqEditor({
   businessId,
+  buyerNoun = "pharmacy",
   initial,
   repeat,
   onSaved,
   onCancel,
 }: {
   businessId: string;
+  /** "pharmacy" or "hospital or clinic", for the wording. */
+  buyerNoun?: string;
   initial?: EnterpriseRfq;
   repeat?: boolean;
   onSaved: (id: string) => void;
@@ -230,7 +233,7 @@ export function EnterpriseRfqEditor({
             <Field label="Expected delivery">
               <Input type="date" value={delivery} onChange={(e) => setDelivery(e.target.value)} />
             </Field>
-            <Field label="Delivery location within this pharmacy">
+            <Field label={`Delivery location within this ${buyerNoun}`}>
               <Input value={location} onChange={(e) => setLocation(e.target.value)} />
             </Field>
             <Field label="Payment preference">

@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardShell";
 import { useSession } from "@/hooks/use-session";
+import { pharmacyLicenceLabel } from "@/lib/business-kind";
 import { supabase } from "@/integrations/supabase/client";
 import { compressImageForUpload, formatFileSize, MAX_UPLOAD_BYTES } from "@/lib/file-upload";
 import { checkUploadFile, hasRiskyName } from "@/lib/upload-safety";
@@ -385,7 +386,7 @@ function OnboardingPage() {
   const docTypes =
     business.type === "pharmacy"
       ? [
-          { key: "pharmacy_council", label: "Pharmacy Council License" },
+          { key: "pharmacy_council", label: pharmacyLicenceLabel(business) },
           { key: "business_registration", label: "Business Registration" },
         ]
       : [

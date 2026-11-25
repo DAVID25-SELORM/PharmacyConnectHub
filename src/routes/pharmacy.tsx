@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useSession } from "@/hooks/use-session";
+import { businessKindLabel, businessKindNoun } from "@/lib/business-kind";
 import { supabase } from "@/integrations/supabase/client";
 import { canViewAccounting } from "@/lib/accounting";
 import { formatGHS, timeAgo } from "@/lib/format";
@@ -140,7 +141,7 @@ import {
 export const Route = createFileRoute("/pharmacy")({
   head: () => ({
     meta: [
-      { title: "Pharmacy Dashboard — Drugxone" },
+      { title: "Catalogue and orders — Drugxone" },
       { name: "description", content: "Browse medicines, compare prices, place orders." },
     ],
   }),
@@ -883,7 +884,7 @@ function PharmacyDashboardContent() {
     return (
       <div className="min-h-screen bg-background">
         <DashboardHeader
-          subtitle="Pharmacy workspace"
+          subtitle={`${businessKindLabel(business)} workspace`}
           showNav={false}
           isAdmin={roles.includes("admin")}
         />
@@ -894,8 +895,8 @@ function PharmacyDashboardContent() {
             </div>
             <h2 className="mt-6 font-display text-2xl font-bold">Verification Pending</h2>
             <p className="mt-2 text-muted-foreground">
-              Your pharmacy registration is being reviewed by our admin team. You'll receive access
-              once your license and details are verified.
+              Your {businessKindNoun(business)} registration is being reviewed by our admin team.
+              You'll receive access once your license and details are verified.
             </p>
             <p className="mt-4 text-sm text-muted-foreground">
               This usually takes 1-2 business days. We'll notify you once approved.
@@ -909,7 +910,7 @@ function PharmacyDashboardContent() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader
-        subtitle="Pharmacy workspace"
+        subtitle={`${businessKindLabel(business)} workspace`}
         showNav={true}
         isAdmin={roles.includes("admin")}
         rightSlot={
@@ -2091,7 +2092,7 @@ export function OrdersView({
         </p>
       )}
       {linkedError && <p role="alert">{linkedError}</p>}
-      <p className="text-xs text-muted-foreground">Totals for this pharmacy across all orders</p>
+      <p className="text-xs text-muted-foreground">Totals across all your orders</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryCard label="Active Orders" value={counts.active} />
         <SummaryCard label="Awaiting Payment" value={counts.awaiting} />
