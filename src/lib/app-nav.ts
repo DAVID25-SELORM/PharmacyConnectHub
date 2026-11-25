@@ -70,6 +70,7 @@ export const WHOLESALER_TABS = [
   "discounts",
   "credit",
   "online-payments",
+  "billing",
 ] as const;
 
 export const PHARMACY_TABS = [
@@ -189,6 +190,14 @@ function wholesalerGroups(ctx: NavContext): NavGroup[] {
           icon: "payments",
           to: ws,
           tab: "online-payments",
+        },
+        // The same roles the database lets read a business's own billing.
+        canRecordCredit && {
+          id: "billing",
+          label: "Billing",
+          icon: "billing",
+          to: ws,
+          tab: "billing",
         },
         canSeeAccounting && {
           id: "accounting",
