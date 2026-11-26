@@ -22,12 +22,13 @@ export function isOpenPath(pathname: string): boolean {
 
 /**
  * Sits in the app root. If someone has an authenticator app but only entered their
- * password this session, every private page asks for the code first.
+ * password this session, every private page asks for the code first, unless this device
+ * was remembered in the last 7 days.
  */
 export function MfaGuard({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const open = isOpenPath(pathname);
-  const { state, loading, refresh } = useMfaState({ enabled: !open });
+  const { state, loading, refresh } = useMfaState({ enabled: !open, allowRememberedDevice: true });
 
   if (open) return <>{children}</>;
   if (loading) return null;

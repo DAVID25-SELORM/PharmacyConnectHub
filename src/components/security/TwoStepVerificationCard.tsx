@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,14 @@ import {
   parseTotpCode,
   removeMfaFactor,
   startTotpEnrolment,
+  verifyMfaCode,
   type TotpEnrolment,
 } from "@/lib/mfa";
+import {
+  REMEMBER_DAYS,
+  countRememberedDevices,
+  forgetRememberedDevices,
+} from "@/lib/remembered-device";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Turn two-step verification on or off with an authenticator app. */
@@ -21,6 +27,35 @@ export function TwoStepVerificationCard() {
   const { state, loading, refresh } = useMfaState({ withFactors: true });
   const [enrolment, setEnrolment] = useState<TotpEnrolment | null>(null);
   const [busy, setBusy] = useState(false);
+  const [remembered, setRemembered] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!state.enrolled) return;
+    let active = true;
+    void countRememberedDevices().then((count) => {
+      if (active) setRemembered(count);
+    });
+    return () => {
+      active = false;
+    };
+  }, [state.enrolled, state.factors.length]);
+
+  const forgetAll = async () => {
+    const ok = await confirmAction(
+      "Forget every remembered device? The next sign-in on each one, including this one, will ask for a code.",
+    );
+    if (!ok) return;
+    setBusy(true);
+    const message = await forgetRememberedDevices({ keepThisOne: false });
+    setBusy(false);
+    if (message) {
+      toast.error(message);
+      return;
+    }
+    setRemembered(0);
+    await refresh();
+    toast.success("Remembered devices were forgotten.");
+  };
 
   const begin = async () => {
     setBusy(true);
@@ -73,16 +108,17 @@ export function TwoStepVerificationCard() {
     <Card className="space-y-4 p-5">
       <div className="flex items-start gap-3">
         {state.enrolled ? (
-          <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" aria-hidden="true" />
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
         ) : (
-          <ShieldOff className="mt-0.5 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <ShieldOff className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         )}
         <div>
           <h2 className="font-semibold">Two-step verification</h2>
           <p className="text-sm text-muted-foreground">
             After your password, Drugxone asks for a 6-digit code from an authenticator app on your
             phone (Google Authenticator, Microsoft Authenticator, Authy). A stolen password alone
-            then cannot open your account.
+            then cannot open your account. You can have a device remembered: it is then asked for
+            the code again after {REMEMBER_DAYS} days. A new device is always asked.
           </p>
         </div>
       </div>
@@ -119,6 +155,24 @@ export function TwoStepVerificationCard() {
       ) : state.enrolled ? (
         <div className="space-y-2">
           <p className="text-sm font-medium text-emerald-700">On</p>
+          {state.needsChallenge && state.factorId && (
+            <div className="space-y-2 rounded-md border border-amber-500/50 p-3 text-sm">
+              <p>
+                You were let in because this device is remembered. To change two-step settings or
+                your password, enter a code first.
+              </p>
+              <div className="max-w-xs">
+                <MfaCodeForm
+                  autoFocus={false}
+                  onSubmit={async (code) => {
+                    const message = await verifyMfaCode(state.factorId as string, code);
+                    if (!message) await refresh();
+                    return message;
+                  }}
+                />
+              </div>
+            </div>
+          )}
           {state.factors.map((factor) => (
             <div
               key={factor.id}
@@ -133,13 +187,34 @@ export function TwoStepVerificationCard() {
               <Button
                 variant="outline"
                 size="sm"
-                disabled={busy}
+                disabled={busy || state.needsChallenge}
                 onClick={() => void remove(factor.id)}
               >
                 Turn off
               </Button>
             </div>
           ))}
+          {remembered !== null && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span data-testid="remembered-count" className="text-muted-foreground">
+                {remembered === 0
+                  ? "No devices are remembered."
+                  : remembered === 1
+                    ? "1 device is remembered."
+                    : `${remembered} devices are remembered.`}
+              </span>
+              {remembered > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void forgetAll()}
+                >
+                  Forget remembered devices
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <Button variant="hero" onClick={() => void begin()} disabled={busy}>

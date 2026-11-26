@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { confirmAction } from "@/lib/confirm-action";
+import { forgetRememberedDevices } from "@/lib/remembered-device";
 import { supabase } from "@/integrations/supabase/client";
 
 /** End sessions on other devices, or everywhere. Useful after a lost phone or shared computer. */
@@ -11,10 +12,21 @@ export function SessionsCard() {
   const [busy, setBusy] = useState(false);
 
   const others = async () => {
-    if (!(await confirmAction("Sign out of every other device? This device stays signed in."))) {
+    if (
+      !(await confirmAction(
+        "Sign out of every other device? This device stays signed in. The others will also need a two-step code next time.",
+      ))
+    ) {
       return;
     }
     setBusy(true);
+    // First, so that a lost device is never left remembered if this cannot be done.
+    const forgetFailed = await forgetRememberedDevices({ keepThisOne: true });
+    if (forgetFailed) {
+      setBusy(false);
+      toast.error(`Nothing was changed: ${forgetFailed}`);
+      return;
+    }
     const { error } = await supabase.auth.signOut({ scope: "others" });
     setBusy(false);
     if (error) toast.error(error.message);
@@ -22,8 +34,20 @@ export function SessionsCard() {
   };
 
   const everywhere = async () => {
-    if (!(await confirmAction("Sign out of all devices, including this one?"))) return;
+    if (
+      !(await confirmAction(
+        "Sign out of all devices, including this one? Each will need a two-step code next time.",
+      ))
+    ) {
+      return;
+    }
     setBusy(true);
+    const forgetFailed = await forgetRememberedDevices({ keepThisOne: false });
+    if (forgetFailed) {
+      setBusy(false);
+      toast.error(`Nothing was changed: ${forgetFailed}`);
+      return;
+    }
     const { error } = await supabase.auth.signOut({ scope: "global" });
     setBusy(false);
     if (error) {
